@@ -389,6 +389,7 @@ img { max-width: 100%; height: auto; }
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition);
+  touch-action: manipulation;
 }
 .mode-btn:not(:last-child) {
   border-right: 1px solid var(--border-primary);

@@ -277,17 +277,17 @@
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         thumbHtml +
         '<div class="article-body">' +
-          '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + article.title + '</span></h3>' +
+          '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
           '<p class="article-summary">' + stripHtml(article.summary).slice(0, 250) + '</p>' +
           '<div class="article-meta">' +
-            '<span class="source">' + article.source + '</span>' +
+            '<span class="source">' + escHtml(article.source) + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
             '<span class="wm-sep">&middot;</span>' +
-            '<span class="wm-source">' + (article.source || 'News') + '</span>' +
+            '<span class="wm-source">' + escHtml(article.source || 'News') + '</span>' +
           '</div>' +
         '</div>' +
       '</article>';
@@ -318,18 +318,20 @@
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
     const bgStyle = hasThumb ? article.imageUrl : '';
 
+    const bgHtml = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
+
     el.main.innerHTML =
       '<div class="reels-container">' +
         '<div class="reels-progress">' +
           articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('') +
         '</div>' +
-        '<div class="reels-card"' + (bgStyle ? ' style="background-image:url(' + bgStyle + ')"' : '') + '>' +
-          '<button class="reels-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + article.title.replace(/"/g, '&quot;') + '" data-source="' + (article.source || '').replace(/"/g, '&quot;') + '" title="Share">&#x21AA;</button>' +
+        '<div class="reels-card"' + bgHtml + '>' +
+          '<button class="reels-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share">&#x21AA;</button>' +
           '<div class="reels-overlay">' +
             '<span class="reels-count">' + (idx + 1) + ' / ' + total + '</span>' +
-            '<h2 class="reels-title">' + article.title + '</h2>' +
+            '<h2 class="reels-title">' + escHtml(article.title) + '</h2>' +
             '<div class="reels-meta">' +
-              '<span class="reels-source">' + article.source + '</span>' +
+              '<span class="reels-source">' + escHtml(article.source) + '</span>' +
               '<span class="reels-date">' + formatDateShort(article.pubDate) + '</span>' +
             '</div>' +
             '<p class="reels-summary">' + stripHtml(article.summary).slice(0, 350) + '</p>' +
@@ -337,7 +339,7 @@
             '<div class="reels-watermark">' +
               '<span class="wm-brand">Invisible Broadcast</span>' +
               '<span class="wm-sep">&middot;</span>' +
-              '<span class="wm-source">' + (article.source || 'News') + '</span>' +
+              '<span class="wm-source">' + escHtml(article.source || 'News') + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -888,6 +890,9 @@
     if (el.feedAddBtn) el.feedAddBtn.addEventListener('click', handleAddFeed);
     if (el.feedUrlInput) el.feedUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleValidateFeed(); });
   }
+
+  function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
   /* ── Article & Source Modals ── */
   function findArticleByLink(link) {
