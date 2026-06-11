@@ -785,27 +785,34 @@
 
   function openSourceIframe(url, title) {
     el.sourceModalTitle.textContent = title || 'Original Article';
-    el.sourceIframe.src = url;
     el.sourceModal.classList.add('open');
+
+    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+    el.sourceIframe.src = proxyUrl;
     el.sourceIframe.dataset.originalUrl = url;
-    el.sourceIframe.onload = function() {
-      const fb = $('#source-fallback');
-      if (!fb) return;
-      setTimeout(() => {
-        try {
-          if (el.sourceIframe.contentDocument && !el.sourceIframe.contentDocument.body.textContent.trim()) {
-            fb.style.display = 'flex';
-          }
-        } catch(e) {
-          fb.style.display = 'flex';
-        }
-      }, 8000);
-    };
+
     const fb = $('#source-fallback');
     if (fb) {
       const link = $('#source-fallback-link');
       if (link) link.href = url;
     }
+
+    let loaded = false;
+    el.sourceIframe.onload = function() {
+      loaded = true;
+      try {
+        const doc = el.sourceIframe.contentDocument;
+        if (doc && doc.body && !doc.body.textContent.trim()) {
+          if (fb) fb.style.display = 'flex';
+        }
+      } catch(e) {
+        if (fb) fb.style.display = 'flex';
+      }
+    };
+
+    setTimeout(() => {
+      if (!loaded && fb) fb.style.display = 'flex';
+    }, 15000);
   }
 
   function closeSourceModal() {
