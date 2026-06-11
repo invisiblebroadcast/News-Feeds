@@ -787,32 +787,58 @@
     el.sourceModalTitle.textContent = title || 'Original Article';
     el.sourceModal.classList.add('open');
 
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-    el.sourceIframe.src = proxyUrl;
-    el.sourceIframe.dataset.originalUrl = url;
-
     const fb = $('#source-fallback');
-    if (fb) {
-      const link = $('#source-fallback-link');
-      if (link) link.href = url;
+    const link = $('#source-fallback-link');
+    if (fb && link) link.href = url;
+
+    let proxyIdx = 0;
+    let loaded = false;
+    let fallbackTimer = null;
+
+    const proxies = [
+      'https://r.jina.ai/',
+      'https://corsproxy.io/?url='
+    ];
+
+    function tryNext() {
+      proxyIdx++;
+      if (proxyIdx >= proxies.length) {
+        if (fb && !loaded) fb.style.display = 'flex';
+        return;
+      }
+      loadCurrent();
     }
 
-    let loaded = false;
+    function loadCurrent() {
+      const src = proxies[proxyIdx] + encodeURIComponent(url);
+      el.sourceIframe.src = src;
+      if (fallbackTimer) { clearTimeout(fallbackTimer); }
+      fallbackTimer = setTimeout(() => {
+        if (!loaded) tryNext();
+      }, 10000);
+    }
+
     el.sourceIframe.onload = function() {
       loaded = true;
       try {
         const doc = el.sourceIframe.contentDocument;
-        if (doc && doc.body && !doc.body.textContent.trim()) {
-          if (fb) fb.style.display = 'flex';
+        if (doc && doc.body) {
+          const text = doc.body.textContent.trim().toLowerCase();
+          if (!text || text.includes('sorry') || text.includes('blocked') || text.includes('automated queries')) {
+            loaded = false;
+            tryNext();
+            return;
+          }
         }
       } catch(e) {
-        if (fb) fb.style.display = 'flex';
+        loaded = false;
+        tryNext();
+        return;
       }
+      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
     };
 
-    setTimeout(() => {
-      if (!loaded && fb) fb.style.display = 'flex';
-    }, 15000);
+    loadCurrent();
   }
 
   function closeSourceModal() {
