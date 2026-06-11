@@ -4,7 +4,7 @@
 
   let currentScope = 'global';
   let currentNation = FeedManager.getSelectedNation();
-  let currentSubcat = 'world';
+  let currentSubcat = 'all';
   let currentMode = 'top';
   let scopeCache = {};
   let isFetching = false;
@@ -47,7 +47,10 @@
     feedValidateBtn: $('#feed-validate-btn'),
     feedAddBtn: $('#feed-add-btn'),
     feedValidateMsg: $('#feed-validate-msg'),
-    feedCustomList: $('#feed-custom-list')
+    feedCustomList: $('#feed-custom-list'),
+    sectionTitle: $('#section-title'),
+    sectionMeta: $('#section-meta'),
+    modeToggle: $('#mode-toggle')
   };
 
   if (!el.modal) return;
@@ -62,6 +65,7 @@
     const date = new Date(d);
     if (isNaN(date.getTime())) return d;
     const diff = Date.now() - date.getTime();
+    if (diff < 0) return 'just now';
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return mins + 'm ago';
     const hours = Math.floor(mins / 60);
@@ -107,26 +111,42 @@
       loadedCount = 0;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      scopeCache = {};
       renderSubTabs();
       renderContent();
     });
   }
 
   /* ── Subcategory Tabs ── */
+  function getFilteredArticles(subcat, cached) {
+    if (!cached) return [];
+    let articles;
+    if (subcat === 'all') {
+      articles = [];
+      for (const cat of Object.keys(cached.groups)) {
+        articles.push(...cached.groups[cat]);
+      }
+    } else {
+      articles = cached.groups[subcat] || [];
+    }
+    if (!articles.length) return [];
+    if (currentMode === 'top') {
+      articles = FeedFetcher.deduplicate(articles);
+      articles = FeedFetcher.sortByDate(articles);
+      articles = applyDateFilter(articles);
+    } else {
+      articles = FeedFetcher.sortByDate(articles);
+    }
+    return articles;
+  }
+
   function renderSubTabs() {
     const subs = FeedManager.subcategoriesForScope(currentScope);
-    const allFeeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
-    const catSet = new Set(allFeeds.map(f => f.hint || 'world'));
-    const available = subs.filter(s => catSet.has(s));
-    if (!available.length) return;
-    if (!available.includes(currentSubcat)) currentSubcat = available[0];
     const cacheKey = scopeKey();
     const cached = scopeCache[cacheKey];
-    el.subTabs.innerHTML = available.map(s =>
+    el.subTabs.innerHTML = subs.map(s =>
       '<li class="tab-item' + (s === currentSubcat ? ' active' : '') + '" data-subcat="' + s + '">' +
       FeedManager.subcatIcon(s) + ' ' + FeedManager.subcatLabel(s, currentScope) +
-      (cached && cached.groups[s] && cached.groups[s].length ? '<span class="tab-count">' + cached.groups[s].length + '</span>' : '') +
+      (cached ? '<span class="tab-count">' + getFilteredArticles(s, cached).length + '</span>' : '') +
       '</li>'
     ).join('');
     el.subBar.style.display = 'block';
@@ -147,17 +167,35 @@
     });
   }
 
+  function updateStickyHeader(metaText) {
+    const scopeLabel = currentScope === 'global' ? 'Global' : (FeedManager.getNations()[currentNation] || currentNation);
+    const subLabel = FeedManager.subcatLabel(currentSubcat, currentScope);
+    if (el.sectionTitle) {
+      el.sectionTitle.innerHTML = FeedManager.subcatIcon(currentSubcat) + ' ' + subLabel +
+        '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + scopeLabel + '</span>';
+    }
+    if (el.sectionMeta) {
+      el.sectionMeta.textContent = metaText || '';
+    }
+    if (el.modeToggle) {
+      $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+    }
+  }
+
   /* ── Render Content ── */
   function showLoading() {
     el.main.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Fetching latest news\u2026</p></div>';
+    updateStickyHeader();
   }
 
   function showError(msg) {
     el.main.innerHTML = '<div class="error-state"><div class="error-icon">\u26A0\uFE0F</div><p>' + msg + '</p></div>';
+    updateStickyHeader();
   }
 
   function showEmpty() {
     el.main.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCED</div><p>No articles found for this period.</p></div>';
+    updateStickyHeader('0 articles');
   }
 
   function renderArticles(articles) {
@@ -178,21 +216,9 @@
       totalShown = display.length;
     }
 
-    const scopeLabel = currentScope === 'global' ? 'Global' : (FeedManager.getNations()[currentNation] || currentNation);
-    const subLabel = FeedManager.subcatLabel(currentSubcat, currentScope);
+    updateStickyHeader(totalShown + ' of ' + articles.length);
 
     el.main.innerHTML =
-      '<div class="section-header">' +
-        '<div><h2>' + FeedManager.subcatIcon(currentSubcat) + ' ' + subLabel +
-          '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + scopeLabel + '</span></h2></div>' +
-        '<div class="section-controls">' +
-          '<div class="mode-toggle">' +
-            '<button class="mode-btn' + (currentMode === 'top' ? ' active' : '') + '" data-mode="top">Top</button>' +
-            '<button class="mode-btn' + (currentMode === 'live' ? ' active' : '') + '" data-mode="live">Live</button>' +
-          '</div>' +
-          '<span class="section-meta">' + totalShown + ' of ' + articles.length + '</span>' +
-        '</div>' +
-      '</div>' +
       '<div class="article-grid">' +
         display.map((a, i) => renderCard(a, i)).join('') +
       '</div>' +
@@ -202,8 +228,6 @@
       (currentMode === 'top' && articles.length > perPage
         ? '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem;">Showing top ' + perPage + ' of ' + articles.length + ' articles</div>'
         : '');
-
-    bindModeToggle();
 
     const loadMore = $('#load-more-btn');
     if (loadMore) loadMore.addEventListener('click', () => { loadedCount += perPage; renderArticles(currentArticles); });
@@ -237,7 +261,7 @@
   }
 
   function bindModeToggle() {
-    const toggle = $('.mode-toggle', el.main);
+    const toggle = el.modeToggle;
     if (!toggle) return;
     toggle.addEventListener('click', e => {
       const btn = e.target.closest('.mode-btn');
@@ -246,6 +270,7 @@
       loadedCount = 0;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      updateStickyHeader();
       displayCurrentSubcat();
     });
   }
@@ -278,16 +303,19 @@
       }
 
       let articles = await FeedFetcher.fetchCategory(key, feeds, true);
-      articles.forEach(a => FeedManager.categorizeArticle(a));
+
+      for (const a of articles) a.subcat = a.feedHint || 'politics';
 
       const groups = {};
       for (const a of articles) {
-        const cat = a.subcat || 'world';
+        const cat = a.subcat;
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(a);
       }
 
       scopeCache[key] = { articles, groups };
+      const subs = FeedManager.subcategoriesForScope(currentScope);
+      if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
       renderSubTabs();
       isFetching = false;
       displayCurrentSubcat();
@@ -303,16 +331,10 @@
     const cached = scopeCache[key];
     if (!cached) { renderContent(); return; }
 
-    let articles = cached.groups[currentSubcat] || [];
-    if (!articles.length) { showEmpty(); return; }
+    updateStickyHeader();
 
-    if (currentMode === 'top') {
-      articles = FeedFetcher.deduplicate(articles);
-      articles = FeedFetcher.sortByDate(articles);
-      articles = applyDateFilter(articles);
-    } else {
-      articles = FeedFetcher.sortByDate(articles);
-    }
+    const articles = getFilteredArticles(currentSubcat, cached);
+    if (!articles.length) { showEmpty(); return; }
 
     renderArticles(articles);
   }
@@ -449,7 +471,7 @@
     const url = validatedFeed?.url || el.feedUrlInput?.value?.trim();
     const scope = el.feedScopeSelect?.value || 'global';
     const nation = el.feedNationSelect?.value || 'india';
-    const subcat = el.feedSubcatSelect?.value || 'world';
+    const subcat = el.feedSubcatSelect?.value || 'politics';
     if (!name || !url) {
       if (el.feedValidateMsg) { el.feedValidateMsg.textContent = 'Enter a name and validate a URL first.'; el.feedValidateMsg.className = 'feed-validate-msg error'; }
       return;
@@ -611,6 +633,7 @@
     bindTopTabs();
     renderSubTabs();
     bindSubTabs();
+    bindModeToggle();
     bindSettings();
     bindArticleClicks();
     bindFeedControls();

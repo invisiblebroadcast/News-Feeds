@@ -34,6 +34,8 @@ const FeedFetcher = (() => {
       const pubDate = item.querySelector('pubDate')?.textContent || '';
       const guid = item.querySelector('guid')?.textContent || link;
       const creator = item.querySelector('dc\\:creator')?.textContent || '';
+      const sourceEl = item.querySelector('source');
+      const sourceName = sourceEl?.textContent || '';
       const mediaContent = item.querySelector('media\\:content');
       const enclosure = item.querySelector('enclosure');
       const thumbnail = item.querySelector('media\\:thumbnail');
@@ -60,9 +62,9 @@ const FeedFetcher = (() => {
         pubDate,
         author: creator.trim(),
         imageUrl,
-        source: new URL(feed.url).hostname.replace('www.', ''),
+        source: sourceName || feed.name || new URL(feed.url).hostname.replace('www.', ''),
         feedUrl: feed.url,
-        feedHint: feed.hint || 'world',
+        feedHint: feed.hint || 'politics',
         guid
       });
     }
@@ -100,7 +102,7 @@ const FeedFetcher = (() => {
           imageUrl,
           source: feed.name,
           feedUrl: feed.url,
-          feedHint: feed.hint || 'world',
+          feedHint: feed.hint || 'politics',
           guid: item.guid || item.link || ''
         };
       });

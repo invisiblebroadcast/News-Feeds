@@ -1,32 +1,32 @@
 {
-  "subcategories": ["world", "politics", "science", "space", "education", "laws", "sports", "agriculture", "nature"],
+  "subcategories": ["politics", "business", "technology", "science", "health", "sports", "entertainment", "environment", "education"],
   "nations": {
     "india": { "label": "India", "icon": "\ud83c\uddee\ud83c\uddf3" }
   },
-  "feeds": [
-    { "name": "Al Jazeera", "url": "https://www.aljazeera.com/xml/rss/all.xml", "scope": "global", "hint": "world", "lang": "en" },
-    { "name": "Reuters", "url": "https://www.reutersagency.com/feed/", "scope": "global", "hint": "world", "lang": "en" },
-    { "name": "BBC News", "url": "https://feeds.bbci.co.uk/news/rss.xml", "scope": "global", "hint": "world", "lang": "en" },
-    { "name": "BBC Politics", "url": "https://feeds.bbci.co.uk/news/politics/rss.xml", "scope": "global", "hint": "politics", "lang": "en" },
-    { "name": "BBC Science & Environment", "url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "scope": "global", "hint": "science", "lang": "en" },
-    { "name": "New Scientist", "url": "https://www.newscientist.com/feed/home", "scope": "global", "hint": "science", "lang": "en" },
-    { "name": "NASA Science", "url": "https://science.nasa.gov/rss.xml", "scope": "global", "hint": "science", "lang": "en" },
-    { "name": "NASA", "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss", "scope": "global", "hint": "space", "lang": "en" },
-    { "name": "Space.com", "url": "https://www.space.com/feeds/all", "scope": "global", "hint": "space", "lang": "en" },
-    { "name": "ESA", "url": "https://www.esa.int/rssfeed/Our_Activities/Space_News", "scope": "global", "hint": "space", "lang": "en" },
-    { "name": "BBC Education", "url": "https://feeds.bbci.co.uk/news/education/rss.xml", "scope": "global", "hint": "education", "lang": "en" },
-    { "name": "BBC UK", "url": "https://feeds.bbci.co.uk/news/uk/rss.xml", "scope": "global", "hint": "laws", "lang": "en" },
-    { "name": "BBC Sport", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "scope": "global", "hint": "sports", "lang": "en" },
-    { "name": "National Geographic", "url": "https://www.nationalgeographic.com/rss/news", "scope": "global", "hint": "nature", "lang": "en" },
-    { "name": "BBC India", "url": "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml", "scope": "nation", "nation": "india", "hint": "world", "lang": "en" },
-    { "name": "India Today", "url": "https://www.indiatoday.in/rss/home", "scope": "nation", "nation": "india", "hint": "world", "lang": "en" },
-    { "name": "The Hindu", "url": "https://www.thehindu.com/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "world", "lang": "en" },
-    { "name": "BBC Tamil", "url": "https://www.bbc.com/tamil/index.xml", "scope": "nation", "nation": "india", "hint": "world", "lang": "ta" },
-    { "name": "India Today Politics", "url": "https://www.indiatoday.in/rss/politics", "scope": "nation", "nation": "india", "hint": "politics", "lang": "en" },
-    { "name": "The Hindu Education", "url": "https://www.thehindu.com/education/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "education", "lang": "en" },
-    { "name": "India Today Law", "url": "https://www.indiatoday.in/rss/legal", "scope": "nation", "nation": "india", "hint": "laws", "lang": "en" },
-    { "name": "ESPN India", "url": "https://www.espn.in/espn/rss/news", "scope": "nation", "nation": "india", "hint": "sports", "lang": "en" },
-    { "name": "The Hindu Agriculture", "url": "https://www.thehindu.com/sci-tech/agriculture/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "agriculture", "lang": "en" },
-    { "name": "The Hindu Environment", "url": "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "nature", "lang": "en" }
-  ]
+  "googleNews": {
+    "locales": {
+      "global": { "hl": "en-US", "gl": "US", "ceid": "US:en" },
+      "nations": {
+        "india": { "hl": "en-IN", "gl": "IN", "ceid": "IN:en" }
+      }
+    },
+    "topicMapping": {
+      "politics": "WORLD",
+      "business": "BUSINESS",
+      "technology": "TECHNOLOGY",
+      "science": "SCIENCE",
+      "health": "HEALTH",
+      "sports": "SPORTS",
+      "entertainment": "ENTERTAINMENT",
+      "environment": null,
+      "education": null
+    },
+    "extraFeeds": [
+      { "name": "BBC Environment", "url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "scope": "global", "hint": "environment", "lang": "en" },
+      { "name": "The Hindu Environment", "url": "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "environment", "lang": "en" },
+      { "name": "Nat Geo Environment", "url": "https://www.nationalgeographic.com/rss/news", "scope": "global", "hint": "environment", "lang": "en" },
+      { "name": "BBC Education", "url": "https://feeds.bbci.co.uk/news/education/rss.xml", "scope": "global", "hint": "education", "lang": "en" },
+      { "name": "The Hindu Education", "url": "https://www.thehindu.com/education/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "education", "lang": "en" }
+    ]
+  }
 }
