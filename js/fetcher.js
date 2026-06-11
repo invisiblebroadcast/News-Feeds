@@ -72,7 +72,32 @@ const FeedFetcher = (() => {
     return articles;
   }
 
+  function isGoogleNewsUrl(url) {
+    try {
+      return new URL(url).hostname.includes('news.google.com');
+    } catch {
+      return false;
+    }
+  }
+
+  async function proxyFetch(feed) {
+    const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url);
+    const res = await fetchWithTimeout(proxyUrl);
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const xmlText = await res.text();
+    return parseRssXml(xmlText, feed);
+  }
+
   async function fetchFeed(feed) {
+    if (isGoogleNewsUrl(feed.url)) {
+      try {
+        return await proxyFetch(feed);
+      } catch (err) {
+        console.warn(`Google News feed failed: ${feed.name}`, err.message);
+        return [];
+      }
+    }
+
     const encodedUrl = encodeURIComponent(feed.url);
     const rss2jsonUrl = RSS2JSON_API + encodedUrl;
 
@@ -108,11 +133,7 @@ const FeedFetcher = (() => {
       });
     } catch (err) {
       try {
-        const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url);
-        const res = await fetchWithTimeout(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-        const xmlText = await res.text();
-        return parseRssXml(xmlText, feed);
+        return await proxyFetch(feed);
       } catch (fallbackErr) {
         console.warn(`Feed failed: ${feed.name} (${feed.url})`, err.message, fallbackErr.message);
         return [];
