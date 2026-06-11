@@ -1242,43 +1242,28 @@ img { max-width: 100%; height: auto; }
 .article-watermark {
   font-size: 0.68rem;
   color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  opacity: 0.5;
   margin-top: 10px;
   padding-top: 6px;
   border-top: 1px solid var(--border-secondary);
-  opacity: 0.6;
 }
 .article-watermark .wm-brand {
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--accent-dim);
-}
-.article-watermark .wm-source {
+  letter-spacing: 0.04em;
   color: var(--text-tertiary);
-}
-.article-watermark .wm-sep {
-  color: var(--border-primary);
 }
 
 .reels-watermark {
   font-size: 0.7rem;
-  color: rgba(255,255,255,0.35);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  color: rgba(255,255,255,0.3);
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 .reels-watermark .wm-brand {
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(255,41,41,0.6);
-}
-.reels-watermark .wm-source {
-  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.3);
 }
 
 /* ─── Share Button ─── */
@@ -1302,25 +1287,29 @@ img { max-width: 100%; height: auto; }
   border-color: var(--text-tertiary);
 }
 
-.reels-share-btn {
+.reels-toolbar {
   position: absolute;
   top: 16px;
   right: 16px;
-  width: 36px;
-  height: 36px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+.reels-tool-btn {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.2);
   background: rgba(0,0,0,0.4);
   color: rgba(255,255,255,0.8);
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all var(--transition);
-  z-index: 3;
 }
-.reels-share-btn:hover {
+.reels-tool-btn:hover {
   background: rgba(255,255,255,0.15);
   color: #fff;
 }
@@ -1328,19 +1317,14 @@ img { max-width: 100%; height: auto; }
 .modal-watermark {
   font-size: 0.72rem;
   color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  opacity: 0.5;
   margin-top: 20px;
   padding-top: 10px;
   border-top: 1px solid var(--border-secondary);
-  opacity: 0.5;
 }
 .modal-watermark .wm-brand {
   font-weight: 600;
-  color: var(--accent-dim);
-}
-.modal-watermark .wm-source {
+  letter-spacing: 0.04em;
   color: var(--text-tertiary);
 }
 

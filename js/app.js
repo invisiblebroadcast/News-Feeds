@@ -287,8 +287,6 @@
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
-            '<span class="wm-sep">&middot;</span>' +
-            '<span class="wm-source">' + escHtml(article.source || 'News') + '</span>' +
           '</div>' +
         '</div>' +
       '</article>';
@@ -327,7 +325,11 @@
           articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('') +
         '</div>' +
         '<div class="reels-card"' + bgHtml + '>' +
-          '<button class="reels-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share">&#x21AA;</button>' +
+          '<div class="reels-toolbar">' +
+            '<button class="reels-tool-btn" id="reels-share-text" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Text">&#x21AA;</button>' +
+            '<button class="reels-tool-btn" id="reels-share-image" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x1F5BC;</button>' +
+            '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
+          '</div>' +
           '<div class="reels-overlay">' +
             '<span class="reels-count">' + (idx + 1) + ' / ' + total + '</span>' +
             '<h2 class="reels-title">' + escHtml(article.title) + '</h2>' +
@@ -339,8 +341,6 @@
             '<button class="btn btn-primary reels-read-btn" data-article="' + encodeURIComponent(article.link) + '">Read Original Article</button>' +
             '<div class="reels-watermark">' +
               '<span class="wm-brand">Invisible Broadcast</span>' +
-              '<span class="wm-sep">&middot;</span>' +
-              '<span class="wm-source">' + escHtml(article.source || 'News') + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -354,13 +354,24 @@
       const link = decodeURIComponent(e.currentTarget.dataset.article);
       openArticleDetail(link);
     });
-    const reelsShare = el.main.querySelector('.reels-share-btn');
-    if (reelsShare) reelsShare.addEventListener('click', e => {
+    const shareText = $('#reels-share-text');
+    if (shareText) shareText.addEventListener('click', e => {
       e.stopPropagation();
-      const url = decodeURIComponent(e.currentTarget.dataset.url);
-      const title = e.currentTarget.dataset.title;
-      const source = e.currentTarget.dataset.source;
-      handleShare(url, title, source);
+      handleShare(
+        decodeURIComponent(shareText.dataset.url),
+        shareText.dataset.title,
+        shareText.dataset.source
+      );
+    });
+    const shareImage = $('#reels-share-image');
+    if (shareImage) shareImage.addEventListener('click', e => {
+      e.stopPropagation();
+      handleShareImage(currentArticles[currentReelIndex]);
+    });
+    const fsBtn = $('#reels-fullscreen');
+    if (fsBtn) fsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFullscreen();
     });
   }
 
@@ -915,8 +926,6 @@
     }
     el.articleModalRead.dataset.url = article.link;
     el.articleModalExt.dataset.url = article.link;
-    const wmSource = $('#article-modal-watermark-source');
-    if (wmSource) wmSource.textContent = article.source || 'News';
     el.articleModal.classList.add('open');
   }
 
@@ -1008,6 +1017,59 @@
           setTimeout(() => { btn.innerHTML = orig; }, 2000);
         }
       }).catch(() => {});
+    }
+  }
+
+  async function handleShareImage(article) {
+    try {
+      const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+      const bgStyle = hasThumb ? article.imageUrl : '';
+      const fullSummary = stripHtml(article.summary);
+
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:-9999px;top:0;width:400px;z-index:-1;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;';
+      el.innerHTML =
+        '<div style="width:100%;min-height:500px;border-radius:12px;overflow:hidden;position:relative;background:' + (bgStyle ? 'transparent' : '#0d1117') + ';' + (bgStyle ? 'background-image:url(' + bgStyle.replace(/'/g, '%27') + ');background-size:cover;background-position:center;' : '') + '">' +
+          '<div style="background:linear-gradient(0deg,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.5) 50%,rgba(0,0,0,0.2) 100%);padding:48px 36px 36px;display:flex;flex-direction:column;justify-content:flex-end;min-height:500px;">' +
+            '<div style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:8px;">' + escHtml(article.source) + ' &middot; ' + formatDateShort(article.pubDate) + '</div>' +
+            '<h2 style="font-size:1.5rem;font-weight:700;line-height:1.35;margin:0 0 12px;color:#fff;">' + escHtml(article.title) + '</h2>' +
+            '<p style="font-size:0.9rem;line-height:1.7;color:rgba(255,255,255,0.8);margin:0 0 24px;">' + escHtml(fullSummary || '') + '</p>' +
+            '<div style="font-size:0.7rem;color:rgba(255,255,255,0.25);padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-weight:600;letter-spacing:0.04em;">Invisible Broadcast</div>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(el);
+
+      const canvas = await html2canvas(el, { useCORS: true, scale: 2, backgroundColor: '#000000', allowTaint: false, logging: false });
+      el.remove();
+
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      if (!blob) { handleShare(article.link, article.title, article.source); return; }
+
+      const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: article.title });
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'invisible-broadcast.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    } catch (err) {
+      console.warn('Image share failed:', err.message);
+      handleShare(article.link, article.title, article.source);
+    }
+  }
+
+  function toggleFullscreen() {
+    const c = document.querySelector('.reels-container');
+    if (!c) return;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } else {
+      if (c.requestFullscreen) c.requestFullscreen();
+      else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
     }
   }
 
