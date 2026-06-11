@@ -56,6 +56,10 @@
           <button class="mode-btn" data-mode="top">Top</button>
           <button class="mode-btn active" data-mode="live">Live</button>
         </div>
+        <div class="mode-toggle view-toggle" id="view-toggle">
+          <button class="mode-btn active" data-view="list">List</button>
+          <button class="mode-btn" data-view="reels">Reels</button>
+        </div>
         <button class="btn btn-icon btn-ghost filter-icon-btn" id="search-toggle" title="Search">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3.5 3.5"/></svg>
         </button>
@@ -92,8 +96,6 @@
         </div>
         <div class="select-wrapper">
           <select id="sort-by">
-            <option value="score">Score ↓</option>
-            <option value="score-asc">Score ↑</option>
             <option value="date-desc">Date ↓</option>
             <option value="date-asc">Date ↑</option>
             <option value="source">Source A–Z</option>
@@ -211,8 +213,14 @@
         </div>
         <p id="article-modal-summary" style="font-size:0.95rem;line-height:1.7;color:var(--text-primary);"></p>
         <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="article-modal-read">Read Original Article</button>
+          <button class="btn btn-primary" id="article-modal-read">Read Article</button>
           <button class="btn btn-danger" id="article-modal-ext-link">Open in Browser</button>
+          <button class="btn-share" id="article-modal-share">&#x21AA; Share</button>
+        </div>
+        <div class="modal-watermark">
+          <span class="wm-brand">Invisible Broadcast</span>
+          <span class="wm-sep">&middot;</span>
+          <span class="wm-source" id="article-modal-watermark-source"></span>
         </div>
       </div>
     </div>
@@ -224,12 +232,16 @@
         <h2 id="source-modal-title">Original Article</h2>
         <button class="modal-close" id="source-modal-close">&times;</button>
       </div>
-      <div class="modal-body modal-body-full">
-        <div id="source-fallback" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:var(--bg-secondary);z-index:10;flex-direction:column;gap:12px;text-align:center;padding:24px;">
-          <p style="color:var(--text-secondary);font-size:0.9rem;">This site can't be embedded. Open in your browser instead.</p>
+      <div class="modal-body modal-body-full" style="flex-direction:column;">
+        <div id="reader-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;color:var(--text-secondary);">
+          <div class="loading-spinner"></div>
+          <p>Fetching article...</p>
+        </div>
+        <div id="reader-content" style="display:none;overflow-y:auto;flex:1;padding:32px 40px;background:var(--bg-primary);color:var(--text-primary);font-size:1.05rem;line-height:1.8;"></div>
+        <div id="source-fallback" style="display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;text-align:center;padding:24px;color:var(--text-secondary);">
+          <p style="font-size:0.9rem;">This article could not be loaded in reader mode.</p>
           <a id="source-fallback-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Open in Browser</a>
         </div>
-        <iframe id="source-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy"></iframe>
       </div>
     </div>
   </div>

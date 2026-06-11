@@ -6,6 +6,7 @@
   let currentNation = FeedManager.getSelectedNation();
   let currentSubcat = 'all';
   let currentMode = 'live';
+  let currentView = 'list';
   let scopeCache = {};
   let isFetching = false;
   let currentArticles = [];
@@ -38,7 +39,6 @@
     sourceModal: $('#source-modal'),
     sourceModalClose: $('#source-modal-close'),
     sourceModalTitle: $('#source-modal-title'),
-    sourceIframe: $('#source-iframe'),
     feedUrlInput: $('#feed-url-input'),
     feedNameInput: $('#feed-name-input'),
     feedScopeSelect: $('#feed-scope-select'),
@@ -58,7 +58,8 @@
     searchToggle: $('#search-toggle'),
     filterToggle: $('#filter-toggle'),
     sortToggle: $('#sort-toggle'),
-    filtersPanel: $('#filters-panel')
+    filtersPanel: $('#filters-panel'),
+    viewToggle: $('#view-toggle')
   };
 
   if (!el.modal) return;
@@ -145,7 +146,9 @@
     }
     articles = applySearch(articles);
     articles = applyFilters(articles);
-    for (const a of articles) a._score = scoreArticle(a);
+    if (currentMode === 'top') {
+      for (const a of articles) a._score = scoreArticle(a);
+    }
     const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
     articles = applySort(articles, sortMode);
     return articles;
@@ -200,6 +203,9 @@
     if (el.modeToggle) {
       $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
     }
+    if (el.viewToggle) {
+      $$('.mode-btn', el.viewToggle).forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
+    }
   }
 
   /* ── Render Content ── */
@@ -233,6 +239,7 @@
       totalShown = display.length;
     } else {
       display = articles.slice(0, perPage);
+      display.forEach((a, i) => a._rank = i + 1);
       totalShown = display.length;
     }
 
@@ -263,8 +270,9 @@
         '</div>'
       : '';
 
-    const score = article._score || 0;
-    const scoreColor = score >= 80 ? 'var(--accent-hover)' : score >= 50 ? 'var(--warning)' : 'var(--text-tertiary)';
+    const rankHtml = currentMode === 'top' && article._rank
+      ? '<span class="score-badge" style="color:' + (article._rank <= 3 ? 'var(--accent)' : 'var(--text-tertiary)') + '">#' + article._rank + '</span>'
+      : '';
 
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         thumbHtml +
@@ -274,10 +282,97 @@
           '<div class="article-meta">' +
             '<span class="source">' + article.source + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
-            '<span class="score-badge" style="color:' + scoreColor + '">' + score + '</span>' +
+            rankHtml +
+          '</div>' +
+          '<div class="article-watermark">' +
+            '<span class="wm-brand">Invisible Broadcast</span>' +
+            '<span class="wm-sep">&middot;</span>' +
+            '<span class="wm-source">' + (article.source || 'News') + '</span>' +
           '</div>' +
         '</div>' +
       '</article>';
+  }
+
+  /* ── Reels View ── */
+  let currentReelIndex = 0;
+
+  function renderReels(articles) {
+    if (!articles.length) { showEmpty(); return; }
+    const settings = Settings.load();
+    const perPage = settings.articlesPerPage || 10;
+    if (currentMode === 'top') {
+      articles = articles.slice(0, perPage);
+      articles.forEach((a, i) => a._rank = i + 1);
+    }
+    currentArticles = articles;
+    currentReelIndex = 0;
+    showReel();
+  }
+
+  function showReel() {
+    const articles = currentArticles;
+    const idx = currentReelIndex;
+    const article = articles[idx];
+    const total = articles.length;
+
+    const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+    const bgStyle = hasThumb ? article.imageUrl : '';
+
+    el.main.innerHTML =
+      '<div class="reels-container">' +
+        '<div class="reels-progress">' +
+          articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('') +
+        '</div>' +
+        '<div class="reels-card"' + (bgStyle ? ' style="background-image:url(' + bgStyle + ')"' : '') + '>' +
+          '<button class="reels-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + article.title.replace(/"/g, '&quot;') + '" data-source="' + (article.source || '').replace(/"/g, '&quot;') + '" title="Share">&#x21AA;</button>' +
+          '<div class="reels-overlay">' +
+            '<span class="reels-count">' + (idx + 1) + ' / ' + total + '</span>' +
+            '<h2 class="reels-title">' + article.title + '</h2>' +
+            '<div class="reels-meta">' +
+              '<span class="reels-source">' + article.source + '</span>' +
+              '<span class="reels-date">' + formatDateShort(article.pubDate) + '</span>' +
+            '</div>' +
+            '<p class="reels-summary">' + stripHtml(article.summary).slice(0, 350) + '</p>' +
+            '<button class="btn btn-primary reels-read-btn" data-article="' + encodeURIComponent(article.link) + '">Read Original Article</button>' +
+            '<div class="reels-watermark">' +
+              '<span class="wm-brand">Invisible Broadcast</span>' +
+              '<span class="wm-sep">&middot;</span>' +
+              '<span class="wm-source">' + (article.source || 'News') + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button class="reels-nav reels-prev" id="reels-prev">\u2039</button>' +
+        '<button class="reels-nav reels-next" id="reels-next">\u203A</button>' +
+      '</div>';
+
+    $('#reels-prev').addEventListener('click', prevReel);
+    $('#reels-next').addEventListener('click', nextReel);
+    el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
+      const link = decodeURIComponent(e.currentTarget.dataset.article);
+      openArticleDetail(link);
+    });
+    const reelsShare = el.main.querySelector('.reels-share-btn');
+    if (reelsShare) reelsShare.addEventListener('click', e => {
+      e.stopPropagation();
+      const url = decodeURIComponent(e.currentTarget.dataset.url);
+      const title = e.currentTarget.dataset.title;
+      const source = e.currentTarget.dataset.source;
+      handleShare(url, title, source);
+    });
+  }
+
+  function prevReel() {
+    if (currentReelIndex > 0) { currentReelIndex--; showReel(); }
+  }
+
+  function nextReel() {
+    if (currentReelIndex < currentArticles.length - 1) { currentReelIndex++; showReel(); }
+  }
+
+  function exitReels() {
+    currentView = 'list';
+    updateStickyHeader();
+    displayCurrentSubcat();
   }
 
   /* ── Toggle Filters Panel ── */
@@ -310,6 +405,24 @@
     });
   }
 
+  function isGoogleNewsRedirect(url) {
+    try { return new URL(url).hostname === 'news.google.com' && url.includes('/rss/articles/'); }
+    catch { return false; }
+  }
+
+  function updateSortOptions() {
+    if (!el.sortBy) return;
+    const current = el.sortBy.value;
+    const isTop = currentMode === 'top';
+    el.sortBy.innerHTML = (isTop ? '<option value="score">Score ↓</option><option value="score-asc">Score ↑</option>' : '') +
+      '<option value="date-desc">Date ↓</option>' +
+      '<option value="date-asc">Date ↑</option>' +
+      '<option value="source">Source A–Z</option>';
+    if ([...el.sortBy.options].some(o => o.value === current)) el.sortBy.value = current;
+    else el.sortBy.value = isTop ? 'score' : 'date-desc';
+    currentSort = el.sortBy.value;
+  }
+
   function bindModeToggle() {
     const toggle = el.modeToggle;
     if (!toggle) return;
@@ -320,7 +433,21 @@
       loadedCount = 0;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      updateSortOptions();
       updateStickyHeader();
+      displayCurrentSubcat();
+    });
+  }
+
+  function bindViewToggle() {
+    const toggle = el.viewToggle;
+    if (!toggle) return;
+    toggle.addEventListener('click', e => {
+      const btn = e.target.closest('.mode-btn');
+      if (!btn || btn.classList.contains('active')) return;
+      currentView = btn.dataset.view;
+      $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
       displayCurrentSubcat();
     });
   }
@@ -443,7 +570,7 @@
       });
     }
     if (el.sortBy) {
-      el.sortBy.value = currentSort || 'score';
+      updateSortOptions();
       el.sortBy.addEventListener('change', () => {
         currentSort = el.sortBy.value;
         const key = scopeKey();
@@ -460,7 +587,11 @@
     const translated = targetLang !== 'en'
       ? await Translator.translateArticles(articles, targetLang)
       : articles;
-    renderArticles(translated);
+    if (currentView === 'reels') {
+      renderReels(translated);
+    } else {
+      renderArticles(translated);
+    }
   }
 
   let currentSearch = '';
@@ -778,75 +909,116 @@
     }
     el.articleModalRead.dataset.url = article.link;
     el.articleModalExt.dataset.url = article.link;
+    const wmSource = $('#article-modal-watermark-source');
+    if (wmSource) wmSource.textContent = article.source || 'News';
+    const shareBtn = $('#article-modal-share');
+    if (shareBtn) {
+      shareBtn.dataset.url = article.link;
+      shareBtn.dataset.title = article.title;
+      shareBtn.dataset.source = article.source;
+    }
     el.articleModal.classList.add('open');
   }
 
   function closeArticleModal() { el.articleModal.classList.remove('open'); }
 
-  function openSourceIframe(url, title) {
+  async function openArticleReader(url, title) {
     el.sourceModalTitle.textContent = title || 'Original Article';
     el.sourceModal.classList.add('open');
 
-    const fb = $('#source-fallback');
+    const loading = $('#reader-loading');
+    const content = $('#reader-content');
+    const fallback = $('#source-fallback');
     const link = $('#source-fallback-link');
-    if (fb && link) link.href = url;
 
-    let proxyIdx = 0;
-    let loaded = false;
-    let fallbackTimer = null;
+    if (loading) loading.style.display = 'flex';
+    if (content) { content.innerHTML = ''; content.style.display = 'none'; }
+    if (fallback) fallback.style.display = 'none';
+    if (link) link.href = url;
 
-    const proxies = [
-      'https://r.jina.ai/',
-      'https://corsproxy.io/?url='
+    if (isGoogleNewsRedirect(url)) {
+      if (loading) loading.style.display = 'none';
+      if (fallback) fallback.style.display = 'flex';
+      return;
+    }
+
+    const fetchProxies = [
+      { url: 'https://corsproxy.io/?url=', encode: true },
+      { url: 'https://api.allorigins.win/raw?url=', encode: true },
+      { url: 'https://r.jina.ai/', encode: true }
     ];
 
-    function tryNext() {
-      proxyIdx++;
-      if (proxyIdx >= proxies.length) {
-        if (fb && !loaded) fb.style.display = 'flex';
-        return;
-      }
-      loadCurrent();
-    }
-
-    function loadCurrent() {
-      const src = proxies[proxyIdx] + encodeURIComponent(url);
-      el.sourceIframe.src = src;
-      if (fallbackTimer) { clearTimeout(fallbackTimer); }
-      fallbackTimer = setTimeout(() => {
-        if (!loaded) tryNext();
-      }, 10000);
-    }
-
-    el.sourceIframe.onload = function() {
-      loaded = true;
+    for (const proxy of fetchProxies) {
       try {
-        const doc = el.sourceIframe.contentDocument;
-        if (doc && doc.body) {
-          const text = doc.body.textContent.trim().toLowerCase();
-          if (!text || text.includes('sorry') || text.includes('blocked') || text.includes('automated queries')) {
-            loaded = false;
-            tryNext();
-            return;
-          }
-        }
-      } catch(e) {
-        loaded = false;
-        tryNext();
-        return;
-      }
-      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    };
+        const proxyUrl = proxy.url + (proxy.encode ? encodeURIComponent(url) : url);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timer);
 
-    loadCurrent();
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        const html = await res.text();
+        if (!html || html.length < 100) throw new Error('Empty response');
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        doc.querySelectorAll('script, style, nav, header, footer, aside').forEach(s => s.remove());
+
+        if (content) {
+          content.innerHTML = doc.body.innerHTML;
+          content.style.display = 'block';
+        }
+        if (loading) loading.style.display = 'none';
+        return;
+      } catch (err) {
+        console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
+      }
+    }
+
+    // Iframe fallback — proxies don't support CORS, load via iframe
+    if (content) {
+      content.innerHTML = '<iframe style="width:100%;height:100%;border:none;background:#fff;" src="https://corsproxy.io/?url=' + encodeURIComponent(url) + '" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>';
+      content.style.display = 'block';
+      const iframe = content.querySelector('iframe');
+      iframe.onload = function() {
+        if (loading) loading.style.display = 'none';
+        try {
+          const doc = iframe.contentDocument;
+          if (doc && doc.body && (!doc.body.textContent.trim() || doc.body.textContent.trim().length < 50)) {
+            if (fallback) fallback.style.display = 'flex';
+          }
+        } catch(e) {
+          if (fallback) fallback.style.display = 'flex';
+        }
+      };
+    }
+  }
+
+  function handleShare(url, title, source) {
+    const text = title + ' — ' + (source || 'News') + '\n\nPresented by Invisible Broadcast\n' + url;
+    if (navigator.share) {
+      navigator.share({ title: title, text: text, url: url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = $('#article-modal-share');
+        if (btn) {
+          const orig = btn.innerHTML;
+          btn.innerHTML = 'Copied!';
+          setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        }
+      }).catch(() => {});
+    }
   }
 
   function closeSourceModal() {
     el.sourceModal.classList.remove('open');
-    el.sourceIframe.src = '';
-    el.sourceIframe.onload = null;
-    const fb = $('#source-fallback');
-    if (fb) fb.style.display = 'none';
+    const content = $('#reader-content');
+    if (content) { content.innerHTML = ''; content.style.display = 'none'; }
+    const loading = $('#reader-loading');
+    if (loading) loading.style.display = 'flex';
+    const fallback = $('#source-fallback');
+    if (fallback) fallback.style.display = 'none';
   }
 
   function bindArticleClicks() {
@@ -859,15 +1031,27 @@
     el.articleModal.addEventListener('click', e => { if (e.target === el.articleModal) closeArticleModal(); });
     el.articleModalRead.addEventListener('click', () => {
       const url = el.articleModalRead.dataset.url;
-      if (url) { closeArticleModal(); openSourceIframe(url, el.articleModalTitle.textContent); }
+      if (url) { closeArticleModal(); openArticleReader(url, el.articleModalTitle.textContent); }
     });
     el.articleModalExt.addEventListener('click', () => {
       const url = el.articleModalExt.dataset.url;
       if (url) window.open(url, '_blank');
     });
+    const shareBtn = $('#article-modal-share');
+    if (shareBtn) shareBtn.addEventListener('click', () => {
+      const url = shareBtn.dataset.url;
+      const title = shareBtn.dataset.title;
+      const source = shareBtn.dataset.source;
+      if (url) handleShare(url, title, source);
+    });
     el.sourceModalClose.addEventListener('click', closeSourceModal);
     el.sourceModal.addEventListener('click', e => { if (e.target === el.sourceModal) closeSourceModal(); });
     document.addEventListener('keydown', e => {
+      if (currentView === 'reels') {
+        if (e.key === 'ArrowLeft') { prevReel(); e.preventDefault(); return; }
+        if (e.key === 'ArrowRight') { nextReel(); e.preventDefault(); return; }
+        if (e.key === 'Escape') { exitReels(); e.preventDefault(); return; }
+      }
       if (e.key === 'Escape') {
         if (el.sourceModal.classList.contains('open')) closeSourceModal();
         else if (el.articleModal.classList.contains('open')) closeArticleModal();
@@ -893,6 +1077,7 @@
     renderSubTabs();
     bindSubTabs();
     bindModeToggle();
+    bindViewToggle();
     bindLangSelect();
     bindSearch();
     bindFilterSort();
