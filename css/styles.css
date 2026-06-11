@@ -796,6 +796,43 @@ img { max-width: 100%; height: auto; }
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
 }
+.card-share-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  z-index: 2;
+  opacity: 0;
+}
+.article-card:hover .card-share-btn,
+.card-share-btn:focus {
+  opacity: 1;
+}
+.card-share-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+  border-color: var(--text-tertiary);
+  opacity: 1;
+}
+@media (max-width: 768px) {
+  .card-share-btn {
+    opacity: 1;
+  }
+}
+.article-card {
+  position: relative;
+}
 .article-card.no-thumb .article-thumb {
   display: none;
 }

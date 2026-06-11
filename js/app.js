@@ -275,6 +275,7 @@
       : '';
 
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
+        '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share">&#x21AA;</button>' +
         thumbHtml +
         '<div class="article-body">' +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
@@ -916,12 +917,6 @@
     el.articleModalExt.dataset.url = article.link;
     const wmSource = $('#article-modal-watermark-source');
     if (wmSource) wmSource.textContent = article.source || 'News';
-    const shareBtn = $('#article-modal-share');
-    if (shareBtn) {
-      shareBtn.dataset.url = article.link;
-      shareBtn.dataset.title = article.title;
-      shareBtn.dataset.source = article.source;
-    }
     el.articleModal.classList.add('open');
   }
 
@@ -1028,6 +1023,13 @@
 
   function bindArticleClicks() {
     el.main.addEventListener('click', e => {
+      const se = e.target.closest('.card-share-btn');
+      if (se) {
+        e.stopPropagation();
+        const url = decodeURIComponent(se.dataset.url);
+        handleShare(url, se.dataset.title, se.dataset.source);
+        return;
+      }
       const ae = e.target.closest('[data-article]');
       if (!ae) return;
       openArticleDetail(decodeURIComponent(ae.dataset.article));
@@ -1041,13 +1043,6 @@
     el.articleModalExt.addEventListener('click', () => {
       const url = el.articleModalExt.dataset.url;
       if (url) window.open(url, '_blank');
-    });
-    const shareBtn = $('#article-modal-share');
-    if (shareBtn) shareBtn.addEventListener('click', () => {
-      const url = shareBtn.dataset.url;
-      const title = shareBtn.dataset.title;
-      const source = shareBtn.dataset.source;
-      if (url) handleShare(url, title, source);
     });
     el.sourceModalClose.addEventListener('click', closeSourceModal);
     el.sourceModal.addEventListener('click', e => { if (e.target === el.sourceModal) closeSourceModal(); });
