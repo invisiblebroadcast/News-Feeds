@@ -53,10 +53,52 @@
       <div><h2 id="section-title"></h2></div>
       <div class="section-controls">
         <div class="mode-toggle" id="mode-toggle">
-          <button class="mode-btn active" data-mode="top">Top</button>
-          <button class="mode-btn" data-mode="live">Live</button>
+          <button class="mode-btn" data-mode="top">Top</button>
+          <button class="mode-btn active" data-mode="live">Live</button>
+        </div>
+        <button class="btn btn-icon btn-ghost filter-icon-btn" id="search-toggle" title="Search">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3.5 3.5"/></svg>
+        </button>
+        <button class="btn btn-icon btn-ghost filter-icon-btn" id="filter-toggle" title="Filter by source">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
+        </button>
+        <button class="btn btn-icon btn-ghost filter-icon-btn" id="sort-toggle" title="Sort">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
+        </button>
+        <div class="select-wrapper lang-select">
+          <select id="lang-select">
+            <option value="en">EN</option>
+            <option value="hi">HI</option><option value="kn">KN</option>
+            <option value="ta">TA</option><option value="te">TE</option>
+            <option value="ml">ML</option><option value="bn">BN</option>
+            <option value="mr">MR</option><option value="gu">GU</option>
+            <option value="pa">PA</option><option value="ur">UR</option>
+            <option value="es">ES</option><option value="fr">FR</option>
+            <option value="ar">AR</option><option value="zh">ZH</option>
+            <option value="ja">JA</option><option value="de">DE</option>
+            <option value="ru">RU</option><option value="pt">PT</option>
+          </select>
         </div>
         <span class="section-meta" id="section-meta"></span>
+      </div>
+    </div>
+    <div class="filters-panel" id="filters-panel">
+      <div class="filters-row">
+        <input type="text" id="search-input" placeholder="Search articles…">
+        <div class="select-wrapper">
+          <select id="filter-source">
+            <option value="">All Sources</option>
+          </select>
+        </div>
+        <div class="select-wrapper">
+          <select id="sort-by">
+            <option value="score">Score ↓</option>
+            <option value="score-asc">Score ↑</option>
+            <option value="date-desc">Date ↓</option>
+            <option value="date-asc">Date ↑</option>
+            <option value="source">Source A–Z</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -111,6 +153,11 @@
               <option value="ru">Russian</option><option value="pt">Portuguese</option>
             </select>
           </div>
+        </div>
+        <div class="setting-group">
+          <label class="setting-label">Feed Subscriptions</label>
+          <p class="setting-desc">Toggle RSS feeds on/off to include them when fetching news.</p>
+          <div id="subscription-list"></div>
         </div>
         <div class="setting-group">
           <label class="setting-label">Custom Feed Sources</label>

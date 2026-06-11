@@ -5,7 +5,7 @@
   let currentScope = 'global';
   let currentNation = FeedManager.getSelectedNation();
   let currentSubcat = 'all';
-  let currentMode = 'top';
+  let currentMode = 'live';
   let scopeCache = {};
   let isFetching = false;
   let currentArticles = [];
@@ -50,7 +50,15 @@
     feedCustomList: $('#feed-custom-list'),
     sectionTitle: $('#section-title'),
     sectionMeta: $('#section-meta'),
-    modeToggle: $('#mode-toggle')
+    modeToggle: $('#mode-toggle'),
+    searchInput: $('#search-input'),
+    langSelect: $('#lang-select'),
+    filterSource: $('#filter-source'),
+    sortBy: $('#sort-by'),
+    searchToggle: $('#search-toggle'),
+    filterToggle: $('#filter-toggle'),
+    sortToggle: $('#sort-toggle'),
+    filtersPanel: $('#filters-panel')
   };
 
   if (!el.modal) return;
@@ -107,7 +115,6 @@
       currentScope = scope;
       currentNation = nation;
       FeedManager.setSelectedNation(nation);
-      currentMode = 'top';
       loadedCount = 0;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -136,7 +143,21 @@
     } else {
       articles = FeedFetcher.sortByDate(articles);
     }
+    articles = applySearch(articles);
+    articles = applyFilters(articles);
+    for (const a of articles) a._score = scoreArticle(a);
+    const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
+    articles = applySort(articles, sortMode);
     return articles;
+  }
+
+  function updateFilterSourceOptions(articles) {
+    if (!el.filterSource) return;
+    const current = el.filterSource.value;
+    const sources = [...new Set(articles.map(a => a.source).filter(Boolean))].sort();
+    el.filterSource.innerHTML = '<option value="">All Sources</option>' +
+      sources.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
+    if (current && sources.includes(current)) el.filterSource.value = current;
   }
 
   function renderSubTabs() {
@@ -159,7 +180,6 @@
       const sub = tab.dataset.subcat;
       if (sub === currentSubcat) return;
       currentSubcat = sub;
-      currentMode = 'top';
       loadedCount = 0;
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -235,16 +255,16 @@
 
   function renderCard(article, index) {
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-    const targetLang = Settings.get('language');
     const encoded = encodeURIComponent(article.link);
-    const favicon = getDomain(article.link) ? 'https://www.google.com/s2/favicons?domain=' + getDomain(article.link) + '&sz=64' : '';
 
-    const imgSrc = hasThumb ? article.imageUrl : favicon;
-    const thumbHtml = imgSrc
+    const thumbHtml = hasThumb
       ? '<div class="article-thumb" style="cursor:pointer" data-article="' + encoded + '">' +
-          '<img src="' + imgSrc + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+          '<img src="' + article.imageUrl + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
         '</div>'
       : '';
+
+    const score = article._score || 0;
+    const scoreColor = score >= 80 ? 'var(--accent-hover)' : score >= 50 ? 'var(--warning)' : 'var(--text-tertiary)';
 
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         thumbHtml +
@@ -254,10 +274,40 @@
           '<div class="article-meta">' +
             '<span class="source">' + article.source + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
-            (targetLang !== 'en' ? '<span class="translate-link">Translate</span>' : '') +
+            '<span class="score-badge" style="color:' + scoreColor + '">' + score + '</span>' +
           '</div>' +
         '</div>' +
       '</article>';
+  }
+
+  /* ── Toggle Filters Panel ── */
+  function bindFilterToggles() {
+    function togglePanel(btnId, panelId) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        const open = el.filtersPanel.classList.contains('open');
+        el.filtersPanel.classList.toggle('open');
+        $$('.filter-icon-btn').forEach(b => b.classList.remove('active'));
+        if (!open) btn.classList.add('active');
+      });
+    }
+    togglePanel('search-toggle', 'filters-panel');
+    togglePanel('filter-toggle', 'filters-panel');
+    togglePanel('sort-toggle', 'filters-panel');
+  }
+
+  function bindLangSelect() {
+    if (!el.langSelect) return;
+    el.langSelect.value = Settings.get('language') || 'en';
+    el.langSelect.addEventListener('change', () => {
+      Settings.save({ language: el.langSelect.value });
+      const key = scopeKey();
+      const cached = scopeCache[key];
+      if (!cached) return;
+      const articles = getFilteredArticles(currentSubcat, cached);
+      renderTranslated(articles);
+    });
   }
 
   function bindModeToggle() {
@@ -278,6 +328,10 @@
   /* ── Fetch & Refresh ── */
   function scopeKey() {
     return currentScope + '_' + (currentScope === 'nation' ? currentNation : '');
+  }
+
+  function showProgress(msg) {
+    el.main.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>' + msg + '</p></div>';
   }
 
   async function renderContent() {
@@ -302,21 +356,58 @@
         return;
       }
 
-      let articles = await FeedFetcher.fetchCategory(key, feeds, true);
-
-      for (const a of articles) a.subcat = a.feedHint || 'politics';
-
       const groups = {};
-      for (const a of articles) {
-        const cat = a.subcat;
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(a);
-      }
-
-      scopeCache[key] = { articles, groups };
       const subs = FeedManager.subcategoriesForScope(currentScope);
       if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
-      renderSubTabs();
+
+      const batchSize = 3;
+      let hasRendered = false;
+
+      for (let i = 0; i < feeds.length; i += batchSize) {
+        const batch = feeds.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map(f => FeedFetcher.fetchFeed(f)));
+
+        for (let j = 0; j < results.length; j++) {
+          const result = results[j];
+          if (result.status === 'fulfilled') {
+            const articles = result.value;
+            for (const a of articles) {
+              a.subcat = a.feedHint || 'politics';
+              const cat = a.subcat;
+              if (!groups[cat]) groups[cat] = [];
+              groups[cat].push(a);
+            }
+          } else {
+            console.warn('Feed failed: ' + batch[j]?.name, result.reason?.message);
+          }
+        }
+
+        let allArticles = [];
+        for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+        scopeCache[key] = { articles: allArticles, groups };
+        renderSubTabs();
+        updateStickyHeader();
+
+        const remaining = feeds.length - (i + batchSize);
+        if (remaining > 0) {
+          const articles = getFilteredArticles(currentSubcat, scopeCache[key]);
+          updateFilterSourceOptions(articles);
+          if (articles.length) {
+            hasRendered = true;
+            el.main.innerHTML = '';
+            renderArticles(articles);
+            const prog = document.createElement('div');
+            prog.id = 'loading-progress';
+            prog.style.cssText = 'text-align:center;padding:12px;font-size:0.82rem;color:var(--text-tertiary);border-top:1px solid var(--border-secondary);';
+            prog.textContent = 'Loading ' + Math.min(remaining, feeds.length > 1 ? batchSize : 0) + ' more sources\u2026';
+            el.main.appendChild(prog);
+          } else if (!hasRendered) {
+            showProgress('Fetching sources\u2026 (' + Math.min(i + batchSize, feeds.length) + '/' + feeds.length + ')');
+          }
+        }
+      }
+
+      $('#loading-progress')?.remove();
       isFetching = false;
       displayCurrentSubcat();
     } catch (err) {
@@ -334,9 +425,115 @@
     updateStickyHeader();
 
     const articles = getFilteredArticles(currentSubcat, cached);
+    updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
-    renderArticles(articles);
+    renderTranslated(articles);
+  }
+
+  function bindFilterSort() {
+    if (el.filterSource) {
+      el.filterSource.addEventListener('change', () => {
+        currentSourceFilter = el.filterSource.value;
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      });
+    }
+    if (el.sortBy) {
+      el.sortBy.value = currentSort || 'score';
+      el.sortBy.addEventListener('change', () => {
+        currentSort = el.sortBy.value;
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      });
+    }
+  }
+
+  async function renderTranslated(articles) {
+    const targetLang = Settings.get('language');
+    const translated = targetLang !== 'en'
+      ? await Translator.translateArticles(articles, targetLang)
+      : articles;
+    renderArticles(translated);
+  }
+
+  let currentSearch = '';
+
+  function bindSearch() {
+    if (!el.searchInput) return;
+    el.searchInput.addEventListener('input', () => {
+      currentSearch = el.searchInput.value.trim().toLowerCase();
+      const key = scopeKey();
+      const cached = scopeCache[key];
+      if (!cached) return;
+      const articles = getFilteredArticles(currentSubcat, cached);
+      renderTranslated(articles);
+    });
+  }
+
+  function applySearch(articles) {
+    if (!currentSearch) return articles;
+    return articles.filter(a =>
+      (a.title || '').toLowerCase().includes(currentSearch) ||
+      (a.source || '').toLowerCase().includes(currentSearch) ||
+      (a.summary || '').toLowerCase().includes(currentSearch) ||
+      (a.pubDate || '').toLowerCase().includes(currentSearch)
+    );
+  }
+
+  const TOP_SOURCES = ['BBC', 'CNN', 'Reuters', 'The Hindu', 'NYT', 'Guardian', 'Times of India', 'NDTV', 'Al Jazeera', 'Washington Post', 'NPR', 'DW'];
+
+  function scoreArticle(article) {
+    let score = 0;
+    if (article.pubDate) {
+      const age = Date.now() - new Date(article.pubDate).getTime();
+      const hours = age / 3600000;
+      score += Math.max(0, 100 - hours);
+    }
+    if (article.imageUrl && article.imageUrl.startsWith('http')) score += 20;
+    const summaryLen = (article.summary || '').length;
+    score += Math.min(15, summaryLen / 20);
+    if (TOP_SOURCES.some(s => (article.source || '').includes(s))) score += 20;
+    if (article.author) score += 10;
+    return Math.round(score);
+  }
+
+  let currentSourceFilter = '';
+  let currentSort = '';
+
+  function applyFilters(articles) {
+    let result = articles;
+    if (currentSourceFilter) {
+      result = result.filter(a => (a.source || '') === currentSourceFilter);
+    }
+    return result;
+  }
+
+  function applySort(articles, sortMode) {
+    const sorted = [...articles];
+    switch (sortMode) {
+      case 'date-asc':
+        sorted.sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0));
+        break;
+      case 'score':
+        sorted.sort((a, b) => (b._score || 0) - (a._score || 0));
+        break;
+      case 'score-asc':
+        sorted.sort((a, b) => (a._score || 0) - (b._score || 0));
+        break;
+      case 'source':
+        sorted.sort((a, b) => (a.source || '').localeCompare(b.source || ''));
+        break;
+      default:
+        sorted.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+    }
+    return sorted;
   }
 
   function applyDateFilter(articles) {
@@ -385,6 +582,7 @@
     if (lang) lang.value = settings.language;
     populateFeedSelects();
     renderCustomFeedList();
+    renderSubscriptionList();
     el.modal.classList.add('open');
   }
 
@@ -502,6 +700,58 @@
     });
   }
 
+  function renderSubscriptionList() {
+    const container = $('#subscription-list');
+    if (!container) return;
+    const allFeeds = FeedManager.getSubscribableFeeds();
+    const subscribed = FeedManager.getSubscribedFeeds();
+    const grouped = {};
+    for (const f of allFeeds) {
+      const region = f.region || 'Other';
+      if (!grouped[region]) grouped[region] = [];
+      grouped[region].push(f);
+    }
+    let html = '';
+    for (const [region, feeds] of Object.entries(grouped)) {
+      const hasRssFeeds = feeds.some(f => f.hasRss);
+      html += '<div class="sub-region"><h4 class="sub-region-title">' + region + '</h4>';
+      if (!hasRssFeeds) {
+        html += '<div class="sub-no-rss">';
+        for (const f of feeds) {
+          html += '<div class="sub-item"><span class="sub-name sub-no">' + f.name + '</span><span class="sub-no-badge">No RSS</span>' +
+            (f.note ? '<span class="sub-note">' + f.note + '</span>' : '') + '</div>';
+        }
+        html += '</div></div>';
+        continue;
+      }
+      for (const f of feeds) {
+        if (!f.hasRss) continue;
+        const checked = subscribed.includes(f.url) ? ' checked' : '';
+        html += '<label class="sub-item' + (checked ? ' sub-active' : '') + '">' +
+          '<input type="checkbox" class="sub-checkbox" data-url="' + f.url + '"' + checked + '>' +
+          '<span class="sub-name">' + f.name + '</span>' +
+          '<span class="sub-lang">' + (f.lang || 'en').toUpperCase() + '</span>' +
+          '</label>';
+      }
+      html += '</div>';
+    }
+    container.innerHTML = html;
+    container.querySelectorAll('.sub-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        FeedManager.toggleSubscription(cb.dataset.url);
+        cb.closest('.sub-item').classList.toggle('sub-active', cb.checked);
+      });
+    });
+    const msg = $('#sub-refresh-note');
+    if (!msg) {
+      const note = document.createElement('p');
+      note.id = 'sub-refresh-note';
+      note.style.cssText = 'font-size:0.78rem;color:var(--text-tertiary);margin-top:8px;font-style:italic;';
+      note.textContent = 'Subscription changes apply on next fetch. Close settings to refresh.';
+      container.parentElement.appendChild(note);
+    }
+  }
+
   function bindFeedControls() {
     if (el.feedValidateBtn) el.feedValidateBtn.addEventListener('click', handleValidateFeed);
     if (el.feedAddBtn) el.feedAddBtn.addEventListener('click', handleAddFeed);
@@ -535,57 +785,33 @@
 
   function openSourceIframe(url, title) {
     el.sourceModalTitle.textContent = title || 'Original Article';
+    el.sourceIframe.src = url;
     el.sourceModal.classList.add('open');
     el.sourceIframe.dataset.originalUrl = url;
-    el.sourceIframe.dataset.fallbackTried = 'false';
-    tryJina(url);
-  }
-
-  function tryJina(url) {
-    const jinaUrl = 'https://r.jina.ai/http://' + url.replace(/^https?:\/\//, '');
-    el.sourceIframe.src = jinaUrl;
     el.sourceIframe.onload = function() {
+      const fb = $('#source-fallback');
+      if (!fb) return;
       setTimeout(() => {
         try {
           if (el.sourceIframe.contentDocument && !el.sourceIframe.contentDocument.body.textContent.trim()) {
-            throw new Error('Empty content');
+            fb.style.display = 'flex';
           }
-        } catch(e) { tryFallback(url); }
+        } catch(e) {
+          fb.style.display = 'flex';
+        }
       }, 8000);
     };
-    el.sourceIframe.onerror = function() { tryFallback(url); };
-  }
-
-  function tryFallback(url) {
-    if (el.sourceIframe.dataset.fallbackTried === 'true') { showSourceFallback(url); return; }
-    el.sourceIframe.dataset.fallbackTried = 'true';
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-    el.sourceIframe.src = proxyUrl;
-    el.sourceIframe.onload = function() {
-      setTimeout(() => {
-        try {
-          if (el.sourceIframe.contentDocument && !el.sourceIframe.contentDocument.body.textContent.trim()) {
-            showSourceFallback(url);
-          }
-        } catch(e) { showSourceFallback(url); }
-      }, 8000);
-    };
-    el.sourceIframe.onerror = function() { showSourceFallback(url); };
-  }
-
-  function showSourceFallback(url) {
     const fb = $('#source-fallback');
-    if (fb) fb.style.display = 'flex';
-    const link = $('#source-fallback-link');
-    if (link) link.href = url;
+    if (fb) {
+      const link = $('#source-fallback-link');
+      if (link) link.href = url;
+    }
   }
 
   function closeSourceModal() {
     el.sourceModal.classList.remove('open');
     el.sourceIframe.src = '';
-    el.sourceIframe.onerror = null;
     el.sourceIframe.onload = null;
-    el.sourceIframe.dataset.fallbackTried = 'false';
     const fb = $('#source-fallback');
     if (fb) fb.style.display = 'none';
   }
@@ -634,6 +860,10 @@
     renderSubTabs();
     bindSubTabs();
     bindModeToggle();
+    bindLangSelect();
+    bindSearch();
+    bindFilterSort();
+    bindFilterToggles();
     bindSettings();
     bindArticleClicks();
     bindFeedControls();

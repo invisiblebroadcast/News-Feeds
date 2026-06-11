@@ -25,15 +25,61 @@ const FeedManager = (() => {
     if (feedData) return feedData;
     if (loadPromise) return loadPromise;
 
-    loadPromise = fetch('data/feeds.json')
-      .then(r => { if (!r.ok) throw new Error('Failed to load feeds'); return r.json(); })
-      .then(data => {
-        feedData = data;
-        return data;
-      })
-      .catch(err => { loadPromise = null; throw err; });
+    loadPromise = Promise.all([
+      fetch('data/feeds.json').then(r => { if (!r.ok) throw new Error('Failed to load feeds'); return r.json(); }),
+      fetch('data/deepseek_json_20260611_0bffae.json').then(r => { if (!r.ok) throw new Error('Failed to load subscribable feeds'); return r.json(); })
+    ]).then(([feedsData, dsData]) => {
+      feedData = feedsData;
+      feedData.subscribableFeeds = flattenDeepSeek(dsData);
+      return feedData;
+    }).catch(err => { loadPromise = null; throw err; });
 
     return loadPromise;
+  }
+
+  function flattenDeepSeek(data) {
+    const result = [];
+    const cats = data.categories || {};
+    function add(items, region, hint) {
+      for (const item of (items || [])) {
+        result.push({
+          region: region || 'Global',
+          name: item.name || '',
+          url: item.url || '',
+          scope: (region === 'Global' || region === 'By Country') ? 'global' : 'nation',
+          nation: (region === 'Global' || region === 'By Country') ? null : 'india',
+          hint: hint || 'politics',
+          lang: item.lang || 'en',
+          hasRss: true
+        });
+      }
+    }
+    add(cats.world?.international_agencies, 'Global');
+    add(cats.world?.by_country, 'By Country');
+    add(cats.india_national?.english_newspapers, 'India (English)');
+    add(cats.india_national?.news_agencies, 'India (English)');
+    add(cats.india_national?.hindi, 'Hindi');
+    add(cats.india_national?.tamil, 'Tamil');
+    for (const key of Object.keys(cats.tv_channels || {})) {
+      add(cats.tv_channels[key], 'TV Channels');
+    }
+    for (const [region, items] of Object.entries(cats.regional || {})) {
+      add(items, region.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+    }
+    add(cats.science_technology?.science, 'Science', 'science');
+    add(cats.science_technology?.space, 'Science', 'science');
+    add(cats.science_technology?.technology, 'Technology', 'technology');
+    add(cats.business_finance, 'Business & Finance', 'business');
+    add(cats.sports, 'Sports', 'sports');
+    add(cats.education, 'Education', 'education');
+    add(cats.legal, 'Legal');
+    for (const key of Object.keys(cats.agriculture_environment || {})) {
+      add(cats.agriculture_environment[key], 'Environment', 'environment');
+    }
+    for (const key of Object.keys(cats.entertainment_lifestyle || {})) {
+      add(cats.entertainment_lifestyle[key], 'Entertainment', 'entertainment');
+    }
+    return result;
   }
 
   function subcategories() {
@@ -106,6 +152,15 @@ const FeedManager = (() => {
       if (f.scope === 'nation' && scope === 'nation' && f.nation === nation) feeds.push({ name: f.name, url: f.url, hint: f.subcat || 'politics', lang: f.lang || 'en' });
     }
 
+    const subscribedUrls = getSubscribedFeeds();
+    const allSubs = getSubscribableFeeds();
+    for (const f of allSubs) {
+      if (!subscribedUrls.includes(f.url)) continue;
+      if (!f.hasRss || !f.url) continue;
+      if (f.scope === 'global' && scope === 'global') feeds.push({ name: f.name, url: f.url, hint: f.hint || 'politics', lang: f.lang || 'en' });
+      if (f.scope === 'nation' && scope === 'nation' && f.nation === nation) feeds.push({ name: f.name, url: f.url, hint: f.hint || 'politics', lang: f.lang || 'en' });
+    }
+
     return feeds;
   }
 
@@ -139,6 +194,32 @@ const FeedManager = (() => {
     saveCustomFeeds(getCustomFeeds().filter(f => f.url !== url));
   }
 
+  function getSubscribableFeeds() {
+    return feedData?.subscribableFeeds || [];
+  }
+
+  function getSubscribedFeeds() {
+    try { return JSON.parse(localStorage.getItem('newsfeeds_subscriptions') || '[]'); }
+    catch { return []; }
+  }
+
+  function saveSubscribedFeeds(urls) {
+    localStorage.setItem('newsfeeds_subscriptions', JSON.stringify(urls));
+  }
+
+  function isSubscribed(url) {
+    return getSubscribedFeeds().includes(url);
+  }
+
+  function toggleSubscription(url) {
+    const subs = getSubscribedFeeds();
+    const idx = subs.indexOf(url);
+    if (idx >= 0) subs.splice(idx, 1);
+    else subs.push(url);
+    saveSubscribedFeeds(subs);
+    return subs;
+  }
+
   async function validateFeed(url) {
     try {
       const encoded = encodeURIComponent(url);
@@ -158,6 +239,7 @@ const FeedManager = (() => {
     load, subcategories, subcategoriesForScope, subcatLabel, subcatIcon,
     getNations, defaultNation, getSelectedNation, setSelectedNation,
     getFeeds, getFeedsBySubcat,
-    getCustomFeeds, addCustomFeed, removeCustomFeed, validateFeed
+    getCustomFeeds, addCustomFeed, removeCustomFeed, validateFeed,
+    getSubscribableFeeds, getSubscribedFeeds, isSubscribed, toggleSubscription
   };
 })();

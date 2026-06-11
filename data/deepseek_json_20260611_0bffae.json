@@ -1,0 +1,280 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-06-12",
+    "total_feeds": 187,
+    "description": "Comprehensive RSS feed collection for news aggregation"
+  },
+  "categories": {
+    "world": {
+      "international_agencies": [
+        { "name": "BBC World News", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "lang": "en", "region": "global" },
+        { "name": "BBC UK", "url": "https://feeds.bbci.co.uk/news/rss.xml", "lang": "en", "region": "global" },
+        { "name": "Al Jazeera English", "url": "https://www.aljazeera.com/xml/rss/all.xml", "lang": "en", "region": "global" },
+        { "name": "Reuters", "url": "https://www.reuters.com/news/rss", "lang": "en", "region": "global" },
+        { "name": "CNN International", "url": "http://rss.cnn.com/rss/edition.rss", "lang": "en", "region": "global" },
+        { "name": "France 24 English", "url": "https://www.france24.com/en/france-24-rss-feeds.xml", "lang": "en", "region": "global" },
+        { "name": "Deutsche Welle (DW)", "url": "https://rss.dw.com/rdf/rss-en-all", "lang": "en", "region": "global" },
+        { "name": "The Guardian", "url": "https://www.theguardian.com/world/rss", "lang": "en", "region": "global" },
+        { "name": "The New York Times", "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "lang": "en", "region": "global" },
+        { "name": "NPR", "url": "https://feeds.npr.org/1001/rss.xml", "lang": "en", "region": "global" },
+        { "name": "ABC News US", "url": "http://feeds.abcnews.com/abcnews/topstories", "lang": "en", "region": "global" }
+      ],
+      "by_country": [
+        { "name": "AAP Australia", "url": "https://www.aap.com.au/rss", "lang": "en", "region": "australia" },
+        { "name": "ANTARA Indonesia", "url": "https://en.antaranews.com/rss", "lang": "en", "region": "indonesia" },
+        { "name": "BERNAMA Malaysia", "url": "https://www.bernama.com/en/news_rss.php", "lang": "en", "region": "malaysia" },
+        { "name": "Kyodo News Japan", "url": "https://english.kyodonews.net/rss", "lang": "en", "region": "japan" },
+        { "name": "Yonhap South Korea", "url": "https://en.yna.co.kr/rss", "lang": "en", "region": "south_korea" },
+        { "name": "Xinhua China", "url": "http://www.xinhuanet.com/english/rss.htm", "lang": "en", "region": "china" },
+        { "name": "QNA Qatar", "url": "https://www.qna.org.qa/rss", "lang": "en", "region": "qatar" },
+        { "name": "SPA Saudi Arabia", "url": "https://www.spa.gov.sa/rss", "lang": "en", "region": "saudi_arabia" },
+        { "name": "WAM UAE", "url": "http://www.wam.ae/en/rss", "lang": "en", "region": "uae" },
+        { "name": "IRNA Iran", "url": "https://en.irna.ir/rss", "lang": "en", "region": "iran" },
+        { "name": "DPA Germany", "url": "https://www.dpa.de/en/rss", "lang": "en", "region": "germany" },
+        { "name": "EFE Spain", "url": "https://www.efe.com/efe/english/rss", "lang": "en", "region": "spain" },
+        { "name": "TASS Russia", "url": "https://tass.com/rss", "lang": "en", "region": "russia" },
+        { "name": "Anadolu Turkey", "url": "https://www.aa.com.tr/en/rss", "lang": "en", "region": "turkey" },
+        { "name": "AllAfrica", "url": "https://allafrica.com/tools/headlines/rdf/africa/headlines.rdf", "lang": "en", "region": "africa" }
+      ]
+    },
+    "india_national": {
+      "english_newspapers": [
+        { "name": "The Hindu", "url": "https://www.thehindu.com/feeder/default.rss", "lang": "en", "category": "general" },
+        { "name": "The Hindu - Science", "url": "https://www.thehindu.com/sci-tech/science/feeder/default.rss", "lang": "en", "category": "science" },
+        { "name": "The Hindu - Education", "url": "https://www.thehindu.com/education/feeder/default.rss", "lang": "en", "category": "education" },
+        { "name": "The Hindu - Agriculture", "url": "https://www.thehindu.com/sci-tech/agriculture/feeder/default.rss", "lang": "en", "category": "agriculture" },
+        { "name": "The Hindu - Environment", "url": "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss", "lang": "en", "category": "nature" },
+        { "name": "The Hindu - Sport", "url": "https://www.thehindu.com/sport/feeder/default.rss", "lang": "en", "category": "sports" },
+        { "name": "Indian Express", "url": "https://indianexpress.com/feed/", "lang": "en", "category": "general" },
+        { "name": "Indian Express - Politics", "url": "https://indianexpress.com/section/politics/feed/", "lang": "en", "category": "politics" },
+        { "name": "Hindustan Times", "url": "https://www.hindustantimes.com/rss/rssfeed", "lang": "en", "category": "general" },
+        { "name": "Times of India", "url": "https://timesofindia.indiatimes.com/rssfeeds/", "lang": "en", "category": "general" },
+        { "name": "The Telegraph India", "url": "https://www.telegraphindia.com/rss", "lang": "en", "category": "general" },
+        { "name": "Deccan Herald", "url": "https://www.deccanherald.com/rss", "lang": "en", "category": "general" },
+        { "name": "The Tribune", "url": "https://www.tribuneindia.com/rss/feed?catId=34", "lang": "en", "category": "general" }
+      ],
+      "news_agencies": [
+        { "name": "PTI", "url": "http://www.ptinews.com/rss", "lang": "en", "category": "general" },
+        { "name": "ANI", "url": "https://www.aninews.in/rss", "lang": "en", "category": "general" },
+        { "name": "IANS", "url": "https://www.ians.in/rss", "lang": "en", "category": "general" }
+      ],
+      "hindi": [
+        { "name": "Dainik Bhaskar - National", "url": "https://www.bhaskar.com/rss-feed/1061/", "lang": "hi", "category": "general" },
+        { "name": "Dainik Bhaskar - India", "url": "https://www.bhaskar.com/rss-feed/1062/", "lang": "hi", "category": "general" },
+        { "name": "Dainik Jagran", "url": "https://www.jagran.com/rss", "lang": "hi", "category": "general" },
+        { "name": "Navbharat Times", "url": "https://navbharattimes.indiatimes.com/rssfeeds", "lang": "hi", "category": "general" },
+        { "name": "Amar Ujala", "url": "https://www.amarujala.com/rss", "lang": "hi", "category": "general" },
+        { "name": "BBC Hindi", "url": "https://www.bbc.com/hindi/index.xml", "lang": "hi", "category": "general" },
+        { "name": "NDTV India", "url": "https://khabar.ndtv.com/rss", "lang": "hi", "category": "general" }
+      ],
+      "tamil": [
+        { "name": "BBC Tamil", "url": "https://www.bbc.com/tamil/index.xml", "lang": "ta", "category": "general" },
+        { "name": "The Hindu Tamil", "url": "https://www.hindutamil.in/rss", "lang": "ta", "category": "general" },
+        { "name": "Dinamalar", "url": "http://www.dinamalar.com/rss.asp", "lang": "ta", "category": "general" }
+      ]
+    },
+    "tv_channels": {
+      "times_now": [
+        { "name": "Times Now - Latest", "url": "https://www.timesnownews.com/feeds/gns-en-latest", "lang": "en" },
+        { "name": "Times Now - India", "url": "https://www.timesnownews.com/feeds/gns-en-india", "lang": "en" },
+        { "name": "Times Now - World", "url": "https://www.timesnownews.com/feeds/gns-en-international", "lang": "en" },
+        { "name": "Times Now - Politics", "url": "https://www.timesnownews.com/feeds/gns-en-newsletter-en-top-stories", "lang": "en" },
+        { "name": "Times Now - Business", "url": "https://www.timesnownews.com/feeds/gns-en-business-economy", "lang": "en" },
+        { "name": "Times Now - Sports", "url": "https://www.timesnownews.com/feeds/gns-en-sports", "lang": "en" },
+        { "name": "Times Now - Technology", "url": "https://www.timesnownews.com/feeds/gns-en-technology-science", "lang": "en" },
+        { "name": "Times Now - Entertainment", "url": "https://www.timesnownews.com/feeds/gns-en-entertainment", "lang": "en" },
+        { "name": "Times Now - Education", "url": "https://www.timesnownews.com/feeds/gns-en-education", "lang": "en" },
+        { "name": "Times Now - Health", "url": "https://www.timesnownews.com/feeds/gns-en-health", "lang": "en" },
+        { "name": "Times Now - Lifestyle", "url": "https://www.timesnownews.com/feeds/gns-en-lifestyle", "lang": "en" },
+        { "name": "Times Now - Travel", "url": "https://www.timesnownews.com/feeds/gns-en-travel", "lang": "en" },
+        { "name": "Times Now - Crypto", "url": "https://www.timesnownews.com/feeds/gns-en-cryptonow", "lang": "en" }
+      ],
+      "ndtv": [
+        { "name": "NDTV - Latest", "url": "https://feeds.feedburner.com/NDTV-LatestNews", "lang": "en" },
+        { "name": "NDTV - World", "url": "https://feeds.feedburner.com/NDTV-World", "lang": "en" },
+        { "name": "NDTV - Politics", "url": "https://feeds.feedburner.com/NDTV-Politics", "lang": "en" },
+        { "name": "NDTV - Education", "url": "https://feeds.feedburner.com/ndtveducation", "lang": "en" }
+      ],
+      "india_today": [
+        { "name": "India Today - Home", "url": "https://www.indiatoday.in/rss/home", "lang": "en" },
+        { "name": "India Today - Politics", "url": "https://www.indiatoday.in/rss/politics", "lang": "en" },
+        { "name": "India Today - Science", "url": "https://www.indiatoday.in/rss/science", "lang": "en" },
+        { "name": "India Today - Space", "url": "https://www.indiatoday.in/rss/space", "lang": "en" },
+        { "name": "India Today - Education", "url": "https://www.indiatoday.in/rss/education", "lang": "en" },
+        { "name": "India Today - Legal", "url": "https://www.indiatoday.in/rss/legal", "lang": "en" },
+        { "name": "India Today - Environment", "url": "https://www.indiatoday.in/rss/environment", "lang": "en" },
+        { "name": "India Today - Lifestyle", "url": "https://www.indiatoday.in/rss/lifestyle", "lang": "en" }
+      ],
+      "others": [
+        { "name": "CNN-News18", "url": "https://www.news18.com/rss/news.xml", "lang": "en" },
+        { "name": "Republic TV", "url": "https://www.republicworld.com/rss", "lang": "en" },
+        { "name": "Zee News", "url": "https://zeenews.india.com/rss", "lang": "en" }
+      ]
+    },
+    "regional": {
+      "punjab": [
+        { "name": "The Tribune - Punjab", "url": "https://www.tribuneindia.com/rss/feed?catId=34", "lang": "en" },
+        { "name": "PTC News - Majha", "url": "https://www.ptcnews.tv/rssfeed/majha", "lang": "pa" },
+        { "name": "PTC News - Malwa", "url": "https://www.ptcnews.tv/rssfeed/malwa", "lang": "pa" },
+        { "name": "PTC News - Doaba", "url": "https://www.ptcnews.tv/rssfeed/doaba", "lang": "pa" },
+        { "name": "PTC News - Punjab Politics", "url": "https://www.ptcnews.tv/rssfeed/punjab", "lang": "pa" },
+        { "name": "Punjabi Tribune", "url": "https://punjabi.tribuneindia.com/rss", "lang": "pa" }
+      ],
+      "maharashtra": [
+        { "name": "Lokmat", "url": "https://www.lokmat.com/rss", "lang": "mr" },
+        { "name": "Loksatta", "url": "https://www.loksatta.com/rss", "lang": "mr" },
+        { "name": "Maharashtra Times", "url": "https://maharashtratimes.com/rssfeeds", "lang": "mr" },
+        { "name": "Sakal", "url": "https://www.sakal.com/rss", "lang": "mr" },
+        { "name": "Zee 24 Taas", "url": "https://zeenews.india.com/marathi/rss", "lang": "mr" }
+      ],
+      "delhi_ncr": [
+        { "name": "Times Now - Delhi", "url": "https://www.timesnownews.com/feeds/gns-en-delhi", "lang": "en" },
+        { "name": "Hindustan Times - Delhi", "url": "https://www.hindustantimes.com/rss/delhi/rssfeed.xml", "lang": "en" },
+        { "name": "The Hindu - Delhi", "url": "https://www.thehindu.com/news/cities/Delhi/feeder/default.rss", "lang": "en" }
+      ],
+      "mumbai": [
+        { "name": "Times Now - Mumbai", "url": "https://www.timesnownews.com/feeds/gns-en-mumbai", "lang": "en" },
+        { "name": "Mid-Day Mumbai", "url": "https://www.mid-day.com/rss", "lang": "en" },
+        { "name": "The Hindu - Mumbai", "url": "https://www.thehindu.com/news/cities/mumbai/feeder/default.rss", "lang": "en" }
+      ],
+      "kolkata": [
+        { "name": "Times Now - Kolkata", "url": "https://www.timesnownews.com/feeds/gns-en-kolkata", "lang": "en" },
+        { "name": "The Telegraph - Kolkata", "url": "https://www.telegraphindia.com/west-bengal/rss", "lang": "en" },
+        { "name": "Anandabazar Patrika", "url": "https://www.anandabazar.com/rss", "lang": "bn" },
+        { "name": "Ei Samay", "url": "https://eisamay.com/rssfeeds", "lang": "bn" }
+      ],
+      "bengaluru": [
+        { "name": "Times Now - Bengaluru", "url": "https://www.timesnownews.com/feeds/gns-en-bengaluru", "lang": "en" },
+        { "name": "Deccan Herald - Bengaluru", "url": "https://www.deccanherald.com/rss/bengaluru", "lang": "en" },
+        { "name": "The Hindu - Bengaluru", "url": "https://www.thehindu.com/news/cities/bangalore/feeder/default.rss", "lang": "en" }
+      ],
+      "chennai": [
+        { "name": "Times Now - Chennai", "url": "https://www.timesnownews.com/feeds/gns-en-chennai", "lang": "en" },
+        { "name": "The Hindu - Chennai", "url": "https://www.thehindu.com/news/cities/chennai/feeder/default.rss", "lang": "en" },
+        { "name": "DT Next", "url": "https://www.dtnext.in/rss", "lang": "en" }
+      ],
+      "hyderabad": [
+        { "name": "Times Now - Hyderabad", "url": "https://www.timesnownews.com/feeds/gns-en-hyderabad", "lang": "en" },
+        { "name": "The Hindu - Hyderabad", "url": "https://www.thehindu.com/news/cities/Hyderabad/feeder/default.rss", "lang": "en" },
+        { "name": "Siasat Daily", "url": "https://www.siasat.com/rss", "lang": "en" }
+      ],
+      "ahmedabad_gujarat": [
+        { "name": "Times Now - Ahmedabad", "url": "https://www.timesnownews.com/feeds/gns-en-ahmedabad", "lang": "en" },
+        { "name": "The Indian Express - Ahmedabad", "url": "https://indianexpress.com/section/cities/ahmedabad/feed", "lang": "en" },
+        { "name": "Gujarat Samachar", "url": "http://www.gujaratsamachar.com/rss", "lang": "gu" },
+        { "name": "Divya Bhaskar - Gujarat", "url": "https://www.divyabhaskar.co.in/rss", "lang": "gu" }
+      ],
+      "pune": [
+        { "name": "Times Now - Pune", "url": "https://www.timesnownews.com/feeds/gns-en-pune", "lang": "en" },
+        { "name": "The Indian Express - Pune", "url": "https://indianexpress.com/section/cities/pune/feed", "lang": "en" },
+        { "name": "Sakal - Pune", "url": "https://www.sakal.com/pune/rss", "lang": "mr" }
+      ],
+      "kerala": [
+        { "name": "Malayala Manorama", "url": "https://www.manoramaonline.com/rss", "lang": "ml" },
+        { "name": "Mathrubhumi", "url": "https://www.mathrubhumi.com/rss", "lang": "ml" },
+        { "name": "The Hindu - Kerala", "url": "https://www.thehindu.com/news/national/kerala/feeder/default.rss", "lang": "en" },
+        { "name": "Deshabhimani", "url": "https://www.deshabhimani.com/rss", "lang": "ml" }
+      ],
+      "telangana_andhra": [
+        { "name": "Sakshi", "url": "https://www.sakshi.com/rss", "lang": "te" },
+        { "name": "Eenadu", "url": "https://www.eenadu.net/rss", "lang": "te" },
+        { "name": "The Hindu - Telangana", "url": "https://www.thehindu.com/news/national/telangana/feeder/default.rss", "lang": "en" }
+      ],
+      "karnataka": [
+        { "name": "Vijaya Karnataka", "url": "https://vijaykarnataka.com/rssfeeds", "lang": "kn" },
+        { "name": "Prajavani", "url": "https://www.prajavani.net/rss", "lang": "kn" },
+        { "name": "Kannada Prabha", "url": "https://kannadaprabha.com/rss", "lang": "kn" }
+      ]
+    },
+    "science_technology": {
+      "science": [
+        { "name": "BBC Science", "url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "lang": "en" },
+        { "name": "New Scientist", "url": "https://www.newscientist.com/feed/home", "lang": "en" },
+        { "name": "Science Magazine", "url": "https://www.sciencemag.org/rss/current.xml", "lang": "en" },
+        { "name": "Nature", "url": "https://www.nature.com/nature.rss", "lang": "en" },
+        { "name": "Science Daily", "url": "https://www.sciencedaily.com/rss/all.xml", "lang": "en" },
+        { "name": "Phys.org", "url": "https://phys.org/rss-feed", "lang": "en" },
+        { "name": "Popular Science", "url": "https://www.popsci.com/arcio/rss", "lang": "en" },
+        { "name": "SciTech Daily", "url": "https://scitechdaily.com/feed", "lang": "en" }
+      ],
+      "space": [
+        { "name": "NASA Breaking News", "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss", "lang": "en" },
+        { "name": "NASA Science", "url": "https://science.nasa.gov/rss.xml", "lang": "en" },
+        { "name": "Space.com", "url": "https://www.space.com/feeds/all", "lang": "en" },
+        { "name": "ESA Space News", "url": "https://www.esa.int/rssfeed/Our_Activities/Space_News", "lang": "en" },
+        { "name": "ISRO News", "url": "https://www.isro.gov.in/rssfeeds.xml", "lang": "en" }
+      ],
+      "technology": [
+        { "name": "The Verge", "url": "https://www.theverge.com/rss/index.xml", "lang": "en" },
+        { "name": "BGR Technology", "url": "https://bgr.com/feed", "lang": "en" },
+        { "name": "TechCrunch", "url": "https://techcrunch.com/feed", "lang": "en" },
+        { "name": "Wired", "url": "https://www.wired.com/feed/rss", "lang": "en" },
+        { "name": "CNET", "url": "https://www.cnet.com/rss/news", "lang": "en" }
+      ]
+    },
+    "business_finance": [
+      { "name": "Business Standard", "url": "https://www.business-standard.com/rss", "lang": "en" },
+      { "name": "Economic Times", "url": "https://economictimes.indiatimes.com/rssfeeds", "lang": "en" },
+      { "name": "Financial Express", "url": "https://www.financialexpress.com/feed", "lang": "en" },
+      { "name": "Moneycontrol", "url": "https://www.moneycontrol.com/rss", "lang": "en" },
+      { "name": "Bloomberg Quint", "url": "https://www.bloombergquint.com/feed", "lang": "en" },
+      { "name": "Livemint", "url": "https://www.livemint.com/rss", "lang": "en" },
+      { "name": "Business Insider", "url": "https://feeds.feedblitz.com/businessinsider", "lang": "en" },
+      { "name": "Bloomberg Markets", "url": "https://www.bloomberg.com/feed/markets", "lang": "en" },
+      { "name": "CNBC", "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "lang": "en" }
+    ],
+    "sports": [
+      { "name": "BBC Sport", "url": "https://feeds.bbci.co.uk/sport/rss.xml", "lang": "en" },
+      { "name": "ESPN", "url": "https://www.espn.com/espn/rss/news", "lang": "en" },
+      { "name": "ESPN India", "url": "https://www.espn.in/espn/rss/news", "lang": "en" },
+      { "name": "Sky Sports", "url": "https://www.skysports.com/rss/12040", "lang": "en" },
+      { "name": "Sportskeeda", "url": "https://www.sportskeeda.com/feed", "lang": "en" },
+      { "name": "Cricbuzz", "url": "https://www.cricbuzz.com/rss", "lang": "en" },
+      { "name": "Sportsstar (The Hindu)", "url": "https://sportstar.thehindu.com/feeder/default.rss", "lang": "en" }
+    ],
+    "education": [
+      { "name": "Times Now Education", "url": "https://www.timesnownews.com/feeds/gns-en-education", "lang": "en" },
+      { "name": "The Hindu Education", "url": "https://www.thehindu.com/education/feeder/default.rss", "lang": "en" },
+      { "name": "India Today Education", "url": "https://www.indiatoday.in/rss/education", "lang": "en" },
+      { "name": "NDTV Education", "url": "https://feeds.feedburner.com/ndtveducation", "lang": "en" },
+      { "name": "EdWeek", "url": "https://www.edweek.org/feed/rss", "lang": "en" }
+    ],
+    "legal": [
+      { "name": "India Today Legal", "url": "https://www.indiatoday.in/rss/legal", "lang": "en" },
+      { "name": "Bar & Bench", "url": "https://www.barandbench.com/rss/news", "lang": "en" },
+      { "name": "LiveLaw", "url": "https://www.livelaw.in/rss/india", "lang": "en" },
+      { "name": "SCOTUSblog", "url": "https://www.scotusblog.com/feed", "lang": "en" },
+      { "name": "ABA Journal", "url": "https://www.abajournal.com/feed", "lang": "en" }
+    ],
+    "agriculture_environment": {
+      "agriculture": [
+        { "name": "The Hindu Agriculture", "url": "https://www.thehindu.com/sci-tech/agriculture/feeder/default.rss", "lang": "en" },
+        { "name": "ICAR", "url": "https://icar.org.in/en/rss.xml", "lang": "en" },
+        { "name": "Agriculture Post", "url": "https://agriculturepost.com/feed", "lang": "en" }
+      ],
+      "environment": [
+        { "name": "BBC Environment", "url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "lang": "en" },
+        { "name": "The Hindu Environment", "url": "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss", "lang": "en" },
+        { "name": "Down To Earth", "url": "https://www.downtoearth.org.in/feed", "lang": "en" }
+      ],
+      "nature": [
+        { "name": "National Geographic", "url": "https://www.nationalgeographic.com/rss/news", "lang": "en" },
+        { "name": "The Guardian Environment", "url": "https://www.theguardian.com/environment/rss", "lang": "en" }
+      ]
+    },
+    "entertainment_lifestyle": {
+      "entertainment": [
+        { "name": "Times Now Entertainment", "url": "https://www.timesnownews.com/feeds/gns-en-entertainment", "lang": "en" },
+        { "name": "India Today Lifestyle", "url": "https://www.indiatoday.in/rss/lifestyle", "lang": "en" },
+        { "name": "Bollywood Hungama", "url": "https://www.bollywoodhungama.com/rss", "lang": "en" }
+      ],
+      "lifestyle": [
+        { "name": "Times Now Lifestyle", "url": "https://www.timesnownews.com/feeds/gns-en-lifestyle", "lang": "en" },
+        { "name": "Times Now Travel", "url": "https://www.timesnownews.com/feeds/gns-en-travel", "lang": "en" },
+        { "name": "Times Now Health", "url": "https://www.timesnownews.com/feeds/gns-en-health", "lang": "en" },
+        { "name": "Conde Nast Traveler", "url": "https://www.cntraveler.com/feed/rss", "lang": "en" }
+      ]
+    }
+  }
+}
