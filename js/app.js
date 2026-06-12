@@ -397,13 +397,8 @@
                 '</div>' +
               '</div>' +
             '</div>' +
-          '</div>' +
-          '<button class="reels-nav reels-prev" id="reels-prev">\u2039</button>' +
-          '<button class="reels-nav reels-next" id="reels-next">\u203A</button>' +
         '</div>';
 
-      $('#reels-prev').addEventListener('click', prevReel);
-      $('#reels-next').addEventListener('click', nextReel);
       el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
         e.stopPropagation();
         const link = decodeURIComponent(e.currentTarget.dataset.article);
@@ -524,27 +519,19 @@
         lastNavTime = now;
         if (dir > 0) nextReel(); else prevReel();
       }
-      rcontainer.addEventListener('wheel', e => {
-        e.preventDefault();
-        navThrottle(e.deltaY > 0 ? 1 : -1);
-      }, { passive: false });
-      let touchStartY = 0, touchStartX = 0;
+      let touchStartX = 0;
       rcontainer.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) {
-          touchStartY = e.touches[0].clientY;
-          touchStartX = e.touches[0].clientX;
-        }
+        if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
       }, { passive: true });
       rcontainer.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
       rcontainer.addEventListener('touchend', e => {
-        if (!touchStartY) return;
-        const dy = touchStartY - e.changedTouches[0].clientY;
+        if (!touchStartX) return;
         const dx = touchStartX - e.changedTouches[0].clientX;
-        touchStartY = 0; touchStartX = 0;
-        if (Math.abs(dy) < 30 || Math.abs(dy) < Math.abs(dx)) return;
-        navThrottle(dy > 0 ? -1 : 1);
+        touchStartX = 0;
+        if (Math.abs(dx) < 30) return;
+        navThrottle(dx > 0 ? 1 : -1);
       }, { passive: true });
-      rcontainer.addEventListener('touchcancel', () => { touchStartY = 0; touchStartX = 0; }, { passive: true });
+      rcontainer.addEventListener('touchcancel', () => { touchStartX = 0; }, { passive: true });
     }
 
     // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
