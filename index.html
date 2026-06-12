@@ -43,12 +43,31 @@
           </button>
           <button class="btn" id="auth-btn">Sign In</button>
           <div class="auth-user" id="auth-user" style="display:none">
-            <div class="auth-avatar-wrap" title="Signed in">
-              <img class="auth-avatar" id="auth-avatar" src="" alt="">
-              <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
+            <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
+              <span class="auth-avatar-wrap">
+                <img class="auth-avatar" id="auth-avatar" src="" alt="">
+                <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
+              </span>
+            </button>
+            <div class="auth-dropdown" id="auth-dropdown" style="display:none">
+              <div class="auth-dropdown-header">
+                <div class="auth-dropdown-name" id="auth-dropdown-name"></div>
+                <div class="auth-dropdown-email" id="auth-dropdown-email"></div>
+              </div>
+              <button class="auth-dropdown-item" id="auth-change-avatar-btn">
+                <span>&#x1F4F7;</span> Change Avatar
+              </button>
+              <button class="auth-dropdown-item" id="auth-change-name-btn">
+                <span>&#x270F;&#xFE0F;</span> Change Name
+              </button>
+              <button class="auth-dropdown-item" id="auth-change-password-btn">
+                <span>&#x1F511;</span> Change Password
+              </button>
+              <div class="auth-dropdown-divider"></div>
+              <button class="auth-dropdown-item auth-dropdown-item-danger" id="auth-signout-btn">
+                <span>&#x23FB;</span> Sign Out
+              </button>
             </div>
-            <span class="auth-name" id="auth-display-name"></span>
-            <button class="btn btn-ghost" id="auth-signout-btn" title="Sign Out" style="padding:3px 8px;font-size:0.75rem;">&#x2716;</button>
           </div>
           <button class="btn" id="settings-btn">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -363,6 +382,62 @@
           </button>
         </form>
         <div id="auth-msg" class="auth-msg" style="margin-top:12px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Name Modal -->
+  <div class="modal-overlay" id="change-name-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Name</h2>
+        <button class="modal-close" id="change-name-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="change-name-form" novalidate>
+          <input type="text" id="change-name-input" placeholder="Your name" required minlength="2" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <button type="submit" class="btn btn-primary" id="change-name-submit-btn" style="width:100%;justify-content:center;padding:10px;">Save</button>
+        </form>
+        <div id="change-name-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Modal -->
+  <div class="modal-overlay" id="change-password-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Password</h2>
+        <button class="modal-close" id="change-password-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="change-password-form" novalidate>
+          <input type="password" id="change-password-current" placeholder="Current password" required autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="change-password-new" placeholder="New password (min 6 chars)" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="change-password-repeat" placeholder="Repeat new password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <button type="submit" class="btn btn-primary" id="change-password-submit-btn" style="width:100%;justify-content:center;padding:10px;">Update Password</button>
+        </form>
+        <div id="change-password-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Avatar Modal -->
+  <div class="modal-overlay" id="change-avatar-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Avatar</h2>
+        <button class="modal-close" id="change-avatar-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align:center;">
+        <div class="change-avatar-preview-wrap">
+          <img class="auth-avatar" id="change-avatar-preview" src="" alt="" style="position:relative;width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-primary);">
+          <span class="auth-avatar-fallback" id="change-avatar-fallback" style="position:relative;font-size:2rem;width:80px;height:80px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg, #ff2929, #ff6b6b);color:#fff;">&#x1F464;</span>
+        </div>
+        <input type="file" id="change-avatar-input" accept="image/*" style="display:none;">
+        <button type="button" class="btn" id="change-avatar-pick-btn" style="width:100%;justify-content:center;padding:10px;margin-top:12px;">Choose Image</button>
+        <button type="button" class="btn btn-primary" id="change-avatar-upload-btn" style="width:100%;justify-content:center;padding:10px;margin-top:8px;" disabled>Upload</button>
+        <div id="change-avatar-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
       </div>
     </div>
   </div>

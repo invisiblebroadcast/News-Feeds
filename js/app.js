@@ -71,7 +71,31 @@
     hardRefreshModal: $('#hard-refresh-modal'),
     hardRefreshModalClose: $('#hard-refresh-modal-close'),
     hardRefreshCancel: $('#hard-refresh-cancel'),
-    hardRefreshConfirm: $('#hard-refresh-confirm')
+    hardRefreshConfirm: $('#hard-refresh-confirm'),
+    authAvatarBtn: $('#auth-avatar-btn'),
+    authDropdown: $('#auth-dropdown'),
+    authDropdownName: $('#auth-dropdown-name'),
+    authDropdownEmail: $('#auth-dropdown-email'),
+    authChangeAvatarBtn: $('#auth-change-avatar-btn'),
+    authChangeNameBtn: $('#auth-change-name-btn'),
+    authChangePasswordBtn: $('#auth-change-password-btn'),
+    changeNameModal: $('#change-name-modal'),
+    changeNameInput: $('#change-name-input'),
+    changeNameForm: $('#change-name-form'),
+    changeNameMsg: $('#change-name-msg'),
+    changePasswordModal: $('#change-password-modal'),
+    changePasswordCurrent: $('#change-password-current'),
+    changePasswordNew: $('#change-password-new'),
+    changePasswordRepeat: $('#change-password-repeat'),
+    changePasswordForm: $('#change-password-form'),
+    changePasswordMsg: $('#change-password-msg'),
+    changeAvatarModal: $('#change-avatar-modal'),
+    changeAvatarInput: $('#change-avatar-input'),
+    changeAvatarPreview: $('#change-avatar-preview'),
+    changeAvatarFallback: $('#change-avatar-fallback'),
+    changeAvatarPickBtn: $('#change-avatar-pick-btn'),
+    changeAvatarUploadBtn: $('#change-avatar-upload-btn'),
+    changeAvatarMsg: $('#change-avatar-msg')
   };
 
   if (!el.modal) return;
@@ -103,12 +127,19 @@
   }
 
   function cleanSummary(text) {
-    return text.replace(/\s*\[\.\.\.\]\s*$/, '')
+    return text
+      .replace(/\s*\[\.\.\.\]\s*$/, '')
       .replace(/\s*\[\.\.\]\s*$/, '')
-      .replace(/\s*\.\.\.\s*$/, '')
+      .replace(/\s*\[\.\s*\.\s*\.\s*\]\s*$/, '')
+      .replace(/\s*\.{3,}\s*$/, '')
       .replace(/\s*…\s*$/, '')
       .replace(/\s*\[more\]\s*$/i, '')
       .replace(/\s*\[read more\]\s*$/i, '')
+      .replace(/\s*\[continue reading\]\s*$/i, '')
+      .replace(/\s*\[continued\]\s*$/i, '')
+      .replace(/\s*\(more\)\s*$/i, '')
+      .replace(/\s*&hellip;\s*$/i, '')
+      .replace(/\s*&#8230;\s*$/i, '')
       .trim();
   }
 
@@ -790,7 +821,7 @@
     reader.querySelector('.rr-title').textContent = article.title;
     reader.querySelector('.rr-source').textContent = article.source;
     reader.querySelector('.rr-date').textContent = formatDateShort(article.pubDate);
-    reader.querySelector('.rr-summary').textContent = cleanSummary(stripHtml(article.summary)).slice(0, 1500);
+    reader.querySelector('.rr-summary').textContent = cleanSummary(stripHtml(article.summary));
     reader.querySelector('.rr-read').dataset.url = article.link;
     reader.querySelector('.rr-read').dataset.title = article.title;
     reader.querySelector('.rr-open').href = article.link;
@@ -1549,7 +1580,7 @@
     el.articleModalTitle.textContent = article.title;
     el.articleModalSource.textContent = article.source;
     el.articleModalDate.textContent = formatDate(article.pubDate);
-    el.articleModalSummary.textContent = cleanSummary(stripHtml(article.summary)).slice(0, 1500);
+    el.articleModalSummary.textContent = cleanSummary(stripHtml(article.summary));
     if (article.imageUrl && article.imageUrl.startsWith('http')) {
       el.articleModalImg.src = article.imageUrl;
       el.articleModalImgWrap.style.display = 'block';
@@ -2111,6 +2142,13 @@
     const repeatField = $('#auth-repeat-field');
     if (repeatField) repeatField.style.display = mode === 'signup' ? 'block' : 'none';
     $$('.auth-mode-tab').forEach(t => t.classList.toggle('active', t.dataset.authtab === mode));
+    // Clear name, password, and repeat password fields when switching tabs (keep email)
+    const nameInput = $('#auth-name');
+    if (nameInput) nameInput.value = '';
+    const pwdInput = $('#auth-password');
+    if (pwdInput) pwdInput.value = '';
+    const pwdRepeatInput = $('#auth-password-repeat');
+    if (pwdRepeatInput) pwdRepeatInput.value = '';
     showAuthMsg('');
     clearInputErrors();
   }
@@ -2120,7 +2158,8 @@
     const btn = $('#auth-btn');
     const userDiv = $('#auth-user');
     const avatar = $('#auth-avatar');
-    const name = $('#auth-display-name');
+    const dropdownName = $('#auth-dropdown-name');
+    const dropdownEmail = $('#auth-dropdown-email');
     if (user) {
       if (btn) btn.style.display = 'none';
       if (userDiv) userDiv.style.display = 'inline-flex';
@@ -2131,11 +2170,15 @@
           avatar.removeAttribute('src');
         }
       }
-      if (name) name.textContent = user.user_metadata?.full_name || user.email || '';
+      if (dropdownName) dropdownName.textContent = user.user_metadata?.full_name || 'User';
+      if (dropdownEmail) dropdownEmail.textContent = user.email || '';
     } else {
       if (btn) btn.style.display = '';
       if (userDiv) userDiv.style.display = 'none';
       if (avatar) avatar.removeAttribute('src');
+      // Close dropdown if open
+      const dropdown = $('#auth-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
     }
   }
 
@@ -2340,6 +2383,214 @@
     }
   }
 
+  // Dropdown toggle
+  function toggleAuthDropdown(force) {
+    const dropdown = $('#auth-dropdown');
+    if (!dropdown) return;
+    const isOpen = dropdown.style.display !== 'none';
+    const shouldOpen = force === undefined ? !isOpen : force;
+    dropdown.style.display = shouldOpen ? 'block' : 'none';
+  }
+  function closeAuthDropdown() {
+    const dropdown = $('#auth-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+  }
+
+  // Change Name
+  function openChangeNameModal() {
+    closeAuthDropdown();
+    const input = $('#change-name-input');
+    if (input && currentUser) {
+      input.value = currentUser.user_metadata?.full_name || '';
+    }
+    const msg = $('#change-name-msg');
+    if (msg) { msg.textContent = ''; msg.classList.remove('error', 'success'); }
+    const modal = $('#change-name-modal');
+    if (modal) modal.classList.add('open');
+    setTimeout(() => input?.focus(), 100);
+  }
+  function closeChangeNameModal() {
+    const modal = $('#change-name-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async function handleChangeName() {
+    const input = $('#change-name-input');
+    const msg = $('#change-name-msg');
+    const name = input?.value?.trim() || '';
+    if (!name || name.length < 2) {
+      if (msg) { msg.textContent = 'Please enter a name (at least 2 characters).'; msg.classList.add('error'); msg.classList.remove('success'); }
+      return;
+    }
+    if (msg) { msg.textContent = 'Updating...'; msg.classList.remove('error', 'success'); }
+    try {
+      const { data, error } = await withTimeout(
+        SupabaseStore.getClient().auth.updateUser({ data: { full_name: name } }),
+        15000,
+        'Update name'
+      );
+      if (error) {
+        if (msg) { msg.textContent = error.message; msg.classList.add('error'); msg.classList.remove('success'); }
+        console.warn('[Auth] update name error:', error);
+        return;
+      }
+      if (msg) { msg.textContent = 'Name updated!'; msg.classList.add('success'); msg.classList.remove('error'); }
+      // Refresh current user
+      const { data: fresh } = await SupabaseStore.getClient().auth.getUser();
+      if (fresh?.user) currentUser = fresh.user;
+      updateAuthUI(currentUser);
+      setTimeout(() => closeChangeNameModal(), 800);
+    } catch (err) {
+      console.error('[Auth] Update name failed:', err);
+      if (msg) { msg.textContent = err.message || 'Update failed.'; msg.classList.add('error'); msg.classList.remove('success'); }
+    }
+  }
+
+  // Change Password
+  function openChangePasswordModal() {
+    closeAuthDropdown();
+    const ids = ['change-password-current', 'change-password-new', 'change-password-repeat'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const msg = $('#change-password-msg');
+    if (msg) { msg.textContent = ''; msg.classList.remove('error', 'success'); }
+    const modal = $('#change-password-modal');
+    if (modal) modal.classList.add('open');
+    setTimeout(() => document.getElementById('change-password-current')?.focus(), 100);
+  }
+  function closeChangePasswordModal() {
+    const modal = $('#change-password-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async function handleChangePassword() {
+    const current = document.getElementById('change-password-current')?.value || '';
+    const newPwd = document.getElementById('change-password-new')?.value || '';
+    const repeatPwd = document.getElementById('change-password-repeat')?.value || '';
+    const msg = $('#change-password-msg');
+
+    if (!current) { if (msg) { msg.textContent = 'Please enter your current password.'; msg.classList.add('error'); msg.classList.remove('success'); } return; }
+    if (!newPwd) { if (msg) { msg.textContent = 'Please enter a new password.'; msg.classList.add('error'); msg.classList.remove('success'); } return; }
+    if (newPwd.length < 6) { if (msg) { msg.textContent = 'New password must be at least 6 characters.'; msg.classList.add('error'); msg.classList.remove('success'); } return; }
+    if (newPwd !== repeatPwd) { if (msg) { msg.textContent = 'New passwords do not match.'; msg.classList.add('error'); msg.classList.remove('success'); } return; }
+
+    if (msg) { msg.textContent = 'Updating...'; msg.classList.remove('error', 'success'); }
+    try {
+      const { data, error } = await withTimeout(
+        SupabaseStore.getClient().auth.updateUser({ password: newPwd }),
+        15000,
+        'Update password'
+      );
+      if (error) {
+        if (msg) { msg.textContent = error.message; msg.classList.add('error'); msg.classList.remove('success'); }
+        console.warn('[Auth] update password error:', error);
+        return;
+      }
+      if (msg) { msg.textContent = 'Password updated!'; msg.classList.add('success'); msg.classList.remove('error'); }
+      setTimeout(() => closeChangePasswordModal(), 800);
+    } catch (err) {
+      console.error('[Auth] Update password failed:', err);
+      if (msg) { msg.textContent = err.message || 'Update failed.'; msg.classList.add('error'); msg.classList.remove('success'); }
+    }
+  }
+
+  // Change Avatar
+  let pendingAvatarFile = null;
+  function openChangeAvatarModal() {
+    closeAuthDropdown();
+    pendingAvatarFile = null;
+    const uploadBtn = $('#change-avatar-upload-btn');
+    if (uploadBtn) uploadBtn.disabled = true;
+    const msg = $('#change-avatar-msg');
+    if (msg) { msg.textContent = ''; msg.classList.remove('error', 'success'); }
+    // Show current avatar
+    const preview = $('#change-avatar-preview');
+    const fallback = $('#change-avatar-fallback');
+    if (currentUser?.user_metadata?.avatar_url) {
+      if (preview) { preview.src = currentUser.user_metadata.avatar_url; preview.style.display = 'block'; }
+      if (fallback) fallback.style.display = 'none';
+    } else {
+      if (preview) { preview.removeAttribute('src'); preview.style.display = 'none'; }
+      if (fallback) fallback.style.display = 'flex';
+    }
+    const modal = $('#change-avatar-modal');
+    if (modal) modal.classList.add('open');
+  }
+  function closeChangeAvatarModal() {
+    const modal = $('#change-avatar-modal');
+    if (modal) modal.classList.remove('open');
+    pendingAvatarFile = null;
+  }
+
+  function handleAvatarFileSelect(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      const msg = $('#change-avatar-msg');
+      if (msg) { msg.textContent = 'Please choose an image file.'; msg.classList.add('error'); msg.classList.remove('success'); }
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      const msg = $('#change-avatar-msg');
+      if (msg) { msg.textContent = 'Image must be under 5 MB.'; msg.classList.add('error'); msg.classList.remove('success'); }
+      return;
+    }
+    pendingAvatarFile = file;
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = e => {
+      const preview = $('#change-avatar-preview');
+      const fallback = $('#change-avatar-fallback');
+      if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+      if (fallback) fallback.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+    const uploadBtn = $('#change-avatar-upload-btn');
+    if (uploadBtn) uploadBtn.disabled = false;
+  }
+
+  async function handleAvatarUpload() {
+    if (!pendingAvatarFile) return;
+    const msg = $('#change-avatar-msg');
+    if (msg) { msg.textContent = 'Uploading...'; msg.classList.remove('error', 'success'); }
+    try {
+      const client = SupabaseStore.getClient();
+      const { data: userData } = await client.auth.getUser();
+      const user = userData?.user;
+      if (!user) throw new Error('Not signed in');
+      const ext = pendingAvatarFile.name.split('.').pop() || 'png';
+      const path = `${user.id}/avatar.${ext}`;
+      // Upload to 'avatars' bucket (must exist in Supabase Storage)
+      const { error: upErr } = await client.storage.from('avatars').upload(path, pendingAvatarFile, { upsert: true, contentType: pendingAvatarFile.type });
+      if (upErr) {
+        if (msg) { msg.textContent = 'Upload failed: ' + upErr.message; msg.classList.add('error'); msg.classList.remove('success'); }
+        console.warn('[Auth] avatar upload error:', upErr);
+        return;
+      }
+      // Get public URL
+      const { data: pub } = client.storage.from('avatars').getPublicUrl(path);
+      const publicUrl = pub?.publicUrl || '';
+      if (!publicUrl) throw new Error('Could not get public URL');
+      // Update user metadata
+      const { error: metaErr } = await withTimeout(
+        client.auth.updateUser({ data: { avatar_url: publicUrl } }),
+        15000,
+        'Update avatar'
+      );
+      if (metaErr) {
+        if (msg) { msg.textContent = metaErr.message; msg.classList.add('error'); msg.classList.remove('success'); }
+        return;
+      }
+      // Refresh current user
+      const { data: fresh } = await client.auth.getUser();
+      if (fresh?.user) currentUser = fresh.user;
+      updateAuthUI(currentUser);
+      if (msg) { msg.textContent = 'Avatar updated!'; msg.classList.add('success'); msg.classList.remove('error'); }
+      setTimeout(() => closeChangeAvatarModal(), 800);
+    } catch (err) {
+      console.error('[Auth] Avatar upload failed:', err);
+      if (msg) { msg.textContent = err.message || 'Upload failed.'; msg.classList.add('error'); msg.classList.remove('success'); }
+    }
+  }
+
   function bindAuth() {
     const client = SupabaseStore.getClient();
 
@@ -2389,8 +2640,56 @@
       });
     });
 
+    // Avatar button toggle dropdown
+    const avatarBtn = $('#auth-avatar-btn');
+    if (avatarBtn) avatarBtn.addEventListener('click', e => { e.stopPropagation(); toggleAuthDropdown(); });
+    // Close dropdown when clicking outside
+    document.addEventListener('click', e => {
+      const dropdown = $('#auth-dropdown');
+      if (dropdown && dropdown.style.display !== 'none' && !e.target.closest('.auth-user')) {
+        closeAuthDropdown();
+      }
+    });
+
+    // Dropdown items
+    const changeAvatarBtn = $('#auth-change-avatar-btn');
+    if (changeAvatarBtn) changeAvatarBtn.addEventListener('click', openChangeAvatarModal);
+    const changeNameBtn = $('#auth-change-name-btn');
+    if (changeNameBtn) changeNameBtn.addEventListener('click', openChangeNameModal);
+    const changePasswordBtn = $('#auth-change-password-btn');
+    if (changePasswordBtn) changePasswordBtn.addEventListener('click', openChangePasswordModal);
     const signoutBtn = $('#auth-signout-btn');
     if (signoutBtn) signoutBtn.addEventListener('click', signOut);
+
+    // Change name modal
+    const changeNameClose = $('#change-name-modal-close');
+    if (changeNameClose) changeNameClose.addEventListener('click', closeChangeNameModal);
+    const changeNameModal = $('#change-name-modal');
+    if (changeNameModal) changeNameModal.addEventListener('click', e => { if (e.target === changeNameModal) closeChangeNameModal(); });
+    const changeNameForm = $('#change-name-form');
+    if (changeNameForm) changeNameForm.addEventListener('submit', e => { e.preventDefault(); handleChangeName(); });
+
+    // Change password modal
+    const changePwdClose = $('#change-password-modal-close');
+    if (changePwdClose) changePwdClose.addEventListener('click', closeChangePasswordModal);
+    const changePwdModal = $('#change-password-modal');
+    if (changePwdModal) changePwdModal.addEventListener('click', e => { if (e.target === changePwdModal) closeChangePasswordModal(); });
+    const changePwdForm = $('#change-password-form');
+    if (changePwdForm) changePwdForm.addEventListener('submit', e => { e.preventDefault(); handleChangePassword(); });
+
+    // Change avatar modal
+    const changeAvatarClose = $('#change-avatar-modal-close');
+    if (changeAvatarClose) changeAvatarClose.addEventListener('click', closeChangeAvatarModal);
+    const changeAvatarModalEl = $('#change-avatar-modal');
+    if (changeAvatarModalEl) changeAvatarModalEl.addEventListener('click', e => { if (e.target === changeAvatarModalEl) closeChangeAvatarModal(); });
+    const changeAvatarPick = $('#change-avatar-pick-btn');
+    const changeAvatarInput = $('#change-avatar-input');
+    if (changeAvatarPick && changeAvatarInput) {
+      changeAvatarPick.addEventListener('click', () => changeAvatarInput.click());
+      changeAvatarInput.addEventListener('change', e => handleAvatarFileSelect(e.target.files[0]));
+    }
+    const changeAvatarUpload = $('#change-avatar-upload-btn');
+    if (changeAvatarUpload) changeAvatarUpload.addEventListener('click', handleAvatarUpload);
   }
 
   /* ── Init ── */
