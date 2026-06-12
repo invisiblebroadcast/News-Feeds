@@ -332,7 +332,12 @@
   function updateReelsFullscreen() {
     isReelsFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
     const c = el.main && el.main.querySelector && el.main.querySelector('.reels-container');
-    if (c) updateNavArrows(c);
+    if (c) {
+      updateNavArrows(c);
+      // Highlight the fullscreen button when active
+      const fsBtns = c.querySelectorAll('.reels-fullscreen');
+      fsBtns.forEach(b => b.classList.toggle('active', isReelsFullscreen));
+    }
   }
   document.addEventListener('fullscreenchange', updateReelsFullscreen);
   document.addEventListener('webkitfullscreenchange', updateReelsFullscreen);
@@ -639,6 +644,7 @@
         if (!isSwiping) return;
 
         const dir = swipeDx < 0 ? -1 : 1; // -1 = left (next), 1 = right (prev)
+        const cw = container.offsetWidth || 1;
         if (dir !== swipeDir) {
           swipeDir = dir;
           // Update background card content based on direction
@@ -649,7 +655,8 @@
             under.className = 'reels-card-under';
             updateCard(under, targetArticle, targetIdx, total);
             under.style.transition = 'none';
-            under.style.transform = dir < 0 ? 'translateX(100%)' : 'translateX(-100%)';
+            // Park off-screen on the side the user is swiping FROM (in pixels, not %)
+            under.style.transform = dir < 0 ? 'translateX(' + cw + 'px)' : 'translateX(-' + cw + 'px)';
           } else {
             under.style.display = 'none';
           }
@@ -659,7 +666,8 @@
         card.style.transform = 'translateX(' + swipeDx + 'px)';
         if (under.style.display !== 'none') {
           under.style.transition = 'none';
-          const offset = dir < 0 ? 100 + swipeDx : -100 + Math.abs(swipeDx);
+          // Under card tracks the foreground by the same pixel delta, so the gap stays constant
+          const offset = dir < 0 ? (cw + swipeDx) : (-cw + swipeDx);
           under.style.transform = 'translateX(' + offset + 'px)';
         }
         e.preventDefault();
@@ -816,8 +824,11 @@
   function requestReelFullscreen() {
     const c = document.querySelector('.reels-container');
     if (!c) return;
-    if (c.requestFullscreen) c.requestFullscreen().catch(() => {});
-    else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
+    if (c.requestFullscreen) {
+      c.requestFullscreen().catch(err => console.warn('Fullscreen request failed:', err.message));
+    } else if (c.webkitRequestFullscreen) {
+      c.webkitRequestFullscreen();
+    }
   }
 
   function exitReels() {
@@ -1753,7 +1764,9 @@
       }
 
       const hasImg = img && imgW > 0;
-      const dpr = Math.max(window.devicePixelRatio || 1, 2);
+      // Cap DPR at 2 so the PNG doesn't get too large for mobile share sheets (3× devices
+      // would otherwise produce a 3240px+ file that many share targets reject)
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
 
       // Canvas: 4:5 portrait, 1080 wide. Height grows to fit content but is at least 1350.
       const W = 1080;
@@ -1801,21 +1814,18 @@
         + smallGap
         + smallFontSize;
 
-      // Image dimensions — use at native size when smaller than the target area (no upscale,
-      // preserves original quality). Only downscale when the image exceeds W or maxImgH.
+      // Image dimensions — always scale to fill the canvas width (constrained by maxH).
+      // This ensures the image is prominent in the share regardless of source resolution.
+      // High-res sources are downscaled with high-quality smoothing; low-res sources are
+      // upscaled to fill the width (accepting some softness for very small thumbnails).
       let imgDrawW = 0, imgDrawH = 0;
       let imgBlockH = 0;
       if (hasImg) {
         const maxW = W - PAD * 2;
         const maxH = imgMaxAreaH - imgPad * 2;
-        if (imgW > maxW || imgH > maxH) {
-          const scale = Math.min(maxW / imgW, maxH / imgH);
-          imgDrawW = Math.round(imgW * scale);
-          imgDrawH = Math.round(imgH * scale);
-        } else {
-          imgDrawW = imgW;
-          imgDrawH = imgH;
-        }
+        const scale = Math.min(maxW / imgW, maxH / imgH);
+        imgDrawW = Math.round(imgW * scale);
+        imgDrawH = Math.round(imgH * scale);
         imgBlockH = imgDrawH + imgPad * 2;
       }
 
@@ -1965,11 +1975,13 @@
 
   function toggleFullscreen() {
     if (document.fullscreenElement || document.webkitFullscreenElement) {
-      if (document.exitFullscreen) document.exitFullscreen();
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     } else {
       requestReelFullscreen();
     }
+    // Sync state immediately in case fullscreenchange event is delayed
+    setTimeout(updateReelsFullscreen, 100);
   }
 
   function closeSourceModal() {

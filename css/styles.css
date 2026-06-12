@@ -576,9 +576,6 @@ img { max-width: 100%; height: auto; }
   flex: 1;
   justify-content: center;
 }
-.reels-stack .reels-card-under.left {
-  transform: translateX(-100%);
-}
 .reels-progress {
   display: flex;
   gap: 4px;
@@ -1597,7 +1594,9 @@ img { max-width: 100%; height: auto; }
 }
 .reels-tool-btn.active {
   opacity: 1;
-  color: var(--accent);
+  color: #fff;
+  background: rgba(31, 111, 235, 0.7);
+  border: 1px solid rgba(31, 111, 235, 0.9);
 }
 
 .modal-watermark {
