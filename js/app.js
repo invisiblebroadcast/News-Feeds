@@ -39,6 +39,10 @@
     sourceModal: $('#source-modal'),
     sourceModalClose: $('#source-modal-close'),
     sourceModalTitle: $('#source-modal-title'),
+    activityBtn: $('#activity-btn'),
+    activityModal: $('#activity-modal'),
+    activityModalClose: $('#activity-modal-close'),
+    activityContent: $('#activity-content'),
     feedUrlInput: $('#feed-url-input'),
     feedNameInput: $('#feed-name-input'),
     feedScopeSelect: $('#feed-scope-select'),
@@ -150,8 +154,8 @@
       articles = cached.groups[subcat] || [];
     }
     if (!articles.length) return [];
+    articles = FeedFetcher.deduplicate(articles);
     if (currentMode === 'top') {
-      articles = FeedFetcher.deduplicate(articles);
       articles = FeedFetcher.sortByDate(articles);
       articles = applyDateFilter(articles);
     } else {
@@ -216,9 +220,7 @@
     if (el.modeToggle) {
       $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
     }
-    if (el.viewToggle) {
-      $$('.mode-btn', el.viewToggle).forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
-    }
+    updateViewToggleInNav();
   }
 
   /* ── Render Content ── */
@@ -309,6 +311,21 @@
       '</article>';
   }
 
+  function renderViewToggle() {
+    return '<button class="mode-btn' + (currentView === 'list' ? ' active' : '') + '" data-view="list" title="List View">' +
+        '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>' +
+      '</button>' +
+      '<button class="mode-btn' + (currentView === 'reels' ? ' active' : '') + '" data-view="reels" title="Cards View">' +
+        '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg>' +
+      '</button>';
+  }
+
+  function updateViewToggleInNav() {
+    const container = $('#view-toggle');
+    if (!container) return;
+    container.innerHTML = renderViewToggle();
+  }
+
   /* ── Reels View ── */
   let currentReelIndex = 0;
 
@@ -325,6 +342,108 @@
     showReel();
   }
 
+  function cardOverlayHtml() {
+    return '<div class="reels-overlay">' +
+      '<div class="reels-toolbar">' +
+        '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
+        '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
+        '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
+        '<button class="reels-tool-btn reels-like-btn" title="Like">&#x1F44D;</button>' +
+        '<button class="reels-tool-btn reels-dislike-btn" title="Dislike">&#x1F44E;</button>' +
+      '</div>' +
+      '<span class="reels-count"></span>' +
+      '<h2 class="reels-title"></h2>' +
+      '<div class="reels-meta">' +
+        '<span class="reels-source"></span>' +
+        '<span class="reels-date"></span>' +
+        '<span class="reels-flag" style="display:none"></span>' +
+      '</div>' +
+      '<p class="reels-summary"></p>' +
+      '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
+      '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
+      '<div class="reels-watermark">' +
+        '<span class="wm-brand">Invisible Broadcast</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function readerHtml() {
+    return '<div class="reels-reader" style="display:none">' +
+      '<div class="reels-reader-header">' +
+        '<span></span>' +
+        '<button class="reels-reader-close">&times;</button>' +
+      '</div>' +
+      '<div class="reels-reader-scroll">' +
+        '<h3 class="rr-title"></h3>' +
+        '<div class="rr-meta">' +
+          '<span class="rr-source"></span>' +
+          '<span class="rr-date"></span>' +
+        '</div>' +
+        '<p class="rr-summary"></p>' +
+        '<div style="margin-bottom:12px">' +
+          '<select class="rr-flag">' +
+            '<option value="">No flag</option>' +
+            '<option value="save">Save for later</option>' +
+            '<option value="investigative">Investigative</option>' +
+            '<option value="favorite">Favorite</option>' +
+            '<option value="important">Important</option>' +
+            '<option value="urgent">Urgent</option>' +
+          '</select>' +
+        '</div>' +
+        '<div style="margin-bottom:16px">' +
+          '<textarea class="rr-notes" placeholder="Add notes\u2026"></textarea>' +
+        '</div>' +
+        '<div class="rr-actions">' +
+          '<button class="btn btn-primary rr-read" style="font-size:0.85rem;padding:8px 16px">Read Article</button>' +
+          '<button class="btn btn-danger rr-open" style="font-size:0.85rem;padding:8px 16px">Open in Browser</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function updateCard(cardEl, article, idx, total) {
+    if (!cardEl || !article) return;
+    const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+    if (hasThumb) { cardEl.style.backgroundImage = 'url(\'' + article.imageUrl.replace(/'/g, '%27') + '\')'; cardEl.style.backgroundSize = 'cover'; cardEl.style.backgroundPosition = 'center'; }
+    else { cardEl.style.backgroundImage = ''; }
+
+    const count = cardEl.querySelector('.reels-count');
+    if (count) count.textContent = (idx + 1) + ' / ' + total;
+    const title = cardEl.querySelector('.reels-title');
+    if (title) title.textContent = article.title;
+    const source = cardEl.querySelector('.reels-source');
+    if (source) source.textContent = article.source;
+    const date = cardEl.querySelector('.reels-date');
+    if (date) date.textContent = formatDateShort(article.pubDate);
+    const summaryText = cleanSummary(stripHtml(article.summary));
+    const summary = cardEl.querySelector('.reels-summary');
+    if (summary) {
+      summary.textContent = summaryText.slice(0, 350);
+      summary.dataset.full = summaryText;
+    }
+    const readmoreBtn = cardEl.querySelector('.reels-readmore-btn');
+    if (readmoreBtn) {
+      readmoreBtn.style.display = summaryText.length > 350 ? 'block' : 'none';
+      readmoreBtn.textContent = 'Read more';
+    }
+    const ad = getArticleData(article.link);
+    const flagEl = cardEl.querySelector('.reels-flag');
+    if (flagEl) {
+      if (ad.flag) { flagEl.textContent = ad.flag; flagEl.style.display = 'inline'; flagEl.style.background = FLAG_COLORS[ad.flag] || 'var(--text-tertiary)'; }
+      else { flagEl.style.display = 'none'; }
+    }
+    const readBtn = cardEl.querySelector('.reels-read-btn');
+    if (readBtn) readBtn.dataset.article = encodeURIComponent(article.link);
+    const st = cardEl.querySelector('.reels-share-text');
+    if (st) { st.dataset.url = encodeURIComponent(article.link); st.dataset.title = article.title; st.dataset.source = article.source; }
+    const si = cardEl.querySelector('.reels-share-image');
+    if (si) { si.dataset.url = encodeURIComponent(article.link); si.dataset.title = article.title; si.dataset.source = article.source; }
+    const likeBtn = cardEl.querySelector('.reels-like-btn');
+    if (likeBtn) likeBtn.classList.toggle('active', !!ad.like);
+    const dislikeBtn = cardEl.querySelector('.reels-dislike-btn');
+    if (dislikeBtn) dislikeBtn.classList.toggle('active', !!ad.dislike);
+  }
+
   function showReel() {
     const articles = currentArticles;
     const idx = currentReelIndex;
@@ -333,109 +452,69 @@
 
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
     const bgStyle = hasThumb ? article.imageUrl : '';
+    const bgCss = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
 
     const existing = el.main.querySelector('.reels-container');
 
     if (!existing) {
-      // First render — build the full DOM
-      const bgHtml = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
+      // First render — build the full DOM with stack
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<button class="reels-tool-btn" id="reels-refresh" title="Refresh">&#x21BB;</button>' +
-          '<div class="reels-card"' + bgHtml + '>' +
-            '<div class="reels-overlay">' +
-              '<div class="reels-toolbar">' +
-                '<button class="reels-tool-btn" id="reels-share-text" title="Share as Text">&#x21AA;</button>' +
-                '<button class="reels-tool-btn" id="reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
-                '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
-                '<button class="reels-tool-btn reels-like-btn" title="Like">&#x1F44D;</button>' +
-                '<button class="reels-tool-btn reels-dislike-btn" title="Dislike">&#x1F44E;</button>' +
-              '</div>' +
-              '<span class="reels-count"></span>' +
-              '<h2 class="reels-title"></h2>' +
-              '<div class="reels-meta">' +
-                '<span class="reels-source"></span>' +
-                '<span class="reels-date"></span>' +
-                '<span class="reels-flag" style="display:none"></span>' +
-              '</div>' +
-              '<p class="reels-summary"></p>' +
-              '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
-              '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
-              '<div class="reels-watermark">' +
-                '<span class="wm-brand">Invisible Broadcast</span>' +
-              '</div>' +
-            '</div>' +
-            '<div class="reels-reader" style="display:none">' +
-              '<div class="reels-reader-header">' +
-                '<span></span>' +
-                '<button class="reels-reader-close">&times;</button>' +
-              '</div>' +
-              '<div class="reels-reader-scroll">' +
-                '<h3 class="rr-title"></h3>' +
-                '<div class="rr-meta">' +
-                  '<span class="rr-source"></span>' +
-                  '<span class="rr-date"></span>' +
-                '</div>' +
-                '<p class="rr-summary"></p>' +
-                '<div style="margin-bottom:12px">' +
-                  '<select class="rr-flag">' +
-                    '<option value="">No flag</option>' +
-                    '<option value="save">Save for later</option>' +
-                    '<option value="investigative">Investigative</option>' +
-                    '<option value="favorite">Favorite</option>' +
-                    '<option value="important">Important</option>' +
-                    '<option value="urgent">Urgent</option>' +
-                  '</select>' +
-                '</div>' +
-                '<div style="margin-bottom:16px">' +
-                  '<textarea class="rr-notes" placeholder="Add notes\u2026"></textarea>' +
-                '</div>' +
-                '<div class="rr-actions">' +
-                  '<button class="btn btn-primary rr-read" style="font-size:0.85rem;padding:8px 16px">Read Article</button>' +
-                  '<button class="btn btn-danger rr-open" style="font-size:0.85rem;padding:8px 16px">Open in Browser</button>' +
+          '<div class="reels-stack">' +
+            '<div class="reels-card"' + bgCss + '>' + cardOverlayHtml() + '</div>' +
+            '<div class="reels-card-under">' +
+              '<div class="reels-overlay">' +
+                '<span class="reels-count"></span>' +
+                '<h2 class="reels-title"></h2>' +
+                '<div class="reels-meta">' +
+                  '<span class="reels-source"></span>' +
+                  '<span class="reels-date"></span>' +
                 '</div>' +
               '</div>' +
             '</div>' +
+            readerHtml() +
+          '</div>' +
         '</div>';
 
-      el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
-        e.stopPropagation();
-        const link = decodeURIComponent(e.currentTarget.dataset.article);
-        if (document.fullscreenElement) {
-          openReelsReader(link);
-        } else {
-          openArticleDetail(link);
+      const container = el.main.querySelector('.reels-container');
+      const stack = container.querySelector('.reels-stack');
+
+      // Event delegation on stack for card button actions (using closest)
+      stack.addEventListener('click', e => {
+        const readBtn = e.target.closest('.reels-read-btn');
+        if (readBtn) {
+          e.stopPropagation();
+          const link = decodeURIComponent(readBtn.dataset.article);
+          if (document.fullscreenElement) openReelsReader(link);
+          else openArticleDetail(link);
+          return;
         }
-      });
-      const st = $('#reels-share-text');
-      if (st) st.addEventListener('click', e => {
-        e.stopPropagation();
-        handleShare(decodeURIComponent(st.dataset.url), st.dataset.title, st.dataset.source);
-      });
-      const si = $('#reels-share-image');
-      if (si) si.addEventListener('click', e => {
-        e.stopPropagation();
-        handleShareImage(currentArticles[currentReelIndex]);
-      });
-      const fs = $('#reels-fullscreen');
-      if (fs) fs.addEventListener('click', e => { e.stopPropagation(); toggleFullscreen(); });
-
-      const rf = $('#reels-refresh');
-      if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
-
-      const rcontainer = el.main.querySelector('.reels-container');
-      rcontainer.addEventListener('click', e => {
+        const st = e.target.closest('.reels-share-text');
+        if (st) {
+          e.stopPropagation();
+          handleShare(decodeURIComponent(st.dataset.url), st.dataset.title, st.dataset.source);
+          return;
+        }
+        const si = e.target.closest('.reels-share-image');
+        if (si) {
+          e.stopPropagation();
+          handleShareImage(currentArticles[currentReelIndex]);
+          return;
+        }
+        const fs = e.target.closest('.reels-fullscreen');
+        if (fs) { e.stopPropagation(); toggleFullscreen(); return; }
         if (e.target.closest('.reels-reader-close')) {
           e.stopPropagation();
           closeReelsReader();
           return;
         }
-        if (e.target.closest('.rr-read')) {
-          const btn = e.target.closest('.rr-read');
-          const url = btn.dataset.url;
+        const rr = e.target.closest('.rr-read');
+        if (rr) {
+          const url = rr.dataset.url;
           if (!url) return;
-          const scroll = rcontainer.querySelector('.reels-reader-scroll');
+          const scroll = stack.querySelector('.reels-reader-scroll');
           const existingContent = scroll.querySelector('.rr-fetched');
           if (existingContent) { existingContent.remove(); return; }
           const wrapper = document.createElement('div');
@@ -446,14 +525,9 @@
           (async () => {
             try {
               const html = await fetchArticleHtml(url);
-              if (html) {
-                wrapper.innerHTML = html;
-              } else {
-                wrapper.innerHTML = '<div style="text-align:center;padding:20px"><p style="color:var(--text-tertiary);margin-bottom:12px">Could not load article directly.</p><a href="' + escAttr(url) + '" target="_blank" class="btn btn-danger" style="font-size:0.85rem;padding:8px 16px;display:inline-block">Open in Browser</a></div>';
-              }
-            } catch {
-              wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Failed to load.</div>';
-            }
+              if (html) wrapper.innerHTML = html;
+              else wrapper.innerHTML = '<div style="text-align:center;padding:20px"><p style="color:var(--text-tertiary);margin-bottom:12px">Could not load article directly.</p><a href="' + escAttr(url) + '" target="_blank" class="btn btn-danger" style="font-size:0.85rem;padding:8px 16px;display:inline-block">Open in Browser</a></div>';
+            } catch { wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Failed to load.</div>'; }
           })();
           return;
         }
@@ -462,56 +536,53 @@
           if (btn.href) window.open(btn.href, '_blank');
           return;
         }
-        if (e.target.closest('.reels-readmore-btn')) {
-          const btn = e.target.closest('.reels-readmore-btn');
-          const summary = rcontainer.querySelector('.reels-summary');
+        const rmBtn = e.target.closest('.reels-readmore-btn');
+        if (rmBtn) {
+          const card = stack.querySelector('.reels-card');
+          const summary = card.querySelector('.reels-summary');
           if (!summary) return;
           if (summary.textContent === summary.dataset.full) {
             summary.textContent = summary.dataset.full.slice(0, 350);
-            btn.textContent = 'Read more';
+            rmBtn.textContent = 'Read more';
           } else {
             summary.textContent = summary.dataset.full;
-            btn.textContent = 'Show less';
+            rmBtn.textContent = 'Show less';
           }
           return;
         }
-        if (e.target.closest('.reels-like-btn')) {
-          const btn = e.target.closest('.reels-like-btn');
-          const article = currentArticles[currentReelIndex];
-          if (!article) return;
-          const ad = getArticleData(article.link);
-          if (ad.like) {
-            ad.like = false;
-            btn.classList.remove('active');
-          } else {
-            ad.like = true;
-            ad.dislike = false;
-            btn.classList.add('active');
-            const dislikeBtn = rcontainer.querySelector('.reels-dislike-btn');
-            if (dislikeBtn) dislikeBtn.classList.remove('active');
-          }
-          saveArticleData(article.link, ad);
+        const likeBtn = e.target.closest('.reels-like-btn');
+        if (likeBtn) {
+          if (!requireAuth()) return;
+          const a = currentArticles[currentReelIndex];
+          if (!a) return;
+          const ad = getArticleData(a.link);
+          if (ad.like) { ad.like = false; } else { ad.like = true; ad.dislike = false; }
+          saveArticleData(a.link, ad);
+          const cards = stack.querySelectorAll('.reels-like-btn');
+          cards.forEach(b => b.classList.toggle('active', !!ad.like));
+          const db = stack.querySelectorAll('.reels-dislike-btn');
+          db.forEach(b => b.classList.toggle('active', !!ad.dislike));
           return;
         }
-        if (e.target.closest('.reels-dislike-btn')) {
-          const btn = e.target.closest('.reels-dislike-btn');
-          const article = currentArticles[currentReelIndex];
-          if (!article) return;
-          const ad = getArticleData(article.link);
-          if (ad.dislike) {
-            ad.dislike = false;
-            btn.classList.remove('active');
-          } else {
-            ad.dislike = true;
-            ad.like = false;
-            btn.classList.add('active');
-            const likeBtn = rcontainer.querySelector('.reels-like-btn');
-            if (likeBtn) likeBtn.classList.remove('active');
-          }
-          saveArticleData(article.link, ad);
+        const dislikeBtn = e.target.closest('.reels-dislike-btn');
+        if (dislikeBtn) {
+          if (!requireAuth()) return;
+          const a = currentArticles[currentReelIndex];
+          if (!a) return;
+          const ad = getArticleData(a.link);
+          if (ad.dislike) { ad.dislike = false; } else { ad.dislike = true; ad.like = false; }
+          saveArticleData(a.link, ad);
+          const db = stack.querySelectorAll('.reels-dislike-btn');
+          db.forEach(b => b.classList.toggle('active', !!ad.dislike));
+          const cards = stack.querySelectorAll('.reels-like-btn');
+          cards.forEach(b => b.classList.toggle('active', !!ad.like));
           return;
         }
       });
+
+      const rf = container.querySelector('#reels-refresh');
+      if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
+
       let lastNavTime = 0;
       function navThrottle(dir) {
         const now = Date.now();
@@ -519,82 +590,114 @@
         lastNavTime = now;
         if (dir > 0) nextReel(); else prevReel();
       }
-      let touchStartX = 0;
-      rcontainer.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
+      let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 left, 1 right
+      container.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        swipeStartX = e.touches[0].clientX;
+        swipeDx = 0;
+        isSwiping = false;
+        swipeDir = 0;
       }, { passive: true });
-      rcontainer.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
-      rcontainer.addEventListener('touchend', e => {
-        if (!touchStartX) return;
-        const dx = touchStartX - e.changedTouches[0].clientX;
-        touchStartX = 0;
-        if (Math.abs(dx) < 30) return;
-        navThrottle(dx > 0 ? 1 : -1);
+      container.addEventListener('touchmove', e => {
+        if (!swipeStartX) return;
+        const card = stack.querySelector('.reels-card');
+        const under = stack.querySelector('.reels-card-under');
+        if (!card) return;
+        swipeDx = e.touches[0].clientX - swipeStartX;
+        if (Math.abs(swipeDx) > 5) isSwiping = true;
+        if (!isSwiping) return;
+
+        const dir = swipeDx < 0 ? -1 : 1; // -1 = left (next), 1 = right (prev)
+        if (dir !== swipeDir) {
+          swipeDir = dir;
+          // Update background card content based on direction
+          const targetIdx = dir < 0 ? idx + 1 : idx - 1;
+          const targetArticle = articles[targetIdx];
+          if (targetArticle) {
+            under.style.display = '';
+            under.className = 'reels-card-under';
+            updateCard(under, targetArticle, targetIdx, total);
+            under.style.transition = 'none';
+            under.style.transform = dir < 0 ? 'translateX(100%)' : 'translateX(-100%)';
+          } else {
+            under.style.display = 'none';
+          }
+        }
+
+        card.style.transition = 'none';
+        card.style.transform = 'translateX(' + swipeDx + 'px)';
+        if (under.style.display !== 'none') {
+          under.style.transition = 'none';
+          const offset = dir < 0 ? 100 + swipeDx : -100 + Math.abs(swipeDx);
+          under.style.transform = 'translateX(' + offset + 'px)';
+        }
+        e.preventDefault();
+      }, { passive: false });
+      container.addEventListener('touchend', e => {
+        if (!swipeStartX) return;
+        const card = stack.querySelector('.reels-card');
+        const under = stack.querySelector('.reels-card-under');
+        const dx = swipeStartX - e.changedTouches[0].clientX;
+        swipeStartX = 0;
+        // Reset transforms with animation
+        if (card) {
+          card.style.transition = '';
+          card.style.transform = '';
+        }
+        if (under) {
+          under.style.transition = '';
+          under.style.transform = '';
+          under.style.display = 'none';
+          under.className = 'reels-card-under';
+        }
+        if (isSwiping && Math.abs(dx) > 30) navThrottle(dx > 0 ? 1 : -1);
+        isSwiping = false;
+        swipeDir = 0;
       }, { passive: true });
-      rcontainer.addEventListener('touchcancel', () => { touchStartX = 0; }, { passive: true });
+      container.addEventListener('touchcancel', () => { swipeStartX = 0; isSwiping = false; swipeDir = 0; }, { passive: true });
     }
 
-    // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
+    // In-place DOM updates
     const container = existing || el.main.querySelector('.reels-container');
     if (!container) return;
+    const stack = container.querySelector('.reels-stack');
+    if (!stack) return;
 
     const dots = container.querySelector('.reels-progress');
     if (dots) dots.innerHTML = articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
 
-    const card = container.querySelector('.reels-card');
-    if (card) {
-      if (hasThumb) { card.style.backgroundImage = 'url(\'' + bgStyle.replace(/'/g, '%27') + '\')'; card.style.backgroundSize = 'cover'; card.style.backgroundPosition = 'center'; }
-      else { card.style.backgroundImage = ''; }
-    }
+    const fg = stack.querySelector('.reels-card');
+    if (fg) updateCard(fg, article, idx, total);
 
-    const count = container.querySelector('.reels-count');
-    if (count) count.textContent = (idx + 1) + ' / ' + total;
-    const title = container.querySelector('.reels-title');
-    if (title) title.textContent = article.title;
-    const source = container.querySelector('.reels-source');
-    if (source) source.textContent = article.source;
-    const date = container.querySelector('.reels-date');
-    if (date) date.textContent = formatDateShort(article.pubDate);
-    const summaryText = cleanSummary(stripHtml(article.summary));
-    const summary = container.querySelector('.reels-summary');
-    if (summary) {
-      summary.textContent = summaryText.slice(0, 350);
-      summary.dataset.full = summaryText;
+    // Pre-populate background card with next article for immediate swipe readiness
+    const under = stack.querySelector('.reels-card-under');
+    if (under) {
+      const nextArticle = articles[idx + 1];
+      if (nextArticle) {
+        updateCard(under, nextArticle, idx + 1, total);
+        under.style.display = '';
+        under.className = 'reels-card-under';
+        under.style.transform = '';
+        under.style.transition = '';
+      } else {
+        under.style.display = 'none';
+      }
     }
-    const readmoreBtn = container.querySelector('.reels-readmore-btn');
-    if (readmoreBtn) {
-      readmoreBtn.style.display = summaryText.length > 350 ? 'block' : 'none';
-      readmoreBtn.textContent = 'Read more';
-    }
-
-    const ad = getArticleData(article.link);
-    const flagEl = container.querySelector('.reels-flag');
-    if (flagEl) {
-      if (ad.flag) { flagEl.textContent = ad.flag; flagEl.style.display = 'inline'; flagEl.style.background = FLAG_COLORS[ad.flag] || 'var(--text-tertiary)'; }
-      else { flagEl.style.display = 'none'; }
-    }
-
-    const readBtn = container.querySelector('.reels-read-btn');
-    if (readBtn) readBtn.dataset.article = encodeURIComponent(article.link);
-    const st2 = container.querySelector('#reels-share-text');
-    if (st2) { st2.dataset.url = encodeURIComponent(article.link); st2.dataset.title = article.title; st2.dataset.source = article.source; }
-    const si2 = container.querySelector('#reels-share-image');
-    if (si2) { si2.dataset.url = encodeURIComponent(article.link); si2.dataset.title = article.title; si2.dataset.source = article.source; }
-    const likeBtn = container.querySelector('.reels-like-btn');
-    if (likeBtn) likeBtn.classList.toggle('active', !!ad.like);
-    const dislikeBtn = container.querySelector('.reels-dislike-btn');
-    if (dislikeBtn) dislikeBtn.classList.toggle('active', !!ad.dislike);
   }
 
   function prevReel() {
     if (currentReelIndex < 1) return;
     currentReelIndex--;
+    const a = currentArticles[currentReelIndex];
+    if (a) trackView(a.link);
     showReel();
   }
 
   function nextReel() {
     if (currentReelIndex >= currentArticles.length - 1) return;
     currentReelIndex++;
+    const a = currentArticles[currentReelIndex];
+    if (a) trackView(a.link);
     showReel();
   }
 
@@ -647,6 +750,7 @@
     if (flagEl) {
       flagEl.value = ad.flag || '';
       flagEl.onchange = function() {
+        if (!requireAuth()) { flagEl.value = ad.flag || ''; return; }
         const newData = getArticleData(article.link);
         newData.flag = this.value || '';
         saveArticleData(article.link, newData);
@@ -656,6 +760,7 @@
     if (notesEl) {
       notesEl.value = ad.note || '';
       notesEl.oninput = function() {
+        if (!requireAuth()) { notesEl.value = ad.note || ''; return; }
         const newData = getArticleData(article.link);
         newData.note = this.value || '';
         saveArticleData(article.link, newData);
@@ -753,13 +858,11 @@
   }
 
   function bindViewToggle() {
-    const toggle = el.viewToggle;
-    if (!toggle) return;
-    toggle.addEventListener('click', e => {
-      const btn = e.target.closest('.mode-btn');
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('#view-toggle .mode-btn');
       if (!btn || btn.classList.contains('active')) return;
       currentView = btn.dataset.view;
-      $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
+      $$('#view-toggle .mode-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       displayCurrentSubcat();
     });
@@ -855,7 +958,7 @@
     }
   }
 
-  function displayCurrentSubcat() {
+  async function displayCurrentSubcat() {
     const key = scopeKey();
     const cached = scopeCache[key];
     if (!cached) { renderContent(); return; }
@@ -866,7 +969,7 @@
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
-    renderTranslated(articles);
+    await renderTranslated(articles);
   }
 
   function bindFilterSort() {
@@ -998,17 +1101,16 @@
   async function refreshAll() {
     const key = scopeKey();
     const overlay = document.createElement('div');
-    overlay.className = 'refresh-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:300';
     overlay.innerHTML = '<div class="loading-spinner"></div>';
     document.body.appendChild(overlay);
-    if (el.refreshBtn) el.refreshBtn.classList.add('btn-spin');
+    document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.add('btn-spin'));
 
     scopeCache[key] = null;
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
     if (!feeds.length) {
       overlay.remove();
-      if (el.refreshBtn) el.refreshBtn.classList.remove('btn-spin');
+      document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
       return;
     }
     const groups = {};
@@ -1032,9 +1134,9 @@
     scopeCache[key] = { articles: allArticles, groups };
     renderSubTabs();
     updateStickyHeader();
-    if (el.refreshBtn) el.refreshBtn.classList.remove('btn-spin');
+    await displayCurrentSubcat();
+    document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
     overlay.remove();
-    displayCurrentSubcat();
   }
 
   /* ── Date Toggle ── */
@@ -1062,10 +1164,6 @@
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
-    if (el.githubTokenInput) {
-      el.githubTokenInput.value = localStorage.getItem('github_token') || '';
-      if (el.cloudStatus) el.cloudStatus.textContent = CloudStore.hasToken() ? '\u{1F7E2}' : '\u{26AA}';
-    }
     el.modal.classList.add('open');
   }
 
@@ -1078,10 +1176,6 @@
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
     Settings.save({ articlesPerPage: perPage, language: lang });
-    if (el.githubTokenInput) {
-      const token = el.githubTokenInput.value.trim();
-      try { localStorage.setItem('github_token', token); } catch {}
-    }
     closeSettings();
     displayCurrentSubcat();
   }
@@ -1092,14 +1186,86 @@
     el.modalCancel.addEventListener('click', closeSettings);
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
-    if (el.githubTokenInput) {
-      el.githubTokenInput.addEventListener('input', function() {
-        const token = this.value.trim();
-        try { localStorage.setItem('github_token', token); } catch {}
-        if (el.cloudStatus) el.cloudStatus.textContent = token ? '\u{1F7E2}' : '\u{26AA}';
-      });
-    }
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
+  }
+
+  /* ── Activity ── */
+  function openActivity() {
+    el.activityModal.classList.add('open');
+    renderActivityTab('history');
+  }
+
+  function closeActivity() { el.activityModal.classList.remove('open'); }
+
+  function renderActivityTab(tab) {
+    const container = el.activityContent;
+    if (!container) return;
+    $$('.activity-tab').forEach(b => b.classList.toggle('active', b.dataset.actab === tab));
+    const allData = SupabaseStore.getAll ? SupabaseStore.getAll() : {};
+    const items = Object.entries(allData);
+
+    let filtered = [];
+    if (tab === 'history') {
+      filtered = items.filter(([, d]) => d.viewed).sort((a, b) => (b[1].viewed || 0) - (a[1].viewed || 0));
+    } else if (tab === 'liked') {
+      filtered = items.filter(([, d]) => d.like);
+    } else if (tab === 'disliked') {
+      filtered = items.filter(([, d]) => d.dislike);
+    } else if (tab === 'flagged') {
+      filtered = items.filter(([, d]) => d.flag);
+    }
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="activity-empty">No ' + tab + ' items yet.</div>';
+      return;
+    }
+
+    // Use currentArticles to find titles/sources for links
+    const articleMap = {};
+    if (currentArticles) currentArticles.forEach(a => articleMap[a.link] = a);
+
+    container.innerHTML = filtered.map(([link, data]) => {
+      const article = articleMap[link];
+      const title = article ? article.title : link;
+      const source = article ? article.source : '';
+      const time = data.viewed ? formatDateShort(data.viewed) : '';
+      const badges = [];
+      if (data.like) badges.push('<span class="ai-badge" style="background:var(--accent-dim);color:#fff">&#x1F44D;</span>');
+      if (data.dislike) badges.push('<span class="ai-badge" style="background:var(--text-tertiary);color:#fff">&#x1F44E;</span>');
+      if (data.flag) badges.push('<span class="ai-badge" style="background:' + (FLAG_COLORS[data.flag] || 'var(--text-tertiary)') + ';color:#000">' + data.flag + '</span>');
+      return '<div class="activity-item">' +
+        '<div class="ai-title" data-link="' + encodeURIComponent(link) + '">' + escHtml(title) +
+          (source ? '<div class="ai-source">' + escHtml(source) + '</div>' : '') +
+        '</div>' +
+        '<div class="ai-meta">' +
+          (time ? '<span>' + time + '</span>' : '') +
+          (badges.length ? '<span>' + badges.join(' ') + '</span>' : '') +
+          (data.note ? '<span style="color:var(--text-secondary);font-size:0.7rem">&#x1F4DD;</span>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    // Click on title to open article
+    container.querySelectorAll('.ai-title').forEach(el2 => {
+      el2.addEventListener('click', () => {
+        const link = decodeURIComponent(el2.dataset.link);
+        closeActivity();
+        openArticleDetail(link);
+      });
+    });
+  }
+
+  function bindActivity() {
+    if (el.activityBtn) el.activityBtn.addEventListener('click', openActivity);
+    if (el.activityModalClose) el.activityModalClose.addEventListener('click', closeActivity);
+    if (el.activityModal) el.activityModal.addEventListener('click', e => { if (e.target === el.activityModal) closeActivity(); });
+    // Tab switching via delegation
+    document.addEventListener('click', e => {
+      const tab = e.target.closest('.activity-tab');
+      if (tab && el.activityModal && el.activityModal.classList.contains('open')) {
+        renderActivityTab(tab.dataset.actab);
+      }
+    });
   }
 
   /* ── Custom Feeds ── */
@@ -1199,8 +1365,14 @@
   const FLAG_LABELS = { save: 'Save for later', investigative: 'Investigative', favorite: 'Favorite', important: 'Important', urgent: 'Urgent' };
   const FLAG_COLORS = { save: '#3fb950', investigative: '#d29922', favorite: '#ff2929', important: '#58a6ff', urgent: '#f0883e' };
 
-  function getArticleData(link) { return CloudStore.get(link); }
-  function saveArticleData(link, data) { CloudStore.set(link, data); }
+  function getArticleData(link) { return SupabaseStore.get(link); }
+  function saveArticleData(link, data) { SupabaseStore.set(link, data); }
+
+  function trackView(link) {
+    const ad = getArticleData(link);
+    ad.viewed = Date.now();
+    saveArticleData(link, ad);
+  }
 
   function renderSubscriptionList() {
     const container = $('#subscription-list');
@@ -1276,6 +1448,7 @@
   function openArticleDetail(link) {
     const article = findArticleByLink(link);
     if (!article) return;
+    trackView(link);
     el.articleModalTitle.textContent = article.title;
     el.articleModalSource.textContent = article.source;
     el.articleModalDate.textContent = formatDate(article.pubDate);
@@ -1294,16 +1467,24 @@
     const notesEl = $('#article-modal-notes');
     if (flagEl) {
       flagEl.value = ad.flag || '';
+      flagEl.disabled = !currentUser;
       flagEl.onchange = function() {
+        if (!requireAuth()) { flagEl.value = ad.flag || ''; return; }
         const newData = getArticleData(article.link);
         newData.flag = flagEl.value || '';
         saveArticleData(article.link, newData);
         renderCurrentList();
+        if (notesEl) {
+          notesEl.disabled = !flagEl.value;
+          if (!flagEl.value) notesEl.value = '';
+        }
       };
     }
     if (notesEl) {
+      notesEl.disabled = !ad.flag || !currentUser;
       notesEl.value = ad.note || '';
       notesEl.oninput = function() {
+        if (!requireAuth()) { notesEl.value = ad.note || ''; return; }
         const newData = getArticleData(article.link);
         newData.note = notesEl.value || '';
         saveArticleData(article.link, newData);
@@ -1521,6 +1702,121 @@
     });
   }
 
+  /* ── Auth ── */
+  let currentUser = null;
+
+  function requireAuth() {
+    if (currentUser) return true;
+    openAuthModal();
+    return false;
+  }
+
+  function updateAuthUI(user) {
+    currentUser = user;
+    const btn = $('#auth-btn');
+    const userDiv = $('#auth-user');
+    const avatar = $('#auth-avatar');
+    const name = $('#auth-name');
+    if (user) {
+      if (btn) btn.style.display = 'none';
+      if (userDiv) { userDiv.style.display = 'inline-flex'; }
+      if (avatar && user.user_metadata?.avatar_url) avatar.src = user.user_metadata.avatar_url;
+      if (name) name.textContent = user.user_metadata?.full_name || user.email || '';
+    } else {
+      if (btn) btn.style.display = '';
+      if (userDiv) userDiv.style.display = 'none';
+    }
+  }
+
+  async function handleAuthChange(event, session) {
+    if (session) {
+      updateAuthUI(session.user);
+      await SupabaseStore.load();
+    } else {
+      updateAuthUI(null);
+    }
+  }
+
+  async function signInWithEmail(email, password) {
+    const { error } = await SupabaseStore.getClient().auth.signInWithPassword({ email, password });
+    if (error) showAuthMsg(error.message);
+    else closeAuthModal();
+  }
+
+  async function signUpWithEmail(name, email, password) {
+    const { error } = await SupabaseStore.getClient().auth.signUp({
+      email, password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: window.location.origin
+      }
+    });
+    if (error) showAuthMsg(error.message);
+    else showAuthMsg('Account created! Check your email for confirmation link.');
+  }
+
+  async function signOut() {
+    await SupabaseStore.getClient().auth.signOut();
+  }
+
+  function showAuthMsg(msg) {
+    const el2 = $('#auth-msg');
+    if (el2) el2.textContent = msg;
+  }
+
+  function openAuthModal() {
+    showAuthMsg('');
+    $$('#auth-email-form input').forEach(i => i.value = '');
+    $('#auth-modal').classList.add('open');
+  }
+
+  function closeAuthModal() {
+    $('#auth-modal').classList.remove('open');
+  }
+
+  function bindAuth() {
+    const client = SupabaseStore.getClient();
+
+    // Check existing session
+    client.auth.getSession().then(({ data }) => {
+      handleAuthChange(null, data.session);
+    });
+
+    // Listen for auth changes
+    client.auth.onAuthStateChange((event, session) => {
+      handleAuthChange(event, session);
+    });
+
+    // UI bindings
+    const authBtn = $('#auth-btn');
+    if (authBtn) authBtn.addEventListener('click', openAuthModal);
+    const authClose = $('#auth-modal-close');
+    if (authClose) authClose.addEventListener('click', closeAuthModal);
+    const authModal = $('#auth-modal');
+    if (authModal) authModal.addEventListener('click', e => { if (e.target === authModal) closeAuthModal(); });
+    const signinBtn = $('#auth-signin-btn');
+    if (signinBtn) signinBtn.addEventListener('click', () => {
+      const email = $('#auth-email')?.value.trim();
+      const pwd = $('#auth-password')?.value;
+      if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
+      signInWithEmail(email, pwd);
+    });
+    const signupBtn = $('#auth-signup-btn');
+    if (signupBtn) signupBtn.addEventListener('click', () => {
+      const name = $('#auth-name')?.value.trim();
+      const email = $('#auth-email')?.value.trim();
+      const pwd = $('#auth-password')?.value;
+      const pwd2 = $('#auth-password-repeat')?.value;
+      if (!name) { showAuthMsg('Please enter your name.'); return; }
+      if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
+      if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.'); return; }
+      if (pwd !== pwd2) { showAuthMsg('Passwords do not match.'); return; }
+      signUpWithEmail(name, email, pwd);
+    });
+    const signoutBtn = $('#auth-signout-btn');
+    if (signoutBtn) signoutBtn.addEventListener('click', signOut);
+  }
+
   /* ── Init ── */
   async function init() {
     try {
@@ -1532,7 +1828,8 @@
     }
 
     currentNation = FeedManager.getSelectedNation();
-    CloudStore.load();
+    await SupabaseStore.load();
+    bindAuth();
 
     renderTopTabs();
     bindTopTabs();
@@ -1545,6 +1842,7 @@
     bindFilterSort();
     bindFilterToggles();
     bindSettings();
+    bindActivity();
     bindArticleClicks();
     bindFeedControls();
     bindDateToggle();

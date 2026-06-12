@@ -48,7 +48,7 @@ const CloudStore = (() => {
 
   function set(key, value) {
     const all = readCache();
-    if (value.flag || value.note) all[key] = value;
+    if (value.flag || value.note || value.like || value.dislike || value.viewed) all[key] = value;
     else delete all[key];
     writeCache(all);
     if (getToken()) scheduleSave(all);
@@ -107,5 +107,9 @@ const CloudStore = (() => {
     }
   }
 
-  return { load, get, set, hasToken };
+  function getAll() {
+    return readCache();
+  }
+
+  return { load, get, set, hasToken, getAll };
 })();

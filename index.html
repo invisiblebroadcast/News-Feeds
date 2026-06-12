@@ -31,6 +31,17 @@
           <button class="btn" id="refresh-btn" title="Refresh">
             &#x21BB; Refresh
           </button>
+          <button class="btn btn-ghost btn-icon" id="activity-btn" title="Activity">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/>
+            </svg>
+          </button>
+          <button class="btn" id="auth-btn">Sign In</button>
+          <div class="auth-user" id="auth-user" style="display:none">
+            <img class="auth-avatar" id="auth-avatar" src="" alt="">
+            <span class="auth-name" id="auth-name"></span>
+            <button class="btn btn-ghost" id="auth-signout-btn" title="Sign Out" style="padding:3px 8px;font-size:0.75rem;">&#x2716;</button>
+          </div>
           <button class="btn" id="settings-btn">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="8" cy="8" r="2.5"/>
@@ -45,6 +56,7 @@
           <li class="tab-item active" data-scope="global">Global</li>
           <li class="tab-item" data-scope="nation" data-nation="india">India</li>
         </ul>
+        <div class="mode-toggle view-toggle" id="view-toggle"></div>
       </nav>
     </header>
     <nav class="tab-bar" id="sub-tab-bar">
@@ -55,14 +67,25 @@
     <div class="section-header" id="section-header">
       <div><h2 id="section-title"></h2></div>
       <div class="section-controls">
-        <div class="mode-toggle" id="mode-toggle">
-          <button class="mode-btn" data-mode="top">Top</button>
-          <button class="mode-btn active" data-mode="live">Live</button>
-        </div>
-        <div class="mode-toggle view-toggle" id="view-toggle">
-          <button class="mode-btn active" data-view="list">List</button>
-          <button class="mode-btn" data-view="reels">Cards</button>
-        </div>
+        <span class="section-meta" id="section-meta"></span>
+      </div>
+    </div>
+  </div>
+
+  <main class="app-main" id="main-content">
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>Loading news feeds&hellip;</p>
+    </div>
+  </main>
+
+  <div class="bottom-bar" id="bottom-bar">
+    <div class="bottom-bar-inner">
+      <div class="mode-toggle" id="mode-toggle">
+        <button class="mode-btn" data-mode="top">Top</button>
+        <button class="mode-btn active" data-mode="live">Live</button>
+      </div>
+      <div class="bottom-controls">
         <button class="btn btn-icon btn-ghost filter-icon-btn" id="search-toggle" title="Search">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3.5 3.5"/></svg>
         </button>
@@ -86,7 +109,6 @@
             <option value="ru">RU</option><option value="pt">PT</option>
           </select>
         </div>
-        <span class="section-meta" id="section-meta"></span>
       </div>
     </div>
     <div class="filters-panel" id="filters-panel">
@@ -107,13 +129,6 @@
       </div>
     </div>
   </div>
-
-  <main class="app-main" id="main-content">
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Loading news feeds&hellip;</p>
-    </div>
-  </main>
 
     <footer class="app-footer">
     News-Feeds &mdash; Aggregated from global sources.
@@ -193,12 +208,9 @@
           <div id="feed-custom-list"></div>
         </div>
         <div class="setting-group">
-          <label class="setting-label">Cloud Sync (GitHub)</label>
-          <p class="setting-desc">Enter a GitHub PAT with repo scope to sync flags &amp; notes to <code>data/article-data.json</code>. Stored locally only.</p>
-          <div class="feed-input-row">
-            <input type="password" id="github-token-input" placeholder="ghp_..." style="flex:1">
-            <span id="cloud-status" style="padding:0 8px;font-size:13px;line-height:36px"></span>
-          </div>
+          <label class="setting-label">Cloud Sync</label>
+          <p class="setting-desc">Your article flags, notes, likes, and history are synced to your Supabase account when signed in.</p>
+          <p style="font-size:0.82rem;color:var(--text-tertiary);">Sign in with Google or Email to enable cloud sync.</p>
         </div>
       </div>
       <div class="modal-footer">
@@ -268,9 +280,61 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="activity-modal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;">
+            <polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/>
+          </svg>
+          Activity
+        </h2>
+        <button class="modal-close" id="activity-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="activity-tabs">
+          <button class="activity-tab active" data-actab="history">History</button>
+          <button class="activity-tab" data-actab="liked">Liked</button>
+          <button class="activity-tab" data-actab="disliked">Disliked</button>
+          <button class="activity-tab" data-actab="flagged">Flagged</button>
+        </div>
+        <div id="activity-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;">
+            <circle cx="8" cy="8" r="6.5"/><path d="M8 10a3 3 0 100-6 3 3 0 000 6z"/><path d="M2 13.5a7 7 0 0112 0"/>
+          </svg>
+          Sign In
+        </h2>
+        <button class="modal-close" id="auth-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="auth-modal-body">
+        <div id="auth-email-form">
+          <input type="text" id="auth-name" placeholder="Full Name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="email" id="auth-email" placeholder="Email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="auth-password" placeholder="Password (min 6 chars)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="auth-password-repeat" placeholder="Repeat Password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="auth-signin-btn" style="flex:1;justify-content:center;">Sign In</button>
+            <button class="btn" id="auth-signup-btn" style="flex:1;justify-content:center;">Sign Up</button>
+          </div>
+          <div id="auth-msg" style="margin-top:10px;font-size:0.82rem;color:var(--accent);text-align:center;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/settings.js"></script>
-  <script src="js/store.js"></script>
+  <script src="js/supabase-store.js"></script>
   <script src="js/feeds.js"></script>
   <script src="js/fetcher.js"></script>
   <script src="js/translator.js"></script>
