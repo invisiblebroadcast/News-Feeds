@@ -517,16 +517,28 @@
           return;
         }
       });
-      let lastWheelTime = 0;
-      const wheelHandler = e => {
+      let lastNavTime = 0;
+      function navThrottle(dir) {
         const now = Date.now();
-        if (now - lastWheelTime < 500) return;
-        lastWheelTime = now;
+        if (now - lastNavTime < 500) return;
+        lastNavTime = now;
+        if (dir > 0) nextReel(); else prevReel();
+      }
+      rcontainer.addEventListener('wheel', e => {
         e.preventDefault();
-        if (e.deltaY > 0) nextReel();
-        else prevReel();
-      };
-      rcontainer.addEventListener('wheel', wheelHandler, { passive: false });
+        navThrottle(e.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+      let touchStartY = 0;
+      rcontainer.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+      rcontainer.addEventListener('touchend', e => {
+        if (!touchStartY) return;
+        const dy = touchStartY - e.changedTouches[0].clientY;
+        touchStartY = 0;
+        if (Math.abs(dy) < 30) return;
+        navThrottle(dy > 0 ? 1 : -1);
+      }, { passive: true });
     }
 
     // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
@@ -771,17 +783,15 @@
 
   async function renderContent() {
     if (isFetching) return;
+    const key = scopeKey();
+    if (scopeCache[key]) {
+      displayCurrentSubcat();
+      return;
+    }
     isFetching = true;
     showLoading();
 
     try {
-      const key = scopeKey();
-
-      if (scopeCache[key]) {
-        isFetching = false;
-        displayCurrentSubcat();
-        return;
-      }
 
       const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
       if (!feeds.length) {
@@ -993,6 +1003,7 @@
   }
 
   async function refreshAll() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen();
     scopeCache = {};
     await renderContent();
   }
