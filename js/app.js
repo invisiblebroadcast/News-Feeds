@@ -398,32 +398,9 @@
       // Highlight the fullscreen button when active
       const fsBtns = c.querySelectorAll('.reels-fullscreen');
       fsBtns.forEach(b => b.classList.toggle('active', isReelsFullscreen));
-      // Show/hide fullscreen overlay header
-      const fsHeader = c.querySelector('#reels-fs-header');
-      if (fsHeader) {
-        fsHeader.style.display = isReelsFullscreen ? 'flex' : 'none';
-        if (isReelsFullscreen) populateFsHeader(c);
-      }
     }
   }
 
-  function populateFsHeader(container) {
-    const tabsEl = container.querySelector('#reels-fs-tabs');
-    const searchEl = container.querySelector('#reels-fs-search-input');
-    if (!tabsEl) return;
-    // Populate tabs: Global / India
-    const nations = FeedManager.getNations ? FeedManager.getNations() : {};
-    let html = '<button class="fs-tab ' + (currentScope === 'global' ? 'active' : '') + '" data-fs-scope="global">Global</button>';
-    for (const [key, label] of Object.entries(nations)) {
-      html += '<button class="fs-tab ' + (currentScope === 'nation' && currentNation === key ? 'active' : '') + '" data-fs-scope="nation" data-fs-nation="' + key + '">' + label + '</button>';
-    }
-    tabsEl.innerHTML = html;
-    // Search input
-    if (searchEl) {
-      const searchInput = $('#search-input');
-      searchEl.value = searchInput?.value || '';
-    }
-  }
   document.addEventListener('fullscreenchange', updateReelsFullscreen);
   document.addEventListener('webkitfullscreenchange', updateReelsFullscreen);
 
@@ -598,11 +575,6 @@
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
-          // Fullscreen overlay header — only visible in fullscreen
-          '<div class="reels-fs-header" id="reels-fs-header" style="display:none">' +
-            '<div class="reels-fs-tabs" id="reels-fs-tabs"></div>' +
-            '<div class="reels-fs-search"><input type="text" id="reels-fs-search-input" placeholder="Search..."></div>' +
-          '</div>' +
           '<div class="reels-stack" id="reels-stack">' +
             '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
             readerHtml() +
@@ -1033,39 +1005,6 @@
       btn.classList.add('active');
       displayCurrentSubcat();
     });
-    // Fullscreen header tabs and search
-    document.addEventListener('click', e => {
-      const tab = e.target.closest('.fs-tab');
-      if (tab) {
-        const scope = tab.dataset.fsScope;
-        const nation = tab.dataset.fsNation;
-        if (scope === 'global') {
-          currentScope = 'global';
-        } else if (scope === 'nation' && nation) {
-          currentScope = 'nation';
-          currentNation = nation;
-          FeedManager.setSelectedNation(nation);
-        }
-        // Re-render
-        renderTopTabs();
-        refreshAll();
-        // Update active state in both header and fs-header
-        $$('.fs-tab').forEach(t => t.classList.toggle('active', t.dataset.fsScope === currentScope && (!t.dataset.fsNation || t.dataset.fsNation === currentNation)));
-        $$('#top-tabs .tab-item').forEach(t => t.classList.toggle('active', t.dataset.scope === currentScope && (!t.dataset.nation || t.dataset.nation === currentNation)));
-      }
-    });
-    const fsSearch = document.getElementById('reels-fs-search-input');
-    if (fsSearch) {
-      fsSearch.addEventListener('input', e => {
-        const val = e.target.value;
-        // Sync with main search
-        const mainSearch = $('#search-input');
-        if (mainSearch) mainSearch.value = val;
-        // Trigger search by dispatching event or calling directly
-        const evt = new Event('input', { bubbles: true });
-        if (mainSearch) mainSearch.dispatchEvent(evt);
-      });
-    }
   }
 
   /* ── Fetch & Refresh ── */
