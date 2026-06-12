@@ -212,8 +212,13 @@ img { max-width: 100%; height: auto; }
   background: var(--bg-tertiary);
 }
 .btn-icon {
-  padding: 8px;
-  font-size: 1.1rem;
+  padding: 8px 10px;
+  font-size: 1.35rem;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ─── Tab Navigation ─── */
@@ -1480,7 +1485,10 @@ img { max-width: 100%; height: auto; }
     font-size: 0.78rem;
   }
   .btn-icon {
-    padding: 6px;
+    padding: 6px 8px;
+    font-size: 1.2rem;
+    min-width: 32px;
+    min-height: 32px;
   }
   .tab-item {
     padding: 5px 10px;

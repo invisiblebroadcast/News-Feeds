@@ -2180,15 +2180,27 @@
     if (type) el2.classList.add(type);
   }
 
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. Please check your connection and try again.`)), ms))
+    ]);
+  }
+
   async function signInWithEmail(email, password) {
     setAuthBusy(true);
     showAuthMsg('', null);
     clearInputErrors();
     try {
-      const { data, error } = await SupabaseStore.getClient().auth.signInWithPassword({ email, password });
+      const { data, error } = await withTimeout(
+        SupabaseStore.getClient().auth.signInWithPassword({ email, password }),
+        20000,
+        'Sign-in'
+      );
       if (error) {
         showAuthMsg(error.message, 'error');
         markInputError('auth-password');
+        console.warn('Auth sign-in error:', error);
         return;
       }
       // Success — show confirmation, then close
@@ -2198,7 +2210,9 @@
         showAuthMsg('', null);
       }, 600);
     } catch (err) {
-      showAuthMsg('Sign-in failed. Please try again.', 'error');
+      console.error('Sign-in failed:', err);
+      showAuthMsg(err.message || 'Sign-in failed. Please try again.', 'error');
+      markInputError('auth-password');
     } finally {
       setAuthBusy(false);
     }
@@ -2209,15 +2223,20 @@
     showAuthMsg('', null);
     clearInputErrors();
     try {
-      const { data, error } = await SupabaseStore.getClient().auth.signUp({
-        email, password,
-        options: {
-          data: { full_name: name },
-          emailRedirectTo: window.location.origin
-        }
-      });
+      const { data, error } = await withTimeout(
+        SupabaseStore.getClient().auth.signUp({
+          email, password,
+          options: {
+            data: { full_name: name },
+            emailRedirectTo: window.location.origin
+          }
+        }),
+        20000,
+        'Sign-up'
+      );
       if (error) {
         showAuthMsg(error.message, 'error');
+        console.warn('Auth sign-up error:', error);
         return;
       }
       // Check if email confirmation is required (no session means confirmation needed)
@@ -2228,14 +2247,17 @@
           showAuthMsg('', null);
         }, 600);
       } else {
-        showAuthMsg('Account created! Check your email for a confirmation link.', 'success');
+        showAuthMsg('Account created! Check your email (including spam) for a confirmation link, then sign in.', 'success');
+        // Keep the modal open longer so the user can read the message
         setTimeout(() => {
-          closeAuthModal();
-          showAuthMsg('', null);
-        }, 2500);
+          setAuthMode('signin');
+          $('#auth-email').value = email;
+          showAuthMsg('Account created. Please check your email and sign in.', 'success');
+        }, 4000);
       }
     } catch (err) {
-      showAuthMsg('Sign-up failed. Please try again.', 'error');
+      console.error('Sign-up failed:', err);
+      showAuthMsg(err.message || 'Sign-up failed. Please try again.', 'error');
     } finally {
       setAuthBusy(false);
     }
@@ -2324,6 +2346,15 @@
     const authForm = $('#auth-form-fields');
     if (authForm) {
       authForm.addEventListener('submit', e => {
+        e.preventDefault();
+        handleAuthSubmit();
+      });
+    }
+
+    // Direct click on submit button (fallback in case form submit doesn't fire)
+    const submitBtn = $('#auth-submit-btn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', e => {
         e.preventDefault();
         handleAuthSubmit();
       });
