@@ -813,22 +813,11 @@ img { max-width: 100%; height: auto; }
   justify-content: center;
   transition: all var(--transition);
   z-index: 2;
-  opacity: 0;
-}
-.article-card:hover .card-share-btn,
-.card-share-btn:focus {
-  opacity: 1;
 }
 .card-share-btn:hover {
   color: var(--text-primary);
   background: var(--bg-card-hover);
   border-color: var(--text-tertiary);
-  opacity: 1;
-}
-@media (max-width: 768px) {
-  .card-share-btn {
-    opacity: 1;
-  }
 }
 .article-card {
   position: relative;

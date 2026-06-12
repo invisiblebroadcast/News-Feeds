@@ -325,12 +325,12 @@
           articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('') +
         '</div>' +
         '<div class="reels-card"' + bgHtml + '>' +
-          '<div class="reels-toolbar">' +
-            '<button class="reels-tool-btn" id="reels-share-text" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Text">&#x21AA;</button>' +
-            '<button class="reels-tool-btn" id="reels-share-image" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x1F5BC;</button>' +
-            '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
-          '</div>' +
           '<div class="reels-overlay">' +
+            '<div class="reels-toolbar">' +
+              '<button class="reels-tool-btn" id="reels-share-text" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Text">&#x21AA;</button>' +
+              '<button class="reels-tool-btn" id="reels-share-image" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x1F5BC;</button>' +
+              '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
+            '</div>' +
             '<span class="reels-count">' + (idx + 1) + ' / ' + total + '</span>' +
             '<h2 class="reels-title">' + escHtml(article.title) + '</h2>' +
             '<div class="reels-meta">' +
@@ -376,11 +376,26 @@
   }
 
   function prevReel() {
-    if (currentReelIndex > 0) { currentReelIndex--; showReel(); }
+    if (currentReelIndex < 1) return;
+    const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    currentReelIndex--;
+    showReel();
+    if (wasFs) requestReelFullscreen();
   }
 
   function nextReel() {
-    if (currentReelIndex < currentArticles.length - 1) { currentReelIndex++; showReel(); }
+    if (currentReelIndex >= currentArticles.length - 1) return;
+    const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    currentReelIndex++;
+    showReel();
+    if (wasFs) requestReelFullscreen();
+  }
+
+  function requestReelFullscreen() {
+    const c = document.querySelector('.reels-container');
+    if (!c) return;
+    if (c.requestFullscreen) c.requestFullscreen();
+    else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
   }
 
   function exitReels() {
@@ -536,7 +551,8 @@
           if (articles.length) {
             hasRendered = true;
             el.main.innerHTML = '';
-            renderArticles(articles);
+            if (currentView === 'reels') renderReels(articles);
+            else renderArticles(articles);
             const prog = document.createElement('div');
             prog.id = 'loading-progress';
             prog.style.cssText = 'text-align:center;padding:12px;font-size:0.82rem;color:var(--text-tertiary);border-top:1px solid var(--border-secondary);';
@@ -1062,14 +1078,11 @@
   }
 
   function toggleFullscreen() {
-    const c = document.querySelector('.reels-container');
-    if (!c) return;
     if (document.fullscreenElement || document.webkitFullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen();
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     } else {
-      if (c.requestFullscreen) c.requestFullscreen();
-      else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
+      requestReelFullscreen();
     }
   }
 
