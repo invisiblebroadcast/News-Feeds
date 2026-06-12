@@ -608,6 +608,14 @@ img { max-width: 100%; height: auto; }
   gap: 8px;
   margin-bottom: 8px;
 }
+.feed-input-row .select-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+.feed-input-row .select-wrapper select {
+  min-width: 0;
+  width: 100%;
+}
 .feed-input-row input[type="text"],
 .feed-input-row input[type="url"] {
   flex: 1;
