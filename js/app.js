@@ -328,6 +328,25 @@
 
   /* ── Reels View ── */
   let currentReelIndex = 0;
+  let isReelsFullscreen = false;
+  function updateReelsFullscreen() {
+    isReelsFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const c = el.main && el.main.querySelector && el.main.querySelector('.reels-container');
+    if (c) updateNavArrows(c);
+  }
+  document.addEventListener('fullscreenchange', updateReelsFullscreen);
+  document.addEventListener('webkitfullscreenchange', updateReelsFullscreen);
+
+  function updateNavArrows(container) {
+    if (!container) return;
+    const prev = container.querySelector('.reels-nav-prev');
+    const next = container.querySelector('.reels-nav-next');
+    const fs = isReelsFullscreen;
+    if (prev) prev.style.display = fs ? 'none' : '';
+    if (next) next.style.display = fs ? 'none' : '';
+    container.classList.toggle('reels-show-arrows', !fs);
+    container.style.touchAction = fs ? 'none' : '';
+  }
 
   function renderReels(articles) {
     if (!articles.length) { showEmpty(); return; }
@@ -470,6 +489,8 @@
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<button class="reels-tool-btn" id="reels-refresh" title="Refresh">&#x21BB;</button>' +
+          '<button class="reels-nav-arrow reels-nav-prev" title="Previous">&#x25C0;</button>' +
+          '<button class="reels-nav-arrow reels-nav-next" title="Next">&#x25B6;</button>' +
           '<div class="reels-stack">' +
             '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
             '<div class="reels-card-under">' + cardOverlayHtml(false) + '</div>' +
@@ -582,6 +603,12 @@
       const rf = container.querySelector('#reels-refresh');
       if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
 
+      const prevBtn = container.querySelector('.reels-nav-prev');
+      if (prevBtn) prevBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(1); });
+      const nextBtn = container.querySelector('.reels-nav-next');
+      if (nextBtn) nextBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(-1); });
+      updateNavArrows(container);
+
       let lastNavTime = 0;
       function navThrottle(dir) {
         const now = Date.now();
@@ -591,6 +618,7 @@
       }
       let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 left, 1 right
       container.addEventListener('touchstart', e => {
+        if (!isReelsFullscreen) return;
         if (e.touches.length !== 1) return;
         swipeStartX = e.touches[0].clientX;
         swipeDx = 0;
@@ -598,6 +626,7 @@
         swipeDir = 0;
       }, { passive: true });
       container.addEventListener('touchmove', e => {
+        if (!isReelsFullscreen) return;
         if (!swipeStartX) return;
         const card = stack.querySelector('.reels-card');
         const under = stack.querySelector('.reels-card-under');
@@ -1713,19 +1742,24 @@
         } catch { img = null; }
       }
 
-      const W = img && imgW > 0 ? Math.min(imgW, 3200) : 600;
-      const dpr = Math.max(window.devicePixelRatio || 1, 2);
-      const nativeScale = img ? W / imgW : 1;
-      const displayImgH = img ? Math.round(imgH * nativeScale) : Math.round(W * 0.35);
       const hasImg = img && imgW > 0;
-      const PAD = Math.round(W * 0.06);
-      const textW = hasImg ? W - PAD * 2 : Math.round(W * 0.65);
-      const textX = hasImg ? PAD : Math.round((W - textW) / 2);
-      const titleFontSize = Math.round(W * 0.04);
-      const bodyFontSize = Math.round(W * 0.022);
-      const smallFontSize = Math.round(W * 0.016);
-      const titleLineH = Math.round(titleFontSize * 1.3);
-      const bodyLineH = Math.round(bodyFontSize * 1.45);
+      const dpr = Math.max(window.devicePixelRatio || 1, 2);
+
+      // Canvas base width: 1080 for crisp HiDPI output, capped by image natural width
+      const W = hasImg ? Math.min(1080, imgW) : 1080;
+      const PAD = Math.round(W * 0.05);
+      const titleFontSize = Math.round(W * 0.052);
+      const bodyFontSize = Math.round(W * 0.028);
+      const smallFontSize = Math.round(W * 0.02);
+      const sourceFontSize = Math.round(W * 0.022);
+      const titleLineH = Math.round(titleFontSize * 1.28);
+      const bodyLineH = Math.round(bodyFontSize * 1.5);
+      const textW = W - PAD * 2;
+
+      // Image header dimensions: 4:3 area, image scaled to fit with padding
+      const headerH = Math.round(W * 0.75);
+      const imgPad = Math.round(W * 0.04);
+      const imgBorder = Math.max(1, Math.round(W * 0.003));
 
       const c = document.createElement('canvas');
       c.width = W * dpr;
@@ -1733,110 +1767,142 @@
       ctx.imageSmoothingQuality = 'high';
       ctx.scale(dpr, dpr);
 
+      // Measure title and full summary to compute body height
       ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
       const titleLines = wrapText(ctx, article.title || '', 0, 0, textW, titleLineH);
       ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
       const summaryLines = fullSummary ? wrapText(ctx, fullSummary, 0, 0, textW, bodyLineH) : 0;
 
-      const textTop = displayImgH + Math.round(W * 0.02);
-      const sourceY = textTop + Math.round(W * 0.03);
-      const titleY = sourceY + bodyFontSize + Math.round(W * 0.015) + (titleLines - 1) * titleLineH + titleLineH;
-      const summaryY = titleY + Math.round(W * 0.02) + (summaryLines - 1) * bodyLineH + bodyLineH;
-      const watermarkY = summaryY + Math.round(W * 0.03);
-      const totalH = watermarkY + Math.round(W * 0.035) + Math.round(W * 0.06);
+      const bodyTop = headerH + Math.round(W * 0.04);
+      const sourceY = bodyTop + sourceFontSize + Math.round(W * 0.01);
+      const titleY = sourceY + Math.round(W * 0.025) + (titleLines - 1) * titleLineH + titleLineH;
+      const summaryY = titleY + Math.round(W * 0.025) + (summaryLines - 1) * bodyLineH + bodyLineH;
+      const watermarkY = summaryY + Math.round(W * 0.045);
+      const totalH = watermarkY + smallFontSize + Math.round(W * 0.05);
 
       c.height = totalH * dpr;
       ctx.scale(dpr, dpr);
       ctx.imageSmoothingQuality = 'high';
+
+      // Background
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, W, totalH);
 
+      // Image header area
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, headerH);
+
       if (hasImg) {
-        ctx.drawImage(img, 0, 0, W, displayImgH);
-
-        const fadeH = Math.round(W * 0.12);
-        const botGrad = ctx.createLinearGradient(0, displayImgH - fadeH, 0, displayImgH);
-        botGrad.addColorStop(0, 'transparent');
-        botGrad.addColorStop(1, bgColor);
-        ctx.fillStyle = botGrad;
-        ctx.fillRect(0, displayImgH - fadeH, W, fadeH);
-
-        const topGrad = ctx.createLinearGradient(0, 0, 0, fadeH);
-        topGrad.addColorStop(0, bgColor);
-        topGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = topGrad;
-        ctx.fillRect(0, 0, W, fadeH);
+        // Scale image to fit inside (W - 2*imgPad) x (headerH - 2*imgPad), preserving aspect
+        const maxW = W - imgPad * 2;
+        const maxH = headerH - imgPad * 2;
+        const imgAspect = imgW / imgH;
+        let drawW, drawH;
+        if (maxW / maxH > imgAspect) {
+          drawH = maxH;
+          drawW = Math.round(drawH * imgAspect);
+        } else {
+          drawW = maxW;
+          drawH = Math.round(drawW / imgAspect);
+        }
+        const drawX = Math.round((W - drawW) / 2);
+        const drawY = Math.round((headerH - drawH) / 2);
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        // Thin border around the image
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = imgBorder;
+        ctx.strokeRect(drawX + imgBorder / 2, drawY + imgBorder / 2, drawW - imgBorder, drawH - imgBorder);
+      } else {
+        // No image: draw IB initials centered faintly as placeholder
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.font = 'bold ' + Math.round(W * 0.22) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('IB', W / 2, headerH / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
       }
 
-      ctx.fillStyle = '#ff2929';
-      const badgeS = Math.round(W * 0.045), badgeX = W - Math.round(W * 0.025) - badgeS, badgeY = Math.round(W * 0.02);
-      roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.005));
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.round(W * 0.02) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'center';
-      ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
+      // IB badge top-right (only when image present, sits on top of the image)
+      if (hasImg) {
+        ctx.fillStyle = '#ff2929';
+        const badgeS = Math.round(W * 0.07), badgeX = W - Math.round(W * 0.035) - badgeS, badgeY = Math.round(W * 0.025);
+        roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.01));
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(W * 0.032) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      } else {
+        // No image: show IB badge below header, top-right of body area
+        ctx.fillStyle = '#ff2929';
+        const badgeS = Math.round(W * 0.07), badgeX = W - PAD - badgeS, badgeY = bodyTop;
+        roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.01));
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(W * 0.032) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
 
-      ctx.fillStyle = '#ff2929';
-      ctx.font = 'bold ' + bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-      ctx.fillText((article.source || '') + ' \u00B7 ' + formatDateShort(article.pubDate), textX, sourceY);
+      // Source label (no date, no ranking) — only if there is a source
+      if (article.source) {
+        ctx.fillStyle = '#ff2929';
+        ctx.font = 'bold ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(article.source.toUpperCase(), PAD, sourceY);
+      }
 
+      // Title
       ctx.fillStyle = titleColor;
       ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-      wrapText(ctx, article.title || '', textX, titleY - (titleLines - 1) * titleLineH, textW, titleLineH);
+      wrapText(ctx, article.title || '', PAD, titleY - (titleLines - 1) * titleLineH, textW, titleLineH);
 
+      // Full summary
       if (fullSummary) {
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fillStyle = 'rgba(255,255,255,0.78)';
         ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-        wrapText(ctx, fullSummary, textX, summaryY - (summaryLines - 1) * bodyLineH, textW, bodyLineH);
+        wrapText(ctx, fullSummary, PAD, summaryY - (summaryLines - 1) * bodyLineH, textW, bodyLineH);
       }
 
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.font = '600 ' + smallFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('INVISIBLE BROADCAST', textX, watermarkY);
+      // Footer: INVISIBLE BROADCAST watermark + thin divider line
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.font = '700 ' + smallFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('INVISIBLE BROADCAST', PAD, watermarkY);
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(textX, watermarkY - Math.round(W * 0.02) - Math.round(W * 0.008), textW, 1);
+      ctx.fillRect(PAD, watermarkY - Math.round(W * 0.025), textW, Math.max(1, Math.round(W * 0.002)));
 
-      const contentBottom = watermarkY + smallFontSize + Math.round(W * 0.015);
-      let cropX = 0, cropY = 0, cropW = W, cropH = Math.min(contentBottom, totalH);
-      if (!hasImg) {
-        const topMargin = Math.max(0, textTop - Math.round(W * 0.02));
-        cropX = textX;
-        cropY = topMargin;
-        cropW = textW;
-        cropH = Math.min(contentBottom - topMargin, totalH - topMargin);
-      }
-      const cc = document.createElement('canvas');
-      cc.width = Math.round(cropW * dpr);
-      cc.height = Math.round(cropH * dpr);
-      const cctx = cc.getContext('2d');
-      cctx.imageSmoothingQuality = 'high';
-      cctx.drawImage(c, cropX * dpr, cropY * dpr, cropW * dpr, cropH * dpr, 0, 0, cropW * dpr, cropH * dpr);
-
-      const blob = await new Promise(r => cc.toBlob(r, 'image/png'));
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
       if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
 
       const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        btn && btn.classList.remove('btn-busy');
-        await navigator.share({ files: [file], title: article.title }).catch(() => {});
-      } else {
+      // Prefer native share sheet on mobile (navigator.share), fall back to clipboard, then download
+      const canNativeShare = navigator.share && (typeof navigator.canShare !== 'function' || (() => { try { return navigator.canShare({ files: [file] }); } catch { return false; } })());
+      if (canNativeShare) {
         try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blob })
-          ]);
-        } catch {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = 'invisible-broadcast.png';
-          a.click();
-          URL.revokeObjectURL(a.href);
+          await navigator.share({ files: [file], title: article.title });
+          btn && btn.classList.remove('btn-busy');
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
         }
-        btn && btn.classList.remove('btn-busy');
       }
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      } catch {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'invisible-broadcast.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      btn && btn.classList.remove('btn-busy');
     } catch (err) {
       btn && btn.classList.remove('btn-busy');
       console.warn('Image share failed:', err.message);
