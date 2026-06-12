@@ -2120,7 +2120,7 @@
     const btn = $('#auth-btn');
     const userDiv = $('#auth-user');
     const avatar = $('#auth-avatar');
-    const name = $('#auth-name');
+    const name = $('#auth-display-name');
     if (user) {
       if (btn) btn.style.display = 'none';
       if (userDiv) userDiv.style.display = 'inline-flex';
@@ -2315,18 +2315,18 @@
     clearInputErrors();
 
     if (authMode === 'signin') {
-      const email = $('#auth-email')?.value.trim();
-      const pwd = $('#auth-password')?.value;
+      const email = $('#auth-email')?.value?.trim() || '';
+      const pwd = $('#auth-password')?.value || '';
       if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); console.warn('[Auth] Sign-in: missing email'); return; }
       if (!pwd) { showAuthMsg('Please enter your password.', 'error'); markInputError('auth-password'); console.warn('[Auth] Sign-in: missing password'); return; }
       if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); console.warn('[Auth] Sign-in: invalid email format:', email); return; }
       console.log('[Auth] Sign-in: calling signInWithEmail');
       signInWithEmail(email, pwd);
     } else {
-      const name = $('#auth-name')?.value.trim();
-      const email = $('#auth-email')?.value.trim();
-      const pwd = $('#auth-password')?.value;
-      const pwd2 = $('#auth-password-repeat')?.value;
+      const name = $('#auth-name')?.value?.trim() || '';
+      const email = $('#auth-email')?.value?.trim() || '';
+      const pwd = $('#auth-password')?.value || '';
+      const pwd2 = $('#auth-password-repeat')?.value || '';
       console.log('[Auth] Sign-up attempt:', { name, email, pwdLength: pwd?.length, hasRepeat: !!pwd2 });
       if (!name || name.length < 2) { showAuthMsg('Please enter your name (at least 2 characters).', 'error'); markInputError('auth-name'); return; }
       if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); return; }
