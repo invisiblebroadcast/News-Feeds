@@ -212,7 +212,21 @@
           <span id="article-modal-date"></span>
         </div>
         <p id="article-modal-summary" style="font-size:0.95rem;line-height:1.7;color:var(--text-primary);"></p>
-        <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <span style="font-size:0.82rem;color:var(--text-secondary);font-weight:500;">Flag:</span>
+          <select id="article-modal-flag" style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;cursor:pointer;">
+            <option value="">None</option>
+            <option value="save">&#x1F516; Save for later</option>
+            <option value="investigative">&#x1F50D; Investigative</option>
+            <option value="favorite">&#x2764;&#xFE0F; Favorite</option>
+            <option value="important">&#x26A0;&#xFE0F; Important</option>
+            <option value="urgent">&#x26A1; Urgent</option>
+          </select>
+        </div>
+        <div style="margin-top:10px;">
+          <textarea id="article-modal-notes" placeholder="Add notes for this article\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;resize:vertical;min-height:60px;transition:border-color var(--transition);"></textarea>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" id="article-modal-read">Read Article</button>
           <button class="btn btn-danger" id="article-modal-ext-link">Open in Browser</button>
         </div>

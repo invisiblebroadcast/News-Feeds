@@ -796,6 +796,27 @@ img { max-width: 100%; height: auto; }
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
 }
+.flag-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 4px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.reels-flag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #fff;
+}
+
 .card-share-btn {
   position: absolute;
   top: 10px;
