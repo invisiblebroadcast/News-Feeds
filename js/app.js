@@ -59,7 +59,9 @@
     filterToggle: $('#filter-toggle'),
     sortToggle: $('#sort-toggle'),
     filtersPanel: $('#filters-panel'),
-    viewToggle: $('#view-toggle')
+    viewToggle: $('#view-toggle'),
+    githubTokenInput: $('#github-token-input'),
+    cloudStatus: $('#cloud-status')
   };
 
   if (!el.modal) return;
@@ -779,6 +781,10 @@
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
+    if (el.githubTokenInput) {
+      el.githubTokenInput.value = localStorage.getItem('github_token') || '';
+      el.cloudStatus.textContent = CloudStore.hasToken() ? '\u{1F7E2}' : '\u{26AA}';
+    }
     el.modal.classList.add('open');
   }
 
@@ -791,6 +797,10 @@
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
     Settings.save({ articlesPerPage: perPage, language: lang });
+    if (el.githubTokenInput) {
+      const token = el.githubTokenInput.value.trim();
+      try { localStorage.setItem('github_token', token); } catch {}
+    }
     closeSettings();
     refreshAll();
   }
@@ -801,6 +811,13 @@
     el.modalCancel.addEventListener('click', closeSettings);
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
+    if (el.githubTokenInput) {
+      el.githubTokenInput.addEventListener('input', function() {
+        const token = this.value.trim();
+        try { localStorage.setItem('github_token', token); } catch {}
+        el.cloudStatus.textContent = token ? '\u{1F7E2}' : '\u{26AA}';
+      });
+    }
   }
 
   /* ── Custom Feeds ── */
@@ -896,24 +913,12 @@
     });
   }
 
-  const ARTICLE_DATA_KEY = 'newsfeeds_article_data';
   const FLAGS = ['', 'save', 'investigative', 'favorite', 'important', 'urgent'];
   const FLAG_LABELS = { save: 'Save for later', investigative: 'Investigative', favorite: 'Favorite', important: 'Important', urgent: 'Urgent' };
   const FLAG_COLORS = { save: '#3fb950', investigative: '#d29922', favorite: '#ff2929', important: '#58a6ff', urgent: '#f0883e' };
 
-  function getArticleData(link) {
-    try { return JSON.parse(localStorage.getItem(ARTICLE_DATA_KEY) || '{}')[link] || {}; }
-    catch { return {}; }
-  }
-
-  function saveArticleData(link, data) {
-    try {
-      const all = JSON.parse(localStorage.getItem(ARTICLE_DATA_KEY) || '{}');
-      if (data.flag || data.note) { all[link] = data; }
-      else { delete all[link]; }
-      localStorage.setItem(ARTICLE_DATA_KEY, JSON.stringify(all));
-    } catch {}
-  }
+  function getArticleData(link) { return CloudStore.get(link); }
+  function saveArticleData(link, data) { CloudStore.set(link, data); }
 
   function renderSubscriptionList() {
     const container = $('#subscription-list');
@@ -1244,6 +1249,7 @@
     }
 
     currentNation = FeedManager.getSelectedNation();
+    CloudStore.load();
 
     renderTopTabs();
     bindTopTabs();
