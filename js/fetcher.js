@@ -160,9 +160,12 @@ const FeedFetcher = (() => {
   function deduplicate(articles) {
     const seen = new Set();
     return articles.filter(a => {
-      const key = a.link || a.title;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      const linkKey = a.link || a.title;
+      if (seen.has(linkKey)) return false;
+      const titleKey = a.title ? a.title.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';
+      if (titleKey && seen.has('t:' + titleKey)) return false;
+      seen.add(linkKey);
+      if (titleKey) seen.add('t:' + titleKey);
       return true;
     });
   }
