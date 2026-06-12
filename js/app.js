@@ -528,17 +528,23 @@
         e.preventDefault();
         navThrottle(e.deltaY > 0 ? 1 : -1);
       }, { passive: false });
-      let touchStartY = 0;
+      let touchStartY = 0, touchStartX = 0;
       rcontainer.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) touchStartY = e.touches[0].clientY;
+        if (e.touches.length === 1) {
+          touchStartY = e.touches[0].clientY;
+          touchStartX = e.touches[0].clientX;
+        }
       }, { passive: true });
+      rcontainer.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
       rcontainer.addEventListener('touchend', e => {
         if (!touchStartY) return;
         const dy = touchStartY - e.changedTouches[0].clientY;
-        touchStartY = 0;
-        if (Math.abs(dy) < 30) return;
-        navThrottle(dy > 0 ? 1 : -1);
+        const dx = touchStartX - e.changedTouches[0].clientX;
+        touchStartY = 0; touchStartX = 0;
+        if (Math.abs(dy) < 30 || Math.abs(dy) < Math.abs(dx)) return;
+        navThrottle(dy > 0 ? -1 : 1);
       }, { passive: true });
+      rcontainer.addEventListener('touchcancel', () => { touchStartY = 0; touchStartX = 0; }, { passive: true });
     }
 
     // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
@@ -1003,9 +1009,33 @@
   }
 
   async function refreshAll() {
-    if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen();
-    scopeCache = {};
-    await renderContent();
+    const wasFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const key = scopeKey();
+    scopeCache[key] = null;
+    const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+    if (!feeds.length) return;
+    const groups = {};
+    const batchSize = 3;
+    for (let i = 0; i < feeds.length; i += batchSize) {
+      const batch = feeds.slice(i, i + batchSize);
+      const results = await Promise.allSettled(batch.map(f => FeedFetcher.fetchFeed(f)));
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          for (const a of result.value) {
+            a.subcat = a.feedHint || 'politics';
+            const cat = a.subcat;
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(a);
+          }
+        }
+      }
+    }
+    let allArticles = [];
+    for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+    scopeCache[key] = { articles: allArticles, groups };
+    renderSubTabs();
+    updateStickyHeader();
+    displayCurrentSubcat();
   }
 
   /* ── Date Toggle ── */
