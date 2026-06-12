@@ -351,6 +351,34 @@
                 '<span class="wm-brand">Invisible Broadcast</span>' +
               '</div>' +
             '</div>' +
+            '<div class="reels-reader" style="display:none">' +
+              '<button class="reels-reader-close" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-primary);font-size:28px;cursor:pointer;z-index:5;line-height:1;padding:4px">&times;</button>' +
+              '<div class="reels-reader-scroll" style="overflow-y:auto;flex:1;padding:20px 16px 16px">' +
+                '<h3 style="font-size:1.05rem;font-weight:700;margin:0 0 8px;color:var(--text-primary);line-height:1.4" class="rr-title"></h3>' +
+                '<div style="display:flex;gap:12px;font-size:0.8rem;color:var(--text-tertiary);margin-bottom:12px">' +
+                  '<span style="font-weight:600;color:var(--accent-red-hover)" class="rr-source"></span>' +
+                  '<span class="rr-date"></span>' +
+                '</div>' +
+                '<p style="font-size:0.88rem;line-height:1.6;color:var(--text-secondary);margin:0 0 16px" class="rr-summary"></p>' +
+                '<div style="margin-bottom:12px">' +
+                  '<select class="rr-flag" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;cursor:pointer">' +
+                    '<option value="">No flag</option>' +
+                    '<option value="save">Save for later</option>' +
+                    '<option value="investigative">Investigative</option>' +
+                    '<option value="favorite">Favorite</option>' +
+                    '<option value="important">Important</option>' +
+                    '<option value="urgent">Urgent</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div style="margin-bottom:16px">' +
+                  '<textarea class="rr-notes" placeholder="Add notes\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;resize:vertical;min-height:50px"></textarea>' +
+                '</div>' +
+                '<div style="display:flex;gap:10px">' +
+                  '<button class="btn btn-primary rr-read" style="font-size:0.85rem;padding:8px 16px">Read Article</button>' +
+                  '<button class="btn btn-danger rr-open" style="font-size:0.85rem;padding:8px 16px">Open in Browser</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
           '<button class="reels-nav reels-prev" id="reels-prev">\u2039</button>' +
           '<button class="reels-nav reels-next" id="reels-next">\u203A</button>' +
@@ -360,8 +388,12 @@
       $('#reels-next').addEventListener('click', nextReel);
       el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
         const link = decodeURIComponent(e.currentTarget.dataset.article);
-        exitFullscreen();
-        openArticleDetail(link);
+        if (document.fullscreenElement) {
+          openReelsReader(link);
+        } else {
+          exitFullscreen();
+          openArticleDetail(link);
+        }
       });
       const st = $('#reels-share-text');
       if (st) st.addEventListener('click', e => {
@@ -426,6 +458,112 @@
     if (currentReelIndex >= currentArticles.length - 1) return;
     currentReelIndex++;
     showReel();
+  }
+
+  async function fetchArticleHtml(url) {
+    if (isGoogleNewsRedirect(url)) return null;
+    const fetchProxies = [
+      { url: 'https://corsproxy.io/?url=', encode: true },
+      { url: 'https://api.allorigins.win/raw?url=', encode: true },
+      { url: 'https://r.jina.ai/', encode: true }
+    ];
+    for (const proxy of fetchProxies) {
+      try {
+        const proxyUrl = proxy.url + (proxy.encode ? encodeURIComponent(url) : url);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const html = await res.text();
+        if (!html || html.length < 100) throw new Error('Empty response');
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        doc.querySelectorAll('script, style, nav, header, footer, aside').forEach(s => s.remove());
+        return doc.body.innerHTML;
+      } catch (err) {
+        console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
+      }
+    }
+    return null;
+  }
+
+  function bindReelsReader() {
+    const container = document.querySelector('.reels-container');
+    if (!container) return;
+    container.querySelector('.reels-reader-close')?.addEventListener('click', closeReelsReader);
+    container.querySelector('.rr-read')?.addEventListener('click', async function() {
+      const url = this.dataset.url;
+      if (!url) return;
+      const scroll = container.querySelector('.reels-reader-scroll');
+      const existingContent = scroll.querySelector('.rr-fetched');
+      if (existingContent) { existingContent.remove(); return; }
+      const wrapper = document.createElement('div');
+      wrapper.className = 'rr-fetched';
+      wrapper.style.cssText = 'margin-top:16px;border-top:1px solid var(--border-primary);padding-top:16px';
+      wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Loading\u2026</div>';
+      scroll.appendChild(wrapper);
+      try {
+        const html = await fetchArticleHtml(url);
+        if (html) {
+          wrapper.innerHTML = html;
+        } else {
+          wrapper.innerHTML = '<div style="text-align:center;padding:20px"><p style="color:var(--text-tertiary);margin-bottom:12px">Could not load article directly.</p><a href="' + escAttr(url) + '" target="_blank" class="btn btn-danger" style="font-size:0.85rem;padding:8px 16px;display:inline-block">Open in Browser</a></div>';
+        }
+      } catch {
+        wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Failed to load.</div>';
+      }
+    });
+    container.querySelector('.rr-open')?.addEventListener('click', function() {
+      if (this.href) window.open(this.href, '_blank');
+    });
+  }
+
+  function openReelsReader(link) {
+    const article = findArticleByLink(link);
+    if (!article) return;
+    const container = document.querySelector('.reels-container');
+    if (!container) return;
+    const reader = container.querySelector('.reels-reader');
+    if (!reader) return;
+    reader.querySelector('.rr-title').textContent = article.title;
+    reader.querySelector('.rr-source').textContent = article.source;
+    reader.querySelector('.rr-date').textContent = formatDateShort(article.pubDate);
+    reader.querySelector('.rr-summary').textContent = stripHtml(article.summary).slice(0, 1500);
+    reader.querySelector('.rr-read').dataset.url = article.link;
+    reader.querySelector('.rr-read').dataset.title = article.title;
+    reader.querySelector('.rr-open').href = article.link;
+    const ad = getArticleData(article.link);
+    const flagEl = reader.querySelector('.rr-flag');
+    if (flagEl) {
+      flagEl.value = ad.flag || '';
+      flagEl.onchange = function() {
+        const newData = getArticleData(article.link);
+        newData.flag = this.value || '';
+        saveArticleData(article.link, newData);
+      };
+    }
+    const notesEl = reader.querySelector('.rr-notes');
+    if (notesEl) {
+      notesEl.value = ad.note || '';
+      notesEl.oninput = function() {
+        const newData = getArticleData(article.link);
+        newData.note = this.value || '';
+        saveArticleData(article.link, newData);
+      };
+    }
+    reader.style.display = 'flex';
+    reader.querySelector('.rr-fetched')?.remove();
+    bindReelsReader();
+  }
+
+  function closeReelsReader() {
+    const container = document.querySelector('.reels-container');
+    if (!container) return;
+    const reader = container.querySelector('.reels-reader');
+    if (reader) reader.style.display = 'none';
+    const scroll = container.querySelector('.reels-reader-scroll');
+    if (scroll) { const f = scroll.querySelector('.rr-fetched'); if (f) f.remove(); }
   }
 
   function requestReelFullscreen() {
