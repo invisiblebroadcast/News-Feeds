@@ -380,7 +380,7 @@
     const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     currentReelIndex--;
     showReel();
-    if (wasFs) requestReelFullscreen();
+    if (wasFs) requestAnimationFrame(() => setTimeout(requestReelFullscreen, 50));
   }
 
   function nextReel() {
@@ -388,13 +388,13 @@
     const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     currentReelIndex++;
     showReel();
-    if (wasFs) requestReelFullscreen();
+    if (wasFs) requestAnimationFrame(() => setTimeout(requestReelFullscreen, 50));
   }
 
   function requestReelFullscreen() {
     const c = document.querySelector('.reels-container');
     if (!c) return;
-    if (c.requestFullscreen) c.requestFullscreen();
+    if (c.requestFullscreen) c.requestFullscreen().catch(() => {});
     else if (c.webkitRequestFullscreen) c.webkitRequestFullscreen();
   }
 
@@ -1051,7 +1051,7 @@
         '<div style="width:100%;min-height:500px;border-radius:12px;overflow:hidden;position:relative;background:' + (bgStyle ? 'transparent' : '#0d1117') + ';' + (bgStyle ? 'background-image:url(' + bgStyle.replace(/'/g, '%27') + ');background-size:cover;background-position:center;' : '') + '">' +
           '<div style="position:absolute;top:20px;right:20px;width:36px;height:36px;background:#ff2929;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:700;color:#fff;z-index:1;">IB</div>' +
           '<div style="background:linear-gradient(0deg,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.5) 50%,rgba(0,0,0,0.2) 100%);padding:48px 36px 36px;display:flex;flex-direction:column;justify-content:flex-end;min-height:500px;">' +
-            '<div style="font-size:0.8rem;color:#ff2929;font-weight:600;margin-bottom:8px;">' + escHtml(article.source) + ' &middot; ' + formatDateShort(article.pubDate) + '</div>' +
+            '<div style="font-size:0.9rem;color:#ff2929;font-weight:700;margin-bottom:8px;">' + escHtml(article.source) + ' &middot; ' + formatDateShort(article.pubDate) + '</div>' +
             '<h2 style="font-size:1.5rem;font-weight:700;line-height:1.35;margin:0 0 12px;color:' + titleColor + ';">' + escHtml(article.title) + '</h2>' +
             '<p style="font-size:0.9rem;line-height:1.7;color:rgba(255,255,255,0.8);margin:0 0 24px;">' + escHtml(fullSummary || '') + '</p>' +
             '<div style="font-size:0.7rem;color:rgba(255,255,255,0.25);padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-weight:600;letter-spacing:0.04em;">Invisible Broadcast</div>' +
