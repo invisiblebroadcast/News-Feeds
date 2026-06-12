@@ -1820,13 +1820,15 @@
       // upscaled to fill the width (accepting some softness for very small thumbnails).
       let imgDrawW = 0, imgDrawH = 0;
       let imgBlockH = 0;
+      // Header area above the image for the IB block (only when image is present)
+      const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
       if (hasImg) {
         const maxW = W - PAD * 2;
-        const maxH = imgMaxAreaH - imgPad * 2;
+        const maxH = imgMaxAreaH - imgPad - ibHeaderH;
         const scale = Math.min(maxW / imgW, maxH / imgH);
         imgDrawW = Math.round(imgW * scale);
         imgDrawH = Math.round(imgH * scale);
-        imgBlockH = imgDrawH + imgPad * 2;
+        imgBlockH = ibHeaderH + imgDrawH + imgPad;
       }
 
       // Total content height
@@ -1849,7 +1851,7 @@
       let imageTopY = 0;
       if (hasImg) {
         const drawX = Math.round((W - imgDrawW) / 2);
-        const drawY = cursorY + imgPad;
+        const drawY = cursorY + ibHeaderH;
         imageTopY = drawY;
         ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
         // Top fade: black → transparent
@@ -1868,17 +1870,19 @@
         cursorY += imgBlockH + gap;
       }
 
-      // IB logo block — equal gap from top and right, overlapping image (or top of text area)
-      const logoS = Math.round(W * 0.07);
-      const logoR = Math.round(W * 0.014);
+      // IB logo block — sits in the empty black space above the image (not overlapping)
+      const logoS = Math.round(W * 0.06);
+      const logoR = Math.round(W * 0.012);
       const logoGap = Math.round(W * 0.03);
       const logoX = W - logoGap - logoS;
-      const logoY = hasImg ? (imageTopY + logoGap) : (cursorY + Math.round(W * 0.01));
+      const logoY = hasImg
+        ? (imageTopY - ibHeaderH + (ibHeaderH - logoS) / 2)  // vertically centered in the header area
+        : (cursorY + Math.round(W * 0.01));
       ctx.fillStyle = '#ff2929';
       roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.round(W * 0.032) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.font = 'bold ' + Math.round(W * 0.028) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('IB', logoX + logoS / 2, logoY + logoS / 2);
@@ -1975,13 +1979,11 @@
 
   function toggleFullscreen() {
     if (document.fullscreenElement || document.webkitFullscreenElement) {
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      if (document.exitFullscreen) document.exitFullscreen().catch(err => console.warn('Exit fullscreen failed:', err.message));
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     } else {
       requestReelFullscreen();
     }
-    // Sync state immediately in case fullscreenchange event is delayed
-    setTimeout(updateReelsFullscreen, 100);
   }
 
   function closeSourceModal() {
