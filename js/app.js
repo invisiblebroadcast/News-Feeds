@@ -405,13 +405,8 @@
 
   function updateNavArrows(container) {
     if (!container) return;
-    const prev = container.querySelector('.reels-nav-prev');
-    const next = container.querySelector('.reels-nav-next');
-    const fs = isReelsFullscreen;
-    if (prev) prev.style.display = fs ? 'none' : '';
-    if (next) next.style.display = fs ? 'none' : '';
-    container.classList.toggle('reels-show-arrows', !fs);
-    container.style.touchAction = fs ? 'none' : '';
+    container.classList.toggle('reels-show-arrows', !isReelsFullscreen);
+    container.style.touchAction = isReelsFullscreen ? 'none' : '';
   }
 
   function renderReels(articles) {
@@ -579,8 +574,6 @@
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
-          '<button class="reels-nav-arrow reels-nav-prev" title="Previous">&#x25C0;</button>' +
-          '<button class="reels-nav-arrow reels-nav-next" title="Next">&#x25B6;</button>' +
           '<div class="reels-stack">' +
             '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
             '<div class="reels-card-under">' + cardOverlayHtml(false) + '</div>' +
@@ -729,6 +722,15 @@
           if (box) box.style.display = 'none';
           return;
         }
+        // Card background click → enter fullscreen (if not already)
+        const card = e.target.closest('.reels-card');
+        if (card && !e.target.closest('button') && !e.target.closest('.reels-comment-box') && !e.target.closest('a')) {
+          e.stopPropagation();
+          if (!isReelsFullscreen && !document.fullscreenElement) {
+            requestReelFullscreen();
+          }
+          return;
+        }
       });
 
       const prevBtn = container.querySelector('.reels-nav-prev');
@@ -736,7 +738,6 @@
       const nextBtn = container.querySelector('.reels-nav-next');
       if (nextBtn) nextBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(1); });
       updateNavArrows(container);
-
       let lastNavTime = 0;
       function navThrottle(dir) {
         const now = Date.now();
@@ -2050,14 +2051,20 @@
 
       let cursorY = topOffset;
 
-      // Image (if any) — top/bottom gradient fade to black, like card view
+      // Image (if any) — top/bottom/left/right gradient fade to black, like card view
       let imageTopY = 0;
       if (hasImg) {
         const drawX = Math.round((W - imgDrawW) / 2);
         const drawY = cursorY + ibHeaderH;
         imageTopY = drawY;
+        const imgRadius = Math.round(W * 0.025);
+
+        // Clip to rounded rect so the image has soft corners
+        ctx.save();
+        roundRect(ctx, drawX, drawY, imgDrawW, imgDrawH, imgRadius);
+        ctx.clip();
+
         // Multi-pass downscale for sharper output when source is much larger than target.
-        // Step down in halves until within 2× of target, then draw final.
         if (imgW > imgDrawW * 2) {
           let curW = imgW, curH = imgH;
           let curSrc = img;
@@ -2077,8 +2084,9 @@
         } else {
           ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
         }
-         // Top fade: black → transparent
-        const fadeH = Math.round(imgDrawH * 0.18);
+
+        // Top fade: black → transparent
+        const fadeH = Math.round(imgDrawH * 0.2);
         const topGrad = ctx.createLinearGradient(0, drawY, 0, drawY + fadeH);
         topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         topGrad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -2090,42 +2098,40 @@
         botGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = botGrad;
         ctx.fillRect(drawX, drawY + imgDrawH - fadeH, imgDrawW, fadeH);
-        // Left fade: black → transparent
-        const fadeW = Math.round(imgDrawW * 0.12);
+        // Left fade: black → transparent (increased to 18% width, 0.85 alpha)
+        const fadeW = Math.round(imgDrawW * 0.18);
         const leftGrad = ctx.createLinearGradient(drawX, 0, drawX + fadeW, 0);
-        leftGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
+        leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = leftGrad;
         ctx.fillRect(drawX, drawY, fadeW, imgDrawH);
         // Right fade: transparent → black
         const rightGrad = ctx.createLinearGradient(drawX + imgDrawW - fadeW, 0, drawX + imgDrawW, 0);
         rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        rightGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
+        rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = rightGrad;
         ctx.fillRect(drawX + imgDrawW - fadeW, drawY, fadeW, imgDrawH);
+
+        // IB logo block — inside the image, top-right, equal gap from top and right edges
+        const logoS = Math.round(W * 0.07);
+        const logoR = Math.round(W * 0.014);
+        const ibGap = Math.round(W * 0.025);
+        const logoX = drawX + imgDrawW - ibGap - logoS;
+        const logoY = drawY + ibGap;
+        ctx.fillStyle = '#ff2929';
+        roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(W * 0.032) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('IB', logoX + logoS / 2, logoY + logoS / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+
+        ctx.restore(); // remove rounded clip
         cursorY += imgBlockH + gap;
       }
-
-      // IB logo block — sits in the empty black space above the image (not overlapping)
-      const logoS = Math.round(W * 0.06);
-      const logoR = Math.round(W * 0.012);
-      const logoGap = Math.round(W * 0.03);
-      // Align with the image's right edge (or canvas right edge if no image)
-      const imgRightEdge = hasImg ? (Math.round((W - imgDrawW) / 2) + imgDrawW) : (W - PAD);
-      const logoX = imgRightEdge - logoGap - logoS;
-      const logoY = hasImg
-        ? (imageTopY - ibHeaderH + (ibHeaderH - logoS) / 2)
-        : (cursorY + Math.round(W * 0.01));
-      ctx.fillStyle = '#ff2929';
-      roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.round(W * 0.028) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('IB', logoX + logoS / 2, logoY + logoS / 2);
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
 
       // Source label (no date, no ranking) — uppercase, red
       if (article.source) {
