@@ -653,7 +653,9 @@
         const cw = container.offsetWidth || 1;
         if (dir !== swipeDir) {
           swipeDir = dir;
-          // Update background card content based on direction
+          // Update background card content based on swipe direction:
+          //   left swipe (dir=-1)  → show NEXT article (idx+1), parked off-screen right
+          //   right swipe (dir=+1) → show PREVIOUS article (idx-1), parked off-screen left
           const targetIdx = dir < 0 ? idx + 1 : idx - 1;
           const targetArticle = articles[targetIdx];
           if (targetArticle) {
@@ -661,7 +663,7 @@
             under.className = 'reels-card-under';
             updateCard(under, targetArticle, targetIdx, total);
             under.style.transition = 'none';
-            // Park off-screen on the side the user is swiping FROM (in pixels, not %)
+            // Park off-screen on the side the user is swiping FROM
             under.style.transform = dir < 0 ? 'translateX(' + cw + 'px)' : 'translateX(-' + cw + 'px)';
           } else {
             under.style.display = 'none';
@@ -714,7 +716,9 @@
     const fg = stack.querySelector('.reels-card');
     if (fg) updateCard(fg, article, idx, total);
 
-    // Pre-populate background card with next article for immediate swipe readiness
+    // Pre-populate background card with next article (for left-swipe → next).
+    // Park it off-screen right. When the user swipes right (prev), the touchmove handler
+    // will update it to show the previous article and park it off-screen left.
     const under = stack.querySelector('.reels-card-under');
     if (under) {
       const nextArticle = articles[idx + 1];
@@ -722,7 +726,7 @@
         updateCard(under, nextArticle, idx + 1, total);
         under.style.display = '';
         under.className = 'reels-card-under';
-        under.style.transform = '';
+        under.style.transform = 'translateX(100%)'; // explicitly off-screen right
         under.style.transition = '';
       } else {
         under.style.display = 'none';
