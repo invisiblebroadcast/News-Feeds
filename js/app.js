@@ -603,9 +603,8 @@
             '<div class="reels-fs-tabs" id="reels-fs-tabs"></div>' +
             '<div class="reels-fs-search"><input type="text" id="reels-fs-search-input" placeholder="Search..."></div>' +
           '</div>' +
-          '<div class="reels-stack">' +
+          '<div class="reels-stack" id="reels-stack">' +
             '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
-            '<div class="reels-card-under">' + cardOverlayHtml(false) + '</div>' +
             readerHtml() +
           '</div>' +
         '</div>';
@@ -751,16 +750,7 @@
           if (box) box.style.display = 'none';
           return;
         }
-        // Card background click → enter fullscreen (if not already)
-        const card = e.target.closest('.reels-card');
-        // Only trigger on card background (not on any interactive element)
-        if (card && !e.target.closest('button, a, input, textarea, .reels-comment-box, .reels-toolbar, .reels-actions, .reels-overlay button, .reels-home-btn')) {
-          e.stopPropagation();
-          if (!isReelsFullscreen && !document.fullscreenElement) {
-            requestReelFullscreen();
-          }
-          return;
-        }
+        // Card click no longer auto-fullscreens — user must click the fullscreen button
       });
 
       const prevBtn = container.querySelector('.reels-nav-prev');
@@ -788,61 +778,42 @@
         if (!isReelsFullscreen) return;
         if (!swipeStartX) return;
         const card = stack.querySelector('.reels-card');
-        const under = stack.querySelector('.reels-card-under');
         if (!card) return;
         swipeDx = e.touches[0].clientX - swipeStartX;
         if (Math.abs(swipeDx) > 5) isSwiping = true;
         if (!isSwiping) return;
 
-        const dir = swipeDx < 0 ? -1 : 1; // -1 = left (next), 1 = right (prev)
-        const cw = container.offsetWidth || 1;
-        if (dir !== swipeDir) {
-          swipeDir = dir;
-          // Update background card content based on swipe direction:
-          //   left swipe (dir=-1)  → show NEXT article (idx+1), parked off-screen right
-          //   right swipe (dir=+1) → show PREVIOUS article (idx-1), parked off-screen left
-          const targetIdx = dir < 0 ? idx + 1 : idx - 1;
-          const targetArticle = articles[targetIdx];
-          if (targetArticle) {
-            under.style.display = '';
-            under.className = 'reels-card-under';
-            updateCard(under, targetArticle, targetIdx, total);
-            under.style.transition = 'none';
-            // Park off-screen on the side the user is swiping FROM
-            under.style.transform = dir < 0 ? 'translateX(' + cw + 'px)' : 'translateX(-' + cw + 'px)';
-          } else {
-            under.style.display = 'none';
-          }
-        }
-
+        // Simple slide animation — card follows finger
         card.style.transition = 'none';
         card.style.transform = 'translateX(' + swipeDx + 'px)';
-        if (under.style.display !== 'none') {
-          under.style.transition = 'none';
-          // Under card tracks the foreground by the same pixel delta, so the gap stays constant
-          const offset = dir < 0 ? (cw + swipeDx) : (-cw + swipeDx);
-          under.style.transform = 'translateX(' + offset + 'px)';
-        }
         e.preventDefault();
       }, { passive: false });
       container.addEventListener('touchend', e => {
         if (!swipeStartX) return;
         const card = stack.querySelector('.reels-card');
-        const under = stack.querySelector('.reels-card-under');
         const dx = swipeStartX - e.changedTouches[0].clientX;
         swipeStartX = 0;
-        // Reset transforms with animation
+        // Animate card back to center or off-screen
         if (card) {
-          card.style.transition = '';
-          card.style.transform = '';
+          if (isSwiping && Math.abs(dx) > 60) {
+            // Animate off-screen then navigate
+            const dir = dx > 0 ? -1 : 1; // dx>0 means swipe left (positive dx), card goes left (negative transform)
+            card.style.transition = 'transform 0.2s ease-out';
+            card.style.transform = dir < 0 ? 'translateX(-100%)' : 'translateX(100%)';
+            setTimeout(() => {
+              if (dir < 0) nextReel(); else prevReel();
+              // Reset card position
+              if (card) { card.style.transition = 'none'; card.style.transform = 'translateX(0)'; }
+              setTimeout(() => { if (card) card.style.transition = ''; }, 20);
+            }, 200);
+          } else {
+            // Snap back to center
+            card.style.transition = 'transform 0.2s ease-out';
+            card.style.transform = 'translateX(0)';
+            setTimeout(() => { if (card) { card.style.transition = ''; } }, 200);
+          }
         }
-        if (under) {
-          under.style.transition = '';
-          under.style.transform = '';
-          under.style.display = 'none';
-          under.className = 'reels-card-under';
-        }
-        if (isSwiping && Math.abs(dx) > 30) navThrottle(dx > 0 ? 1 : -1);
+        if (isSwiping && Math.abs(dx) > 60) navThrottle(dx > 0 ? 1 : -1);
         isSwiping = false;
         swipeDir = 0;
       }, { passive: true });
@@ -859,31 +830,12 @@
     if (dots) dots.innerHTML = articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
 
     const fg = stack.querySelector('.reels-card');
-    if (fg) updateCard(fg, article, idx, total);
-
-    // Pre-populate background card with next article (for left-swipe → next).
-    // Park it off-screen right. When the user swipes right (prev), the touchmove handler
-    // will update it to show the previous article and park it off-screen left.
-    const under = stack.querySelector('.reels-card-under');
-    if (under) {
-      const nextArticle = articles[idx + 1];
-      if (nextArticle) {
-        updateCard(under, nextArticle, idx + 1, total);
-        under.style.display = '';
-        under.className = 'reels-card-under';
-        under.style.transform = 'translateX(100%)'; // explicitly off-screen right
-        under.style.transition = '';
-        // Force image reload by clearing src first
-        const underImg = under.querySelector('.reels-img');
-        if (underImg) {
-          const newSrc = enhanceImageUrl(nextArticle.imageUrl) || nextArticle.imageUrl || '';
-          if (underImg.src !== newSrc) {
-            underImg.src = newSrc;
-          }
-        }
-      } else {
-        under.style.display = 'none';
-      }
+    if (fg) {
+      updateCard(fg, article, idx, total);
+      // Reset card position for new article
+      fg.style.transition = 'none';
+      fg.style.transform = 'translateX(0)';
+      requestAnimationFrame(() => { fg.style.transition = ''; });
     }
   }
 
@@ -1747,7 +1699,6 @@
 
     const ad = getArticleData(article.link);
     const flagEl = $('#article-modal-flag');
-    const notesEl = $('#article-modal-notes');
     // Like / Dislike buttons in article modal
     const articleLikeBtn = $('#article-modal-like');
     const articleDislikeBtn = $('#article-modal-dislike');
@@ -1801,20 +1752,6 @@
         newData.flag = flagEl.value || '';
         saveArticleData(article.link, newData);
         renderCurrentList();
-        if (notesEl) {
-          notesEl.disabled = !flagEl.value;
-          if (!flagEl.value) notesEl.value = '';
-        }
-      };
-    }
-    if (notesEl) {
-      notesEl.disabled = !ad.flag || !currentUser;
-      notesEl.value = ad.note || '';
-      notesEl.oninput = function() {
-        if (!requireAuth()) { notesEl.value = ad.note || ''; return; }
-        const newData = getArticleData(article.link);
-        newData.note = notesEl.value || '';
-        saveArticleData(article.link, newData);
       };
     }
 

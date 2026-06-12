@@ -250,6 +250,7 @@ img { max-width: 100%; height: auto; }
   z-index: 100;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-primary);
+  padding: 10px 16px 14px;
 }
 .bottom-bar-inner {
   display: flex;
@@ -271,7 +272,7 @@ img { max-width: 100%; height: auto; }
 .bottom-bar .filters-panel {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 16px 8px;
+  padding: 12px 16px 8px;
   display: none;
 }
 .bottom-bar .filters-panel.open {
@@ -314,7 +315,13 @@ img { max-width: 100%; height: auto; }
 
 /* Ensure main content isn't hidden behind bottom bar */
 .app-main {
-  padding-bottom: 56px;
+  padding-bottom: 80px;
+}
+
+/* Decent padding for the main content area */
+.article-grid {
+  padding: 16px 0;
+  padding-bottom: 24px;
 }
 
 #sub-tab-bar {
@@ -496,8 +503,7 @@ img { max-width: 100%; height: auto; }
   overflow: hidden;
   border-radius: var(--radius-lg);
 }
-.reels-stack .reels-card,
-.reels-stack .reels-card-under {
+.reels-stack .reels-card {
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -508,13 +514,8 @@ img { max-width: 100%; height: auto; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-.reels-stack .reels-card-under {
-  z-index: 1;
-  transform: translateX(100%);
-}
-.reels-stack .reels-card-under.left {
-  transform: translateX(-100%);
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+  opacity: 1;
 }
 .reels-img-wrap {
   width: 100%;
