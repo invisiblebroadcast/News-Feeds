@@ -753,12 +753,21 @@ img { max-width: 100%; height: auto; }
 /* ─── Comments Page ─── */
 .comments-page {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50vh;
+  min-height: 280px;
+  max-height: 90vh;
   z-index: 150;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
   animation: slideUp 0.25s ease;
+  touch-action: none;
 }
 @keyframes slideUp {
   from { transform: translateY(100%); }
@@ -771,6 +780,15 @@ img { max-width: 100%; height: auto; }
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.comments-drag-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--text-tertiary);
+  border-radius: 2px;
+  margin: 8px auto 0;
+  cursor: ns-resize;
   flex-shrink: 0;
 }
 .comments-page-header h2 {
@@ -1713,6 +1731,51 @@ img { max-width: 100%; height: auto; }
     min-height: 100px;
   }
 }
+
+/* ─── Card Actions (like/dislike/comment) ─── */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-secondary);
+}
+.card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.card-action-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
+}
+.card-action-btn span:first-child { font-size: 0.95rem; }
+.card-action-count {
+  font-weight: 600;
+  min-width: 12px;
+  text-align: center;
+}
+.card-action-btn.active.like {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.6);
+  color: #4caf50;
+}
+.card-action-btn.active.dislike {
+  background: rgba(255, 41, 41, 0.2);
+  border-color: rgba(255, 41, 41, 0.6);
+  color: var(--accent);
+}
+.card-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ─── Watermark ─── */
 .article-watermark {

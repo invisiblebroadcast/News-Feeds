@@ -338,6 +338,9 @@
 
     const ad = getArticleData(article.link);
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
+    const likeCount = ad.likeCount || 0;
+    const dislikeCount = ad.dislikeCount || 0;
+    const commentCount = (ad.comments && ad.comments.length) || 0;
 
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
@@ -350,6 +353,17 @@
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
             flagHtml +
+          '</div>' +
+          '<div class="card-actions">' +
+            '<button class="card-action-btn card-like-btn ' + (ad.like ? 'active' : '') + '" data-article="' + encoded + '" title="Like">' +
+              '<span>&#x1F44D;</span><span class="card-action-count">' + likeCount + '</span>' +
+            '</button>' +
+            '<button class="card-action-btn card-dislike-btn ' + (ad.dislike ? 'active' : '') + '" data-article="' + encoded + '" title="Dislike">' +
+              '<span>&#x1F44E;</span><span class="card-action-count">' + dislikeCount + '</span>' +
+            '</button>' +
+            '<button class="card-action-btn card-comment-btn" data-article="' + encoded + '" title="Comment">' +
+              '<span>&#x1F4AC;</span><span class="card-action-count">' + commentCount + '</span>' +
+            '</button>' +
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
@@ -1693,6 +1707,19 @@
         renderCurrentList();
       };
     }
+    // Comments button in article modal
+    const articleCommentsBtn = $('#article-modal-comments-btn');
+    const articleCommentsCount = $('#article-modal-comments-count');
+    if (articleCommentsBtn) {
+      const commentCount = (ad.comments && ad.comments.length) || 0;
+      if (articleCommentsCount) articleCommentsCount.textContent = commentCount;
+      articleCommentsBtn.onclick = function(e) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        closeArticleModal();
+        openCommentsPage(article);
+      };
+    }
     if (flagEl) {
       flagEl.value = ad.flag || '';
       flagEl.disabled = !currentUser;
@@ -2209,6 +2236,60 @@
         }
         return;
       }
+      // Card like button
+      const likeBtn = e.target.closest('.card-like-btn');
+      if (likeBtn) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        const url = decodeURIComponent(likeBtn.dataset.article);
+        const article = findArticleByLink(url);
+        if (!article) return;
+        const ad = getArticleData(url);
+        if (ad.like) { ad.like = false; ad.likeCount = Math.max(0, (ad.likeCount || 1) - 1); }
+        else { ad.like = true; ad.dislike = false; ad.dislikeCount = Math.max(0, (ad.dislikeCount || 0)); ad.likeCount = (ad.likeCount || 0) + 1; }
+        saveArticleData(url, ad);
+        likeBtn.classList.toggle('active', !!ad.like);
+        likeBtn.classList.toggle('like', true);
+        const countEl = likeBtn.querySelector('.card-action-count');
+        if (countEl) countEl.textContent = ad.likeCount || 0;
+        // Update dislike button if it was active
+        const dislikeBtn = likeBtn.parentElement.querySelector('.card-dislike-btn');
+        if (dislikeBtn) { dislikeBtn.classList.toggle('active', !!ad.dislike); const dc = dislikeBtn.querySelector('.card-action-count'); if (dc) dc.textContent = ad.dislikeCount || 0; }
+        renderCurrentList();
+        return;
+      }
+      // Card dislike button
+      const dislikeBtn = e.target.closest('.card-dislike-btn');
+      if (dislikeBtn) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        const url = decodeURIComponent(dislikeBtn.dataset.article);
+        const article = findArticleByLink(url);
+        if (!article) return;
+        const ad = getArticleData(url);
+        if (ad.dislike) { ad.dislike = false; ad.dislikeCount = Math.max(0, (ad.dislikeCount || 1) - 1); }
+        else { ad.dislike = true; ad.like = false; ad.likeCount = Math.max(0, (ad.likeCount || 0)); ad.dislikeCount = (ad.dislikeCount || 0) + 1; }
+        saveArticleData(url, ad);
+        dislikeBtn.classList.toggle('active', !!ad.dislike);
+        dislikeBtn.classList.toggle('dislike', true);
+        const countEl = dislikeBtn.querySelector('.card-action-count');
+        if (countEl) countEl.textContent = ad.dislikeCount || 0;
+        // Update like button if it was active
+        const likeBtn = dislikeBtn.parentElement.querySelector('.card-like-btn');
+        if (likeBtn) { likeBtn.classList.toggle('active', !!ad.like); const lc = likeBtn.querySelector('.card-action-count'); if (lc) lc.textContent = ad.likeCount || 0; }
+        renderCurrentList();
+        return;
+      }
+      // Card comment button — open comments page
+      const commentBtn = e.target.closest('.card-comment-btn');
+      if (commentBtn) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        const url = decodeURIComponent(commentBtn.dataset.article);
+        const article = findArticleByLink(url);
+        if (article) openCommentsPage(article);
+        return;
+      }
       const ae = e.target.closest('[data-article]');
       if (!ae) return;
       openArticleDetail(decodeURIComponent(ae.dataset.article));
@@ -2722,6 +2803,11 @@
     if (!article) return;
     commentsContextArticle = article;
     commentsReplyToId = null;
+    // Exit fullscreen so the comments page is visible (fullscreen hides other DOM)
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
     if (el.commentsPage) el.commentsPage.style.display = 'flex';
     if (el.commentsInput) { el.commentsInput.value = ''; el.commentsInput.placeholder = 'Add a comment…'; }
     if (el.commentsPostBtn) el.commentsPostBtn.disabled = true;
@@ -2840,8 +2926,18 @@
     commentsReplyToId = null;
     hideReplyPreview();
     renderCommentsList();
+    // Update article modal comment count
+    const countEl = $('#article-modal-comments-count');
+    if (countEl) countEl.textContent = (ad.comments && ad.comments.length) || 0;
+    // Update card comment count
+    updateCardCommentCount(commentsContextArticle.link, (ad.comments && ad.comments.length) || 0);
     // Scroll to bottom
     if (el.commentsList) el.commentsList.scrollTop = el.commentsList.scrollHeight;
+  }
+
+  function updateCardCommentCount(link, count) {
+    const card = el.main.querySelector(`.card-comment-btn[data-article="${encodeURIComponent(link)}"] .card-action-count`);
+    if (card) card.textContent = count;
   }
 
   function setReplyTo(commentId) {
@@ -2871,6 +2967,11 @@
     commentsPendingDeleteId = null;
     if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
     renderCommentsList();
+    // Update counts
+    const newCount = (ad.comments && ad.comments.length) || 0;
+    const countEl = $('#article-modal-comments-count');
+    if (countEl) countEl.textContent = newCount;
+    updateCardCommentCount(commentsContextArticle.link, newCount);
   }
 
   function bindAuth() {
@@ -2975,6 +3076,30 @@
 
     // Comments page
     if (el.commentsBackBtn) el.commentsBackBtn.addEventListener('click', closeCommentsPage);
+    // Draggable resize for comments page
+    const dragHandle = $('#comments-drag-handle');
+    if (dragHandle && el.commentsPage) {
+      let dragStartY = 0, dragStartH = 0, dragging = false;
+      const onDragStart = (clientY) => {
+        dragging = true;
+        dragStartY = clientY;
+        dragStartH = el.commentsPage.offsetHeight;
+        el.commentsPage.style.transition = 'none';
+      };
+      const onDragMove = (clientY) => {
+        if (!dragging) return;
+        const dy = dragStartY - clientY;
+        const newH = Math.min(window.innerHeight * 0.9, Math.max(280, dragStartH + dy));
+        el.commentsPage.style.height = newH + 'px';
+      };
+      const onDragEnd = () => { dragging = false; };
+      dragHandle.addEventListener('mousedown', e => { e.preventDefault(); onDragStart(e.clientY); });
+      dragHandle.addEventListener('touchstart', e => { onDragStart(e.touches[0].clientY); }, { passive: true });
+      document.addEventListener('mousemove', e => onDragMove(e.clientY));
+      document.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY), { passive: true });
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchend', onDragEnd);
+    }
     if (el.commentsPostBtn) el.commentsPostBtn.addEventListener('click', postComment);
     if (el.commentsInput) {
       el.commentsInput.addEventListener('input', () => {
