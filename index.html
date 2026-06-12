@@ -263,7 +263,13 @@
         </div>
         <p id="article-modal-summary" style="font-size:0.95rem;line-height:1.7;color:var(--text-primary);"></p>
         <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <span style="font-size:0.82rem;color:var(--text-secondary);font-weight:500;">Flag:</span>
+          <button class="article-action-btn article-like-btn" id="article-modal-like" title="Like" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:var(--text-primary);font-size:0.85rem;font-family:var(--font);cursor:pointer;transition:all var(--transition);">
+            <span style="font-size:1.1rem;">&#x1F44D;</span> <span>Like</span>
+          </button>
+          <button class="article-action-btn article-dislike-btn" id="article-modal-dislike" title="Dislike" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:var(--text-primary);font-size:0.85rem;font-family:var(--font);cursor:pointer;transition:all var(--transition);">
+            <span style="font-size:1.1rem;">&#x1F44E;</span> <span>Dislike</span>
+          </button>
+          <span style="font-size:0.82rem;color:var(--text-secondary);font-weight:500;margin-left:8px;">Flag:</span>
           <select id="article-modal-flag" style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;cursor:pointer;">
             <option value="">None</option>
             <option value="save">&#x1F516; Save for later</option>

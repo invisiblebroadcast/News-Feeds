@@ -413,8 +413,29 @@
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
         '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
-        '<button class="reels-tool-btn reels-like-btn" title="Like">&#x1F44D;</button>' +
-        '<button class="reels-tool-btn reels-dislike-btn" title="Dislike">&#x1F44E;</button>' +
+      '</div>';
+      // Vertical action bar — right side, center (like YT Shorts / Reels)
+      html += '<div class="reels-actions">' +
+        '<button class="reels-action-btn reels-like-btn" title="Like">' +
+          '<span class="reels-action-icon">&#x1F44D;</span>' +
+          '<span class="reels-action-label">Like</span>' +
+        '</button>' +
+        '<button class="reels-action-btn reels-dislike-btn" title="Dislike">' +
+          '<span class="reels-action-icon">&#x1F44E;</span>' +
+          '<span class="reels-action-label">Dislike</span>' +
+        '</button>' +
+        '<button class="reels-action-btn reels-comment-btn" title="Comment">' +
+          '<span class="reels-action-icon">&#x1F4AC;</span>' +
+          '<span class="reels-action-label">Comment</span>' +
+        '</button>' +
+      '</div>';
+      // Comment input area — hidden by default
+      html += '<div class="reels-comment-box" id="reels-comment-box" style="display:none">' +
+        '<textarea class="reels-comment-input" placeholder="Write a comment..." rows="2"></textarea>' +
+        '<div class="reels-comment-actions">' +
+          '<button class="btn btn-ghost reels-comment-cancel">Cancel</button>' +
+          '<button class="btn btn-primary reels-comment-submit">Post</button>' +
+        '</div>' +
       '</div>';
     }
     html += '<div class="reels-overlay">' +
@@ -644,6 +665,49 @@
           db.forEach(b => b.classList.toggle('active', !!ad.dislike));
           const cards = stack.querySelectorAll('.reels-like-btn');
           cards.forEach(b => b.classList.toggle('active', !!ad.like));
+          return;
+        }
+        const commentBtn = e.target.closest('.reels-comment-btn');
+        if (commentBtn) {
+          if (!requireAuth()) return;
+          const card = stack.querySelector('.reels-card');
+          const box = card?.querySelector('.reels-comment-box');
+          if (box) {
+            box.style.display = 'block';
+            const input = box.querySelector('.reels-comment-input');
+            if (input) { input.value = getArticleData(currentArticles[currentReelIndex]?.link || '').note || ''; input.focus(); }
+          }
+          return;
+        }
+        const commentSubmit = e.target.closest('.reels-comment-submit');
+        if (commentSubmit) {
+          e.stopPropagation();
+          const card = stack.querySelector('.reels-card');
+          const box = card?.querySelector('.reels-comment-box');
+          const input = box?.querySelector('.reels-comment-input');
+          const text = input?.value?.trim() || '';
+          if (!text) return;
+          const a = currentArticles[currentReelIndex];
+          if (!a) return;
+          const ad = getArticleData(a.link);
+          ad.note = text;
+          saveArticleData(a.link, ad);
+          // Close the comment box
+          if (box) box.style.display = 'none';
+          // Show brief feedback on the comment button
+          const btn = card.querySelector('.reels-comment-btn');
+          if (btn) {
+            const label = btn.querySelector('.reels-action-label');
+            if (label) { const orig = label.textContent; label.textContent = 'Posted!'; setTimeout(() => { label.textContent = orig; }, 1200); }
+          }
+          return;
+        }
+        const commentCancel = e.target.closest('.reels-comment-cancel');
+        if (commentCancel) {
+          e.stopPropagation();
+          const card = stack.querySelector('.reels-card');
+          const box = card?.querySelector('.reels-comment-box');
+          if (box) box.style.display = 'none';
           return;
         }
       });
@@ -1593,6 +1657,37 @@
     const ad = getArticleData(article.link);
     const flagEl = $('#article-modal-flag');
     const notesEl = $('#article-modal-notes');
+    // Like / Dislike buttons in article modal
+    const articleLikeBtn = $('#article-modal-like');
+    const articleDislikeBtn = $('#article-modal-dislike');
+    if (articleLikeBtn) {
+      articleLikeBtn.classList.toggle('active', !!ad.like);
+      articleLikeBtn.classList.toggle('like', true);
+      articleLikeBtn.onclick = function(e) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        const newData = getArticleData(article.link);
+        if (newData.like) { newData.like = false; } else { newData.like = true; newData.dislike = false; }
+        saveArticleData(article.link, newData);
+        articleLikeBtn.classList.toggle('active', !!newData.like);
+        if (articleDislikeBtn) articleDislikeBtn.classList.toggle('active', !!newData.dislike);
+        renderCurrentList();
+      };
+    }
+    if (articleDislikeBtn) {
+      articleDislikeBtn.classList.toggle('active', !!ad.dislike);
+      articleDislikeBtn.classList.toggle('dislike', true);
+      articleDislikeBtn.onclick = function(e) {
+        e.stopPropagation();
+        if (!requireAuth()) return;
+        const newData = getArticleData(article.link);
+        if (newData.dislike) { newData.dislike = false; } else { newData.dislike = true; newData.like = false; }
+        saveArticleData(article.link, newData);
+        articleDislikeBtn.classList.toggle('active', !!newData.dislike);
+        if (articleLikeBtn) articleLikeBtn.classList.toggle('active', !!newData.like);
+        renderCurrentList();
+      };
+    }
     if (flagEl) {
       flagEl.value = ad.flag || '';
       flagEl.disabled = !currentUser;
@@ -1950,9 +2045,11 @@
       const logoS = Math.round(W * 0.06);
       const logoR = Math.round(W * 0.012);
       const logoGap = Math.round(W * 0.03);
-      const logoX = W - logoGap - logoS;
+      // Align with the image's right edge (or canvas right edge if no image)
+      const imgRightEdge = hasImg ? (Math.round((W - imgDrawW) / 2) + imgDrawW) : (W - PAD);
+      const logoX = imgRightEdge - logoGap - logoS;
       const logoY = hasImg
-        ? (imageTopY - ibHeaderH + (ibHeaderH - logoS) / 2)  // vertically centered in the header area
+        ? (imageTopY - ibHeaderH + (ibHeaderH - logoS) / 2)
         : (cursorY + Math.round(W * 0.01));
       ctx.fillStyle = '#ff2929';
       roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
