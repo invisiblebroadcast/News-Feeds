@@ -755,9 +755,11 @@
         if (Math.abs(swipeDx) > 5) isSwiping = true;
         if (!isSwiping) return;
 
-        // Simple slide animation — card follows finger
+        // Simple slide animation — card follows finger with slight rotation for visual feedback
+        const rotation = swipeDx / 20; // subtle tilt effect
         card.style.transition = 'none';
-        card.style.transform = 'translateX(' + swipeDx + 'px)';
+        card.style.transform = 'translateX(' + swipeDx + 'px) rotate(' + rotation + 'deg)';
+        card.style.opacity = 1 - Math.abs(swipeDx) / 500; // slight fade
         e.preventDefault();
       }, { passive: false });
       container.addEventListener('touchend', e => {
@@ -765,27 +767,31 @@
         const card = stack.querySelector('.reels-card');
         const dx = swipeStartX - e.changedTouches[0].clientX;
         swipeStartX = 0;
-        // Animate card back to center or off-screen
         if (card) {
           if (isSwiping && Math.abs(dx) > 60) {
-            // Animate off-screen then navigate
-            const dir = dx > 0 ? -1 : 1; // dx>0 means swipe left (positive dx), card goes left (negative transform)
-            card.style.transition = 'transform 0.2s ease-out';
-            card.style.transform = dir < 0 ? 'translateX(-100%)' : 'translateX(100%)';
+            // Swipe out: animate off-screen, then navigate
+            const dir = dx > 0 ? -1 : 1; // dx>0 means swipe left
+            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+            card.style.transform = dir < 0 ? 'translateX(-110%) rotate(-5deg)' : 'translateX(110%) rotate(5deg)';
+            card.style.opacity = '0';
             setTimeout(() => {
               if (dir < 0) nextReel(); else prevReel();
               // Reset card position
-              if (card) { card.style.transition = 'none'; card.style.transform = 'translateX(0)'; }
-              setTimeout(() => { if (card) card.style.transition = ''; }, 20);
+              if (card) {
+                card.style.transition = 'none';
+                card.style.transform = 'translateX(0) rotate(0)';
+                card.style.opacity = '1';
+                setTimeout(() => { if (card) card.style.transition = ''; }, 20);
+              }
             }, 200);
           } else {
             // Snap back to center
-            card.style.transition = 'transform 0.2s ease-out';
-            card.style.transform = 'translateX(0)';
+            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+            card.style.transform = 'translateX(0) rotate(0)';
+            card.style.opacity = '1';
             setTimeout(() => { if (card) { card.style.transition = ''; } }, 200);
           }
         }
-        if (isSwiping && Math.abs(dx) > 60) navThrottle(dx > 0 ? 1 : -1);
         isSwiping = false;
         swipeDir = 0;
       }, { passive: true });
