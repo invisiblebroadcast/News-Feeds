@@ -1790,21 +1790,23 @@
         + smallGap
         + smallFontSize;
 
-      // Image dimensions (scaled to fit inside padded area, aspect preserved)
+      // Image dimensions — use at native size when smaller than the target area (no upscale,
+      // preserves original quality). Only downscale when the image exceeds W or maxImgH.
       let imgDrawW = 0, imgDrawH = 0;
       let imgBlockH = 0;
+      const imgRadius = Math.round(W * 0.025);
       if (hasImg) {
         const maxW = W - PAD * 2;
         const maxH = imgMaxAreaH - imgPad * 2;
-        const imgAspect = imgW / imgH;
-        if (maxW / maxH > imgAspect) {
-          imgDrawH = maxH;
-          imgDrawW = Math.round(imgDrawH * imgAspect);
+        if (imgW > maxW || imgH > maxH) {
+          const scale = Math.min(maxW / imgW, maxH / imgH);
+          imgDrawW = Math.round(imgW * scale);
+          imgDrawH = Math.round(imgH * scale);
         } else {
-          imgDrawW = maxW;
-          imgDrawH = Math.round(imgDrawW / imgAspect);
+          imgDrawW = imgW;
+          imgDrawH = imgH;
         }
-        imgBlockH = imgMaxAreaH;
+        imgBlockH = imgDrawH + imgPad * 2;
       }
 
       // Total content height
@@ -1823,17 +1825,36 @@
 
       let cursorY = topOffset;
 
-      // Image (if any)
+      // Image (if any) — with rounded corners (no sharp edges) and IB logo overlay
+      let imageTopY = 0;
       if (hasImg) {
         const drawX = Math.round((W - imgDrawW) / 2);
-        const drawY = cursorY + Math.round((imgBlockH - imgDrawH) / 2);
+        const drawY = cursorY + imgPad;
+        imageTopY = drawY;
+        // Clip to rounded rect so the image has soft corners (like card view)
+        ctx.save();
+        roundRect(ctx, drawX, drawY, imgDrawW, imgDrawH, imgRadius);
+        ctx.clip();
         ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
-        // Thin border around the image
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = imgBorder;
-        ctx.strokeRect(drawX + imgBorder / 2, drawY + imgBorder / 2, imgDrawW - imgBorder, imgDrawH - imgBorder);
+        ctx.restore();
         cursorY += imgBlockH + gap;
       }
+
+      // IB logo block — always visible, top-right corner overlapping image (or top of text area)
+      const logoS = Math.round(W * 0.09);
+      const logoR = Math.round(W * 0.018);
+      const logoX = W - PAD - logoS;
+      const logoY = hasImg ? (imageTopY + Math.round(W * 0.02)) : (cursorY + Math.round(W * 0.01));
+      ctx.fillStyle = '#ff2929';
+      roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.round(W * 0.04) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('IB', logoX + logoS / 2, logoY + logoS / 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
 
       // Source label (no date, no ranking) — uppercase, red
       if (article.source) {
