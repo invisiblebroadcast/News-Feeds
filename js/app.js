@@ -604,9 +604,9 @@
       if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
 
       const prevBtn = container.querySelector('.reels-nav-prev');
-      if (prevBtn) prevBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(1); });
+      if (prevBtn) prevBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(-1); });
       const nextBtn = container.querySelector('.reels-nav-next');
-      if (nextBtn) nextBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(-1); });
+      if (nextBtn) nextBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(1); });
       updateNavArrows(container);
 
       let lastNavTime = 0;
@@ -1811,6 +1811,9 @@
       const totalContentH = hasImg ? (imgBlockH + gap + textBlockH) : textBlockH;
       // Canvas height: at least 1350 (4:5), more if content is taller
       const H = Math.max(1350, totalContentH + Math.round(W * 0.08));
+      c.height = H * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.imageSmoothingQuality = 'high';
       // Vertical centering offset
       const topOffset = Math.round((H - totalContentH) / 2);
 
