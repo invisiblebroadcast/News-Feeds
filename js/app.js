@@ -391,7 +391,7 @@
           '</select>' +
         '</div>' +
         '<div style="margin-bottom:16px">' +
-          '<textarea class="rr-notes" placeholder="Add notes\u2026"></textarea>' +
+          '<textarea class="rr-notes" placeholder="Add a comment\u2026"></textarea>' +
         '</div>' +
         '<div class="rr-actions">' +
           '<button class="btn btn-primary rr-read" style="font-size:0.85rem;padding:8px 16px">Read Article</button>' +
@@ -749,6 +749,7 @@
     const flagEl = reader.querySelector('.rr-flag');
     if (flagEl) {
       flagEl.value = ad.flag || '';
+      flagEl.disabled = !currentUser;
       flagEl.onchange = function() {
         if (!requireAuth()) { flagEl.value = ad.flag || ''; return; }
         const newData = getArticleData(article.link);
@@ -759,6 +760,7 @@
     const notesEl = reader.querySelector('.rr-notes');
     if (notesEl) {
       notesEl.value = ad.note || '';
+      notesEl.disabled = !currentUser;
       notesEl.oninput = function() {
         if (!requireAuth()) { notesEl.value = ad.note || ''; return; }
         const newData = getArticleData(article.link);
@@ -1704,11 +1706,28 @@
 
   /* ── Auth ── */
   let currentUser = null;
+  let authMode = 'signin'; // 'signin' or 'signup'
 
   function requireAuth() {
     if (currentUser) return true;
+    // Exit fullscreen so auth modal is visible
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     openAuthModal();
     return false;
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    const title = $('#auth-modal-title');
+    if (title) title.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
+    const submitBtn = $('#auth-submit-btn');
+    if (submitBtn) submitBtn.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
+    const nameField = $('#auth-name-field');
+    if (nameField) nameField.style.display = mode === 'signup' ? 'block' : 'none';
+    const repeatField = $('#auth-repeat-field');
+    if (repeatField) repeatField.style.display = mode === 'signup' ? 'block' : 'none';
+    $$('.auth-mode-tab').forEach(t => t.classList.toggle('active', t.dataset.authtab === mode));
+    showAuthMsg('');
   }
 
   function updateAuthUI(user) {
@@ -1719,7 +1738,7 @@
     const name = $('#auth-name');
     if (user) {
       if (btn) btn.style.display = 'none';
-      if (userDiv) { userDiv.style.display = 'inline-flex'; }
+      if (userDiv) userDiv.style.display = 'inline-flex';
       if (avatar && user.user_metadata?.avatar_url) avatar.src = user.user_metadata.avatar_url;
       if (name) name.textContent = user.user_metadata?.full_name || user.email || '';
     } else {
@@ -1766,7 +1785,8 @@
 
   function openAuthModal() {
     showAuthMsg('');
-    $$('#auth-email-form input').forEach(i => i.value = '');
+    setAuthMode('signin');
+    $$('#auth-form-fields input').forEach(i => i.value = '');
     $('#auth-modal').classList.add('open');
   }
 
@@ -1777,42 +1797,47 @@
   function bindAuth() {
     const client = SupabaseStore.getClient();
 
-    // Check existing session
     client.auth.getSession().then(({ data }) => {
       handleAuthChange(null, data.session);
     });
 
-    // Listen for auth changes
     client.auth.onAuthStateChange((event, session) => {
       handleAuthChange(event, session);
     });
 
-    // UI bindings
     const authBtn = $('#auth-btn');
     if (authBtn) authBtn.addEventListener('click', openAuthModal);
     const authClose = $('#auth-modal-close');
     if (authClose) authClose.addEventListener('click', closeAuthModal);
     const authModal = $('#auth-modal');
     if (authModal) authModal.addEventListener('click', e => { if (e.target === authModal) closeAuthModal(); });
-    const signinBtn = $('#auth-signin-btn');
-    if (signinBtn) signinBtn.addEventListener('click', () => {
-      const email = $('#auth-email')?.value.trim();
-      const pwd = $('#auth-password')?.value;
-      if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
-      signInWithEmail(email, pwd);
+
+    // Tab switching via delegation
+    document.addEventListener('click', e => {
+      const tab = e.target.closest('.auth-mode-tab');
+      if (tab && authModal?.classList.contains('open')) setAuthMode(tab.dataset.authtab);
     });
-    const signupBtn = $('#auth-signup-btn');
-    if (signupBtn) signupBtn.addEventListener('click', () => {
-      const name = $('#auth-name')?.value.trim();
-      const email = $('#auth-email')?.value.trim();
-      const pwd = $('#auth-password')?.value;
-      const pwd2 = $('#auth-password-repeat')?.value;
-      if (!name) { showAuthMsg('Please enter your name.'); return; }
-      if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
-      if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.'); return; }
-      if (pwd !== pwd2) { showAuthMsg('Passwords do not match.'); return; }
-      signUpWithEmail(name, email, pwd);
+
+    const submitBtn = $('#auth-submit-btn');
+    if (submitBtn) submitBtn.addEventListener('click', async () => {
+      if (authMode === 'signin') {
+        const email = $('#auth-email')?.value.trim();
+        const pwd = $('#auth-password')?.value;
+        if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
+        await signInWithEmail(email, pwd);
+      } else {
+        const name = $('#auth-name')?.value.trim();
+        const email = $('#auth-email')?.value.trim();
+        const pwd = $('#auth-password')?.value;
+        const pwd2 = $('#auth-password-repeat')?.value;
+        if (!name) { showAuthMsg('Please enter your name.'); return; }
+        if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
+        if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.'); return; }
+        if (pwd !== pwd2) { showAuthMsg('Passwords do not match.'); return; }
+        await signUpWithEmail(name, email, pwd);
+      }
     });
+
     const signoutBtn = $('#auth-signout-btn');
     if (signoutBtn) signoutBtn.addEventListener('click', signOut);
   }

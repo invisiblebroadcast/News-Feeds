@@ -209,7 +209,7 @@
         </div>
         <div class="setting-group">
           <label class="setting-label">Cloud Sync</label>
-          <p class="setting-desc">Your article flags, notes, likes, and history are synced to your Supabase account when signed in.</p>
+          <p class="setting-desc">Your article flags, comments, likes, and history are synced to your Supabase account when signed in.</p>
           <p style="font-size:0.82rem;color:var(--text-tertiary);">Sign in with Google or Email to enable cloud sync.</p>
         </div>
       </div>
@@ -247,7 +247,7 @@
           </select>
         </div>
         <div style="margin-top:10px;">
-          <textarea id="article-modal-notes" placeholder="Add notes for this article\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;resize:vertical;min-height:60px;transition:border-color var(--transition);"></textarea>
+          <textarea id="article-modal-notes" placeholder="Add a comment for this article\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;resize:vertical;min-height:60px;transition:border-color var(--transition);"></textarea>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" id="article-modal-read">Read Article</button>
@@ -310,29 +310,33 @@
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;">
             <circle cx="8" cy="8" r="6.5"/><path d="M8 10a3 3 0 100-6 3 3 0 000 6z"/><path d="M2 13.5a7 7 0 0112 0"/>
           </svg>
-          Sign In
+          <span id="auth-modal-title">Sign In</span>
         </h2>
         <button class="modal-close" id="auth-modal-close">&times;</button>
       </div>
       <div class="modal-body" id="auth-modal-body">
-        <div id="auth-email-form">
-          <input type="text" id="auth-name" placeholder="Full Name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+        <div class="auth-mode-tabs">
+          <button class="auth-mode-tab active" data-authtab="signin">Sign In</button>
+          <button class="auth-mode-tab" data-authtab="signup">Sign Up</button>
+        </div>
+        <div id="auth-form-fields">
+          <div id="auth-name-field" style="display:none">
+            <input type="text" id="auth-name" placeholder="Full Name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          </div>
           <input type="email" id="auth-email" placeholder="Email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
           <input type="password" id="auth-password" placeholder="Password (min 6 chars)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <input type="password" id="auth-password-repeat" placeholder="Repeat Password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" id="auth-signin-btn" style="flex:1;justify-content:center;">Sign In</button>
-            <button class="btn" id="auth-signup-btn" style="flex:1;justify-content:center;">Sign Up</button>
+          <div id="auth-repeat-field" style="display:none">
+            <input type="password" id="auth-password-repeat" placeholder="Repeat Password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
           </div>
-          <div id="auth-msg" style="margin-top:10px;font-size:0.82rem;color:var(--accent);text-align:center;"></div>
+          <button class="btn btn-primary" id="auth-submit-btn" style="width:100%;justify-content:center;padding:12px;">Sign In</button>
         </div>
+        <div id="auth-msg" style="margin-top:10px;font-size:0.82rem;color:var(--accent);text-align:center;"></div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/settings.js"></script>
   <script src="js/supabase-store.js"></script>
   <script src="js/feeds.js"></script>
