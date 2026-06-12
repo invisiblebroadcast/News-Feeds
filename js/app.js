@@ -281,7 +281,7 @@
 
     const thumbHtml = hasThumb
       ? '<div class="article-thumb" style="cursor:pointer" data-article="' + encoded + '">' +
-          '<img src="' + article.imageUrl + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+          '<img src="' + escAttr(enhanceImageUrl(article.imageUrl) || article.imageUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
         '</div>'
       : '';
 
@@ -293,7 +293,7 @@
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
 
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
-        '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share">&#x21AA;</button>' +
+        '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
         thumbHtml +
         '<div class="article-body">' +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
@@ -342,29 +342,33 @@
     showReel();
   }
 
-  function cardOverlayHtml() {
-    return '<div class="reels-overlay">' +
-      '<div class="reels-toolbar">' +
+  function cardOverlayHtml(includeToolbar) {
+    var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
+    if (includeToolbar !== false) {
+      html += '<div class="reels-toolbar">' +
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
         '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
         '<button class="reels-tool-btn reels-like-btn" title="Like">&#x1F44D;</button>' +
         '<button class="reels-tool-btn reels-dislike-btn" title="Dislike">&#x1F44E;</button>' +
-      '</div>' +
-      '<span class="reels-count"></span>' +
-      '<h2 class="reels-title"></h2>' +
-      '<div class="reels-meta">' +
-        '<span class="reels-source"></span>' +
-        '<span class="reels-date"></span>' +
-        '<span class="reels-flag" style="display:none"></span>' +
-      '</div>' +
-      '<p class="reels-summary"></p>' +
-      '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
-      '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
-      '<div class="reels-watermark">' +
-        '<span class="wm-brand">Invisible Broadcast</span>' +
-      '</div>' +
-    '</div>';
+      '</div>';
+    }
+    html += '<div class="reels-overlay">' +
+        '<span class="reels-count"></span>' +
+        '<h2 class="reels-title"></h2>' +
+        '<div class="reels-meta">' +
+          '<span class="reels-source"></span>' +
+          '<span class="reels-date"></span>' +
+          '<span class="reels-flag" style="display:none"></span>' +
+        '</div>' +
+        '<p class="reels-summary"></p>' +
+        '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
+        '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
+        '<div class="reels-watermark">' +
+          '<span class="wm-brand">Invisible Broadcast</span>' +
+        '</div>' +
+      '</div>';
+    return html;
   }
 
   function readerHtml() {
@@ -404,8 +408,17 @@
   function updateCard(cardEl, article, idx, total) {
     if (!cardEl || !article) return;
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-    if (hasThumb) { cardEl.style.backgroundImage = 'url(\'' + article.imageUrl.replace(/'/g, '%27') + '\')'; cardEl.style.backgroundSize = 'cover'; cardEl.style.backgroundPosition = 'center'; }
-    else { cardEl.style.backgroundImage = ''; }
+    const imgWrap = cardEl.querySelector('.reels-img-wrap');
+    const imgEl = cardEl.querySelector('.reels-img');
+    if (hasThumb && imgEl && imgWrap) {
+      imgEl.src = enhanceImageUrl(article.imageUrl) || article.imageUrl;
+      imgWrap.classList.remove('no-image');
+      imgWrap.style.display = '';
+      imgEl.onerror = function() { imgWrap.classList.add('no-image'); };
+    } else {
+      if (imgWrap) { imgWrap.classList.add('no-image'); imgWrap.style.display = ''; }
+      if (imgEl) imgEl.src = '';
+    }
 
     const count = cardEl.querySelector('.reels-count');
     if (count) count.textContent = (idx + 1) + ' / ' + total;
@@ -450,30 +463,16 @@
     const article = articles[idx];
     const total = articles.length;
 
-    const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-    const bgStyle = hasThumb ? article.imageUrl : '';
-    const bgCss = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
-
     const existing = el.main.querySelector('.reels-container');
 
     if (!existing) {
-      // First render — build the full DOM with stack
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<button class="reels-tool-btn" id="reels-refresh" title="Refresh">&#x21BB;</button>' +
           '<div class="reels-stack">' +
-            '<div class="reels-card"' + bgCss + '>' + cardOverlayHtml() + '</div>' +
-            '<div class="reels-card-under">' +
-              '<div class="reels-overlay">' +
-                '<span class="reels-count"></span>' +
-                '<h2 class="reels-title"></h2>' +
-                '<div class="reels-meta">' +
-                  '<span class="reels-source"></span>' +
-                  '<span class="reels-date"></span>' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
+            '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
+            '<div class="reels-card-under">' + cardOverlayHtml(false) + '</div>' +
             readerHtml() +
           '</div>' +
         '</div>';
@@ -500,7 +499,7 @@
         const si = e.target.closest('.reels-share-image');
         if (si) {
           e.stopPropagation();
-          handleShareImage(currentArticles[currentReelIndex]);
+          handleShareImage(currentArticles[currentReelIndex], si);
           return;
         }
         const fs = e.target.closest('.reels-fullscreen');
@@ -1597,47 +1596,264 @@
 
   const TITLE_COLORS = ['#e6edf3', '#f5e6d3', '#d3e8f5', '#e6d3f5', '#d3f5e0', '#f5e0d3', '#f0dbe8', '#dbe8f0', '#d4f0db', '#f0ecd4', '#e0dbf0', '#dbf0ec'];
 
-  async function handleShareImage(article) {
+  function enhanceImageUrl(url) {
+    let u = url;
+    u = u.replace(/[?&](w|width|size|h|height)=\d+/gi, '');
+    u = u.replace(/[-_](\d+)x(\d+)(\.\w+)$/i, '$3');
+    u = u.replace(/\?&$/, '').replace(/\?$/, '');
+    return u !== url ? u : null;
+  }
+
+  async function fetchOGImage(articleUrl) {
+    try {
+      const proxy = 'https://api.allorigins.win/raw?url=';
+      const resp = await fetch(proxy + encodeURIComponent(articleUrl));
+      if (!resp.ok) return null;
+      const html = await resp.text();
+      const m = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)
+            || html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+      return m ? m[1] : null;
+    } catch { return null; }
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.crossOrigin = 'anonymous';
+      img.src = src;
+    });
+  }
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    const lines = [];
+    const words = text.split(' ');
+    let line = '';
+    for (const word of words) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], x, y + i * lineHeight);
+    }
+    return lines.length;
+  }
+
+  async function imageToDataUrl(url) {
+    try {
+      const resp = await fetch(url, { mode: 'cors' });
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return new Promise(r => {
+        const fr = new FileReader();
+        fr.onload = () => r(fr.result);
+        fr.onerror = () => r(null);
+        fr.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+
+  async function loadImageWithFallback(url) {
+    try {
+      const resp = await fetch(url, { mode: 'cors' });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const dataUrl = await new Promise(r => {
+          const fr = new FileReader();
+          fr.onload = () => r(fr.result);
+          fr.readAsDataURL(blob);
+        });
+        const img = await loadImage(dataUrl);
+        if (img) return img;
+      }
+    } catch {}
+    try {
+      const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+      const resp = await fetch(proxyUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const dataUrl = await new Promise(r => {
+          const fr = new FileReader();
+          fr.onload = () => r(fr.result);
+          fr.readAsDataURL(blob);
+        });
+        const img = await loadImage(dataUrl);
+        if (img) return img;
+      }
+    } catch {}
+    return null;
+  }
+
+  async function handleShareImage(article, btn) {
+    btn && btn.classList.add('btn-busy');
     try {
       const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-      const bgStyle = hasThumb ? article.imageUrl : '';
       const fullSummary = stripHtml(article.summary);
       const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
+      const bgColor = '#0d1117';
 
-      const el = document.createElement('div');
-      el.style.cssText = 'position:fixed;left:-9999px;top:0;width:400px;z-index:-1;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;';
-      el.innerHTML =
-        '<div style="width:100%;min-height:500px;border-radius:12px;overflow:hidden;position:relative;background:' + (bgStyle ? 'transparent' : '#0d1117') + ';' + (bgStyle ? 'background-image:url(' + bgStyle.replace(/'/g, '%27') + ');background-size:cover;background-position:center;' : '') + '">' +
-          '<div style="position:absolute;top:20px;right:20px;width:36px;height:36px;background:#ff2929;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:700;color:#fff;z-index:1;">IB</div>' +
-          '<div style="background:linear-gradient(0deg,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.5) 50%,rgba(0,0,0,0.2) 100%);padding:48px 36px 36px;display:flex;flex-direction:column;justify-content:flex-end;min-height:500px;">' +
-            '<div style="font-size:0.9rem;color:#ff2929;font-weight:700;margin-bottom:8px;">' + escHtml(article.source) + ' &middot; ' + formatDateShort(article.pubDate) + '</div>' +
-            '<h2 style="font-size:1.5rem;font-weight:700;line-height:1.35;margin:0 0 12px;color:' + titleColor + ';">' + escHtml(article.title) + '</h2>' +
-            '<p style="font-size:0.9rem;line-height:1.7;color:rgba(255,255,255,0.8);margin:0 0 24px;">' + escHtml(fullSummary || '') + '</p>' +
-            '<div style="font-size:0.7rem;color:rgba(255,255,255,0.25);padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-weight:600;letter-spacing:0.04em;">Invisible Broadcast</div>' +
-          '</div>' +
-        '</div>';
-      document.body.appendChild(el);
+      let img = null;
+      let imgW = 0, imgH = 0;
+      if (hasThumb) {
+        try {
+          let finalUrl = await fetchOGImage(article.link);
+          if (!finalUrl) {
+            const enhanced = enhanceImageUrl(article.imageUrl);
+            finalUrl = enhanced || article.imageUrl;
+          }
+          const loaded = await loadImageWithFallback(finalUrl);
+          if (loaded) { img = loaded; imgW = img.naturalWidth; imgH = img.naturalHeight; }
+        } catch { img = null; }
+      }
 
-      const canvas = await html2canvas(el, { useCORS: true, scale: 2, backgroundColor: '#000000', allowTaint: false, logging: false });
-      el.remove();
+      const W = img && imgW > 0 ? Math.min(imgW, 3200) : 600;
+      const dpr = Math.max(window.devicePixelRatio || 1, 2);
+      const nativeScale = img ? W / imgW : 1;
+      const displayImgH = img ? Math.round(imgH * nativeScale) : 0;
+      const PAD = Math.round(W * 0.06);
+      const textW = W - PAD * 2;
+      const titleFontSize = Math.round(W * 0.04);
+      const bodyFontSize = Math.round(W * 0.022);
+      const smallFontSize = Math.round(W * 0.016);
+      const titleLineH = Math.round(titleFontSize * 1.3);
+      const bodyLineH = Math.round(bodyFontSize * 1.45);
 
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      if (!blob) { handleShare(article.link, article.title, article.source); return; }
+      const c = document.createElement('canvas');
+      c.width = W * dpr;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.scale(dpr, dpr);
+
+      ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+      const titleLines = wrapText(ctx, article.title || '', 0, 0, textW, titleLineH);
+      ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+      const summaryLines = fullSummary ? wrapText(ctx, fullSummary, 0, 0, textW, bodyLineH) : 0;
+
+      const textTop = displayImgH + (displayImgH > 0 ? Math.round(W * 0.02) : Math.round(W * 0.06));
+      const sourceY = textTop + Math.round(W * 0.03);
+      const titleY = sourceY + bodyFontSize + Math.round(W * 0.015) + (titleLines - 1) * titleLineH + titleLineH;
+      const summaryY = titleY + Math.round(W * 0.02) + (summaryLines - 1) * bodyLineH + bodyLineH;
+      const watermarkY = summaryY + Math.round(W * 0.03);
+      const totalH = watermarkY + Math.round(W * 0.035) + Math.round(W * 0.06);
+
+      c.height = totalH * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, W, totalH);
+
+      if (img && displayImgH > 0) {
+        ctx.drawImage(img, 0, 0, W, displayImgH);
+
+        const fadeH = Math.round(W * 0.12);
+        const botGrad = ctx.createLinearGradient(0, displayImgH - fadeH, 0, displayImgH);
+        botGrad.addColorStop(0, 'transparent');
+        botGrad.addColorStop(1, bgColor);
+        ctx.fillStyle = botGrad;
+        ctx.fillRect(0, displayImgH - fadeH, W, fadeH);
+
+        const topGrad = ctx.createLinearGradient(0, 0, 0, fadeH);
+        topGrad.addColorStop(0, bgColor);
+        topGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(0, 0, W, fadeH);
+
+        ctx.fillStyle = '#ff2929';
+        const badgeS = Math.round(W * 0.045), badgeX = W - Math.round(W * 0.025) - badgeS, badgeY = Math.round(W * 0.02);
+        roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.005));
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(W * 0.02) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+
+      ctx.fillStyle = '#ff2929';
+      ctx.font = 'bold ' + bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+      ctx.fillText((article.source || '') + ' \u00B7 ' + formatDateShort(article.pubDate), PAD, sourceY);
+
+      ctx.fillStyle = titleColor;
+      ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+      wrapText(ctx, article.title || '', PAD, titleY - (titleLines - 1) * titleLineH, textW, titleLineH);
+
+      if (fullSummary) {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+        wrapText(ctx, fullSummary, PAD, summaryY - (summaryLines - 1) * bodyLineH, textW, bodyLineH);
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.font = '600 ' + smallFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('INVISIBLE BROADCAST', PAD, watermarkY);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(PAD, watermarkY - Math.round(W * 0.02) - Math.round(W * 0.008), textW, 1);
+
+      const contentBottom = watermarkY + smallFontSize + Math.round(W * 0.015);
+      let cropX = 0, cropY = 0, cropW = W, cropH = Math.min(contentBottom, totalH);
+      if (!img || displayImgH === 0) {
+        const topMargin = Math.max(0, textTop - Math.round(W * 0.02));
+        cropX = PAD;
+        cropY = topMargin;
+        cropW = textW;
+        cropH = Math.min(contentBottom - topMargin, totalH - topMargin);
+      }
+      const cc = document.createElement('canvas');
+      cc.width = Math.round(cropW * dpr);
+      cc.height = Math.round(cropH * dpr);
+      const cctx = cc.getContext('2d');
+      cctx.imageSmoothingQuality = 'high';
+      cctx.drawImage(c, cropX * dpr, cropY * dpr, cropW * dpr, cropH * dpr, 0, 0, cropW * dpr, cropH * dpr);
+
+      const blob = await new Promise(r => cc.toBlob(r, 'image/png'));
+      if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
 
       const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
       if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: article.title });
+        btn && btn.classList.remove('btn-busy');
+        await navigator.share({ files: [file], title: article.title }).catch(() => {});
       } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'invisible-broadcast.png';
-        a.click();
-        URL.revokeObjectURL(a.href);
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+        } catch {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'invisible-broadcast.png';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }
+        btn && btn.classList.remove('btn-busy');
       }
     } catch (err) {
+      btn && btn.classList.remove('btn-busy');
       console.warn('Image share failed:', err.message);
       handleShare(article.link, article.title, article.source);
     }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   function exitFullscreen() {
@@ -1671,7 +1887,12 @@
       if (se) {
         e.stopPropagation();
         const url = decodeURIComponent(se.dataset.url);
-        handleShare(url, se.dataset.title, se.dataset.source);
+        const article = findArticleByLink(url);
+        if (article && article.imageUrl && article.imageUrl.startsWith('http')) {
+          handleShareImage(article, se);
+        } else {
+          handleShare(url, se.dataset.title, se.dataset.source);
+        }
         return;
       }
       const ae = e.target.closest('[data-article]');
