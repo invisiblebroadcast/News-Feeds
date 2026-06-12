@@ -1716,9 +1716,11 @@
       const W = img && imgW > 0 ? Math.min(imgW, 3200) : 600;
       const dpr = Math.max(window.devicePixelRatio || 1, 2);
       const nativeScale = img ? W / imgW : 1;
-      const displayImgH = img ? Math.round(imgH * nativeScale) : 0;
+      const displayImgH = img ? Math.round(imgH * nativeScale) : Math.round(W * 0.35);
+      const hasImg = img && imgW > 0;
       const PAD = Math.round(W * 0.06);
-      const textW = W - PAD * 2;
+      const textW = hasImg ? W - PAD * 2 : Math.round(W * 0.65);
+      const textX = hasImg ? PAD : Math.round((W - textW) / 2);
       const titleFontSize = Math.round(W * 0.04);
       const bodyFontSize = Math.round(W * 0.022);
       const smallFontSize = Math.round(W * 0.016);
@@ -1736,7 +1738,7 @@
       ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
       const summaryLines = fullSummary ? wrapText(ctx, fullSummary, 0, 0, textW, bodyLineH) : 0;
 
-      const textTop = displayImgH + (displayImgH > 0 ? Math.round(W * 0.02) : Math.round(W * 0.06));
+      const textTop = displayImgH + Math.round(W * 0.02);
       const sourceY = textTop + Math.round(W * 0.03);
       const titleY = sourceY + bodyFontSize + Math.round(W * 0.015) + (titleLines - 1) * titleLineH + titleLineH;
       const summaryY = titleY + Math.round(W * 0.02) + (summaryLines - 1) * bodyLineH + bodyLineH;
@@ -1749,7 +1751,7 @@
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, W, totalH);
 
-      if (img && displayImgH > 0) {
+      if (hasImg) {
         ctx.drawImage(img, 0, 0, W, displayImgH);
 
         const fadeH = Math.round(W * 0.12);
@@ -1764,45 +1766,45 @@
         topGrad.addColorStop(1, 'transparent');
         ctx.fillStyle = topGrad;
         ctx.fillRect(0, 0, W, fadeH);
-
-        ctx.fillStyle = '#ff2929';
-        const badgeS = Math.round(W * 0.045), badgeX = W - Math.round(W * 0.025) - badgeS, badgeY = Math.round(W * 0.02);
-        roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.005));
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold ' + Math.round(W * 0.02) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
-        ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
       }
 
       ctx.fillStyle = '#ff2929';
+      const badgeS = Math.round(W * 0.045), badgeX = W - Math.round(W * 0.025) - badgeS, badgeY = Math.round(W * 0.02);
+      roundRect(ctx, badgeX, badgeY, badgeS, badgeS, Math.round(W * 0.005));
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.round(W * 0.02) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.fillText('IB', badgeX + badgeS / 2, badgeY + badgeS / 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+
+      ctx.fillStyle = '#ff2929';
       ctx.font = 'bold ' + bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-      ctx.fillText((article.source || '') + ' \u00B7 ' + formatDateShort(article.pubDate), PAD, sourceY);
+      ctx.fillText((article.source || '') + ' \u00B7 ' + formatDateShort(article.pubDate), textX, sourceY);
 
       ctx.fillStyle = titleColor;
       ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-      wrapText(ctx, article.title || '', PAD, titleY - (titleLines - 1) * titleLineH, textW, titleLineH);
+      wrapText(ctx, article.title || '', textX, titleY - (titleLines - 1) * titleLineH, textW, titleLineH);
 
       if (fullSummary) {
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-        wrapText(ctx, fullSummary, PAD, summaryY - (summaryLines - 1) * bodyLineH, textW, bodyLineH);
+        wrapText(ctx, fullSummary, textX, summaryY - (summaryLines - 1) * bodyLineH, textW, bodyLineH);
       }
 
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.font = '600 ' + smallFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('INVISIBLE BROADCAST', PAD, watermarkY);
+      ctx.fillText('INVISIBLE BROADCAST', textX, watermarkY);
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(PAD, watermarkY - Math.round(W * 0.02) - Math.round(W * 0.008), textW, 1);
+      ctx.fillRect(textX, watermarkY - Math.round(W * 0.02) - Math.round(W * 0.008), textW, 1);
 
       const contentBottom = watermarkY + smallFontSize + Math.round(W * 0.015);
       let cropX = 0, cropY = 0, cropW = W, cropH = Math.min(contentBottom, totalH);
-      if (!img || displayImgH === 0) {
+      if (!hasImg) {
         const topMargin = Math.max(0, textTop - Math.round(W * 0.02));
-        cropX = PAD;
+        cropX = textX;
         cropY = topMargin;
         cropW = textW;
         cropH = Math.min(contentBottom - topMargin, totalH - topMargin);
