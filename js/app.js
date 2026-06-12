@@ -358,6 +358,7 @@
       $('#reels-next').addEventListener('click', nextReel);
       el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
         const link = decodeURIComponent(e.currentTarget.dataset.article);
+        exitFullscreen();
         openArticleDetail(link);
       });
       const st = $('#reels-share-text');
@@ -1167,6 +1168,11 @@
       console.warn('Image share failed:', err.message);
       handleShare(article.link, article.title, article.source);
     }
+  }
+
+  function exitFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
   }
 
   function toggleFullscreen() {
