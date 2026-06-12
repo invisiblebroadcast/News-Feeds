@@ -274,6 +274,9 @@
       ? '<span class="score-badge" style="color:' + (article._rank <= 3 ? 'var(--accent)' : 'var(--text-tertiary)') + '">#' + article._rank + '</span>'
       : '';
 
+    const ad = getArticleData(article.link);
+    const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
+
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share">&#x21AA;</button>' +
         thumbHtml +
@@ -284,6 +287,7 @@
             '<span class="source">' + escHtml(article.source) + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
+            flagHtml +
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
@@ -337,6 +341,7 @@
               '<div class="reels-meta">' +
                 '<span class="reels-source"></span>' +
                 '<span class="reels-date"></span>' +
+                '<span class="reels-flag" style="display:none"></span>' +
               '</div>' +
               '<p class="reels-summary"></p>' +
               '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
@@ -392,6 +397,13 @@
     if (date) date.textContent = formatDateShort(article.pubDate);
     const summary = container.querySelector('.reels-summary');
     if (summary) summary.textContent = stripHtml(article.summary).slice(0, 350);
+
+    const ad = getArticleData(article.link);
+    const flagEl = container.querySelector('.reels-flag');
+    if (flagEl) {
+      if (ad.flag) { flagEl.textContent = ad.flag; flagEl.style.display = 'inline'; flagEl.style.background = FLAG_COLORS[ad.flag] || 'var(--text-tertiary)'; }
+      else { flagEl.style.display = 'none'; }
+    }
 
     const readBtn = container.querySelector('.reels-read-btn');
     if (readBtn) readBtn.dataset.article = encodeURIComponent(article.link);
@@ -883,11 +895,35 @@
     });
   }
 
+  const ARTICLE_DATA_KEY = 'newsfeeds_article_data';
+  const FLAGS = ['', 'save', 'investigative', 'favorite', 'important', 'urgent'];
+  const FLAG_LABELS = { save: 'Save for later', investigative: 'Investigative', favorite: 'Favorite', important: 'Important', urgent: 'Urgent' };
+  const FLAG_COLORS = { save: '#3fb950', investigative: '#d29922', favorite: '#ff2929', important: '#58a6ff', urgent: '#f0883e' };
+
+  function getArticleData(link) {
+    try { return JSON.parse(localStorage.getItem(ARTICLE_DATA_KEY) || '{}')[link] || {}; }
+    catch { return {}; }
+  }
+
+  function saveArticleData(link, data) {
+    try {
+      const all = JSON.parse(localStorage.getItem(ARTICLE_DATA_KEY) || '{}');
+      if (data.flag || data.note) { all[link] = data; }
+      else { delete all[link]; }
+      localStorage.setItem(ARTICLE_DATA_KEY, JSON.stringify(all));
+    } catch {}
+  }
+
   function renderSubscriptionList() {
     const container = $('#subscription-list');
     if (!container) return;
     const allFeeds = FeedManager.getSubscribableFeeds();
-    const subscribed = FeedManager.getSubscribedFeeds();
+    let subscribed = FeedManager.getSubscribedFeeds();
+    if (subscribed.length === 0 && allFeeds.length > 0) {
+      const allUrls = allFeeds.filter(f => f.hasRss && f.url).map(f => f.url);
+      FeedManager.saveSubscribedFeeds(allUrls);
+      subscribed = allUrls;
+    }
     const grouped = {};
     for (const f of allFeeds) {
       const region = f.region || 'Other';
@@ -964,10 +1000,40 @@
     }
     el.articleModalRead.dataset.url = article.link;
     el.articleModalExt.dataset.url = article.link;
+
+    const ad = getArticleData(article.link);
+    const flagEl = $('#article-modal-flag');
+    const notesEl = $('#article-modal-notes');
+    if (flagEl) {
+      flagEl.value = ad.flag || '';
+      flagEl.onchange = function() {
+        const newData = getArticleData(article.link);
+        newData.flag = flagEl.value || '';
+        saveArticleData(article.link, newData);
+        renderCurrentList();
+      };
+    }
+    if (notesEl) {
+      notesEl.value = ad.note || '';
+      notesEl.oninput = function() {
+        const newData = getArticleData(article.link);
+        newData.note = notesEl.value || '';
+        saveArticleData(article.link, newData);
+      };
+    }
+
     el.articleModal.classList.add('open');
   }
 
   function closeArticleModal() { el.articleModal.classList.remove('open'); }
+
+  function renderCurrentList() {
+    const key = scopeKey();
+    const cached = scopeCache[key];
+    if (!cached) return;
+    const articles = getFilteredArticles(currentSubcat, cached);
+    renderTranslated(articles);
+  }
 
   async function openArticleReader(url, title) {
     el.sourceModalTitle.textContent = title || 'Original Article';
