@@ -492,16 +492,15 @@ img { max-width: 100%; height: auto; }
 }
 .reels-container .reels-nav-arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 16px;
   z-index: 9;
-  width: 24px;
-  height: 44px;
+  width: 28px;
+  height: 28px;
   border: none;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.7rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -516,13 +515,13 @@ img { max-width: 100%; height: auto; }
   color: #fff;
 }
 .reels-container .reels-nav-arrow:active {
-  transform: translateY(-50%) scale(0.92);
+  transform: scale(0.92);
 }
 .reels-container .reels-nav-prev {
-  left: 8px;
+  left: 16px;
 }
 .reels-container .reels-nav-next {
-  right: 8px;
+  right: 60px; /* leave room for the top-right toolbar (refresh, share, fullscreen) */
 }
 .reels-container:not(.reels-show-arrows) .reels-nav-arrow {
   display: none;
