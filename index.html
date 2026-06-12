@@ -189,6 +189,14 @@
           <div id="feed-validate-msg" class="feed-validate-msg"></div>
           <div id="feed-custom-list"></div>
         </div>
+        <div class="setting-group">
+          <label class="setting-label">Cloud Sync (GitHub)</label>
+          <p class="setting-desc">Enter a GitHub PAT with repo scope to sync flags &amp; notes to <code>data/article-data.json</code>. Stored locally only.</p>
+          <div class="feed-input-row">
+            <input type="password" id="github-token-input" placeholder="ghp_..." style="flex:1">
+            <span id="cloud-status" style="padding:0 8px;font-size:13px;line-height:36px"></span>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn" id="modal-cancel">Cancel</button>
@@ -259,6 +267,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="js/settings.js"></script>
+  <script src="js/store.js"></script>
   <script src="js/feeds.js"></script>
   <script src="js/fetcher.js"></script>
   <script src="js/translator.js"></script>
