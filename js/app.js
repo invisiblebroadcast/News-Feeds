@@ -61,7 +61,8 @@
     filtersPanel: $('#filters-panel'),
     viewToggle: $('#view-toggle'),
     githubTokenInput: $('#github-token-input'),
-    cloudStatus: $('#cloud-status')
+    cloudStatus: $('#cloud-status'),
+    refreshBtn: $('#refresh-btn')
   };
 
   if (!el.modal) return;
@@ -90,6 +91,16 @@
     const div = document.createElement('div');
     div.innerHTML = html;
     return div.textContent || div.innerText || '';
+  }
+
+  function cleanSummary(text) {
+    return text.replace(/\s*\[\.\.\.\]\s*$/, '')
+      .replace(/\s*\[\.\.\]\s*$/, '')
+      .replace(/\s*\.\.\.\s*$/, '')
+      .replace(/\s*…\s*$/, '')
+      .replace(/\s*\[more\]\s*$/i, '')
+      .replace(/\s*\[read more\]\s*$/i, '')
+      .trim();
   }
 
   function getDomain(url) {
@@ -284,7 +295,7 @@
         thumbHtml +
         '<div class="article-body">' +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
-          '<p class="article-summary">' + stripHtml(article.summary).slice(0, 250) + '</p>' +
+          '<p class="article-summary">' + cleanSummary(stripHtml(article.summary)).slice(0, 250) + '</p>' +
           '<div class="article-meta">' +
             '<span class="source">' + escHtml(article.source) + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
@@ -331,12 +342,15 @@
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
+          '<button class="reels-tool-btn" id="reels-refresh" title="Refresh">&#x21BB;</button>' +
           '<div class="reels-card"' + bgHtml + '>' +
             '<div class="reels-overlay">' +
               '<div class="reels-toolbar">' +
                 '<button class="reels-tool-btn" id="reels-share-text" title="Share as Text">&#x21AA;</button>' +
                 '<button class="reels-tool-btn" id="reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
                 '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
+                '<button class="reels-tool-btn reels-like-btn" title="Like">&#x1F44D;</button>' +
+                '<button class="reels-tool-btn reels-dislike-btn" title="Dislike">&#x1F44E;</button>' +
               '</div>' +
               '<span class="reels-count"></span>' +
               '<h2 class="reels-title"></h2>' +
@@ -346,6 +360,7 @@
                 '<span class="reels-flag" style="display:none"></span>' +
               '</div>' +
               '<p class="reels-summary"></p>' +
+              '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
               '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
               '<div class="reels-watermark">' +
                 '<span class="wm-brand">Invisible Broadcast</span>' +
@@ -410,6 +425,108 @@
       });
       const fs = $('#reels-fullscreen');
       if (fs) fs.addEventListener('click', e => { e.stopPropagation(); toggleFullscreen(); });
+
+      const rf = $('#reels-refresh');
+      if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
+
+      const rcontainer = el.main.querySelector('.reels-container');
+      rcontainer.addEventListener('click', e => {
+        if (e.target.closest('.reels-reader-close')) {
+          e.stopPropagation();
+          closeReelsReader();
+          return;
+        }
+        if (e.target.closest('.rr-read')) {
+          const btn = e.target.closest('.rr-read');
+          const url = btn.dataset.url;
+          if (!url) return;
+          const scroll = rcontainer.querySelector('.reels-reader-scroll');
+          const existingContent = scroll.querySelector('.rr-fetched');
+          if (existingContent) { existingContent.remove(); return; }
+          const wrapper = document.createElement('div');
+          wrapper.className = 'rr-fetched';
+          wrapper.style.cssText = 'margin-top:16px;border-top:1px solid var(--border-primary);padding-top:16px';
+          wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Loading\u2026</div>';
+          scroll.appendChild(wrapper);
+          (async () => {
+            try {
+              const html = await fetchArticleHtml(url);
+              if (html) {
+                wrapper.innerHTML = html;
+              } else {
+                wrapper.innerHTML = '<div style="text-align:center;padding:20px"><p style="color:var(--text-tertiary);margin-bottom:12px">Could not load article directly.</p><a href="' + escAttr(url) + '" target="_blank" class="btn btn-danger" style="font-size:0.85rem;padding:8px 16px;display:inline-block">Open in Browser</a></div>';
+              }
+            } catch {
+              wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Failed to load.</div>';
+            }
+          })();
+          return;
+        }
+        if (e.target.closest('.rr-open')) {
+          const btn = e.target.closest('.rr-open');
+          if (btn.href) window.open(btn.href, '_blank');
+          return;
+        }
+        if (e.target.closest('.reels-readmore-btn')) {
+          const btn = e.target.closest('.reels-readmore-btn');
+          const summary = rcontainer.querySelector('.reels-summary');
+          if (!summary) return;
+          if (summary.textContent === summary.dataset.full) {
+            summary.textContent = summary.dataset.full.slice(0, 350);
+            btn.textContent = 'Read more';
+          } else {
+            summary.textContent = summary.dataset.full;
+            btn.textContent = 'Show less';
+          }
+          return;
+        }
+        if (e.target.closest('.reels-like-btn')) {
+          const btn = e.target.closest('.reels-like-btn');
+          const article = currentArticles[currentReelIndex];
+          if (!article) return;
+          const ad = getArticleData(article.link);
+          if (ad.like) {
+            ad.like = false;
+            btn.classList.remove('active');
+          } else {
+            ad.like = true;
+            ad.dislike = false;
+            btn.classList.add('active');
+            const dislikeBtn = rcontainer.querySelector('.reels-dislike-btn');
+            if (dislikeBtn) dislikeBtn.classList.remove('active');
+          }
+          saveArticleData(article.link, ad);
+          return;
+        }
+        if (e.target.closest('.reels-dislike-btn')) {
+          const btn = e.target.closest('.reels-dislike-btn');
+          const article = currentArticles[currentReelIndex];
+          if (!article) return;
+          const ad = getArticleData(article.link);
+          if (ad.dislike) {
+            ad.dislike = false;
+            btn.classList.remove('active');
+          } else {
+            ad.dislike = true;
+            ad.like = false;
+            btn.classList.add('active');
+            const likeBtn = rcontainer.querySelector('.reels-like-btn');
+            if (likeBtn) likeBtn.classList.remove('active');
+          }
+          saveArticleData(article.link, ad);
+          return;
+        }
+      });
+      let lastWheelTime = 0;
+      const wheelHandler = e => {
+        const now = Date.now();
+        if (now - lastWheelTime < 500) return;
+        lastWheelTime = now;
+        e.preventDefault();
+        if (e.deltaY > 0) nextReel();
+        else prevReel();
+      };
+      rcontainer.addEventListener('wheel', wheelHandler, { passive: false });
     }
 
     // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
@@ -433,8 +550,17 @@
     if (source) source.textContent = article.source;
     const date = container.querySelector('.reels-date');
     if (date) date.textContent = formatDateShort(article.pubDate);
+    const summaryText = cleanSummary(stripHtml(article.summary));
     const summary = container.querySelector('.reels-summary');
-    if (summary) summary.textContent = stripHtml(article.summary).slice(0, 350);
+    if (summary) {
+      summary.textContent = summaryText.slice(0, 350);
+      summary.dataset.full = summaryText;
+    }
+    const readmoreBtn = container.querySelector('.reels-readmore-btn');
+    if (readmoreBtn) {
+      readmoreBtn.style.display = summaryText.length > 350 ? 'block' : 'none';
+      readmoreBtn.textContent = 'Read more';
+    }
 
     const ad = getArticleData(article.link);
     const flagEl = container.querySelector('.reels-flag');
@@ -449,6 +575,10 @@
     if (st2) { st2.dataset.url = encodeURIComponent(article.link); st2.dataset.title = article.title; st2.dataset.source = article.source; }
     const si2 = container.querySelector('#reels-share-image');
     if (si2) { si2.dataset.url = encodeURIComponent(article.link); si2.dataset.title = article.title; si2.dataset.source = article.source; }
+    const likeBtn = container.querySelector('.reels-like-btn');
+    if (likeBtn) likeBtn.classList.toggle('active', !!ad.like);
+    const dislikeBtn = container.querySelector('.reels-dislike-btn');
+    if (dislikeBtn) dislikeBtn.classList.toggle('active', !!ad.dislike);
   }
 
   function prevReel() {
@@ -491,36 +621,7 @@
     return null;
   }
 
-  function bindReelsReader() {
-    const container = document.querySelector('.reels-container');
-    if (!container) return;
-    container.querySelector('.reels-reader-close')?.addEventListener('click', e => { e.stopPropagation(); closeReelsReader(); });
-    container.querySelector('.rr-read')?.addEventListener('click', async function() {
-      const url = this.dataset.url;
-      if (!url) return;
-      const scroll = container.querySelector('.reels-reader-scroll');
-      const existingContent = scroll.querySelector('.rr-fetched');
-      if (existingContent) { existingContent.remove(); return; }
-      const wrapper = document.createElement('div');
-      wrapper.className = 'rr-fetched';
-      wrapper.style.cssText = 'margin-top:16px;border-top:1px solid var(--border-primary);padding-top:16px';
-      wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Loading\u2026</div>';
-      scroll.appendChild(wrapper);
-      try {
-        const html = await fetchArticleHtml(url);
-        if (html) {
-          wrapper.innerHTML = html;
-        } else {
-          wrapper.innerHTML = '<div style="text-align:center;padding:20px"><p style="color:var(--text-tertiary);margin-bottom:12px">Could not load article directly.</p><a href="' + escAttr(url) + '" target="_blank" class="btn btn-danger" style="font-size:0.85rem;padding:8px 16px;display:inline-block">Open in Browser</a></div>';
-        }
-      } catch {
-        wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Failed to load.</div>';
-      }
-    });
-    container.querySelector('.rr-open')?.addEventListener('click', function() {
-      if (this.href) window.open(this.href, '_blank');
-    });
-  }
+  function bindReelsReader() {}
 
   function openReelsReader(link) {
     const article = findArticleByLink(link);
@@ -532,7 +633,7 @@
     reader.querySelector('.rr-title').textContent = article.title;
     reader.querySelector('.rr-source').textContent = article.source;
     reader.querySelector('.rr-date').textContent = formatDateShort(article.pubDate);
-    reader.querySelector('.rr-summary').textContent = stripHtml(article.summary).slice(0, 1500);
+    reader.querySelector('.rr-summary').textContent = cleanSummary(stripHtml(article.summary)).slice(0, 1500);
     reader.querySelector('.rr-read').dataset.url = article.link;
     reader.querySelector('.rr-read').dataset.title = article.title;
     reader.querySelector('.rr-open').href = article.link;
@@ -557,7 +658,6 @@
     }
     reader.style.display = 'flex';
     reader.querySelector('.rr-fetched')?.remove();
-    bindReelsReader();
   }
 
   function closeReelsReader() {
@@ -676,9 +776,8 @@
 
     try {
       const key = scopeKey();
-      const isLive = currentMode === 'live';
 
-      if (!isLive && scopeCache[key]) {
+      if (scopeCache[key]) {
         isFetching = false;
         displayCurrentSubcat();
         return;
@@ -944,7 +1043,7 @@
       try { localStorage.setItem('github_token', token); } catch {}
     }
     closeSettings();
-    refreshAll();
+    displayCurrentSubcat();
   }
 
   function bindSettings() {
@@ -960,6 +1059,7 @@
         if (el.cloudStatus) el.cloudStatus.textContent = token ? '\u{1F7E2}' : '\u{26AA}';
       });
     }
+    if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
   }
 
   /* ── Custom Feeds ── */
@@ -1139,7 +1239,7 @@
     el.articleModalTitle.textContent = article.title;
     el.articleModalSource.textContent = article.source;
     el.articleModalDate.textContent = formatDate(article.pubDate);
-    el.articleModalSummary.textContent = stripHtml(article.summary).slice(0, 1500);
+    el.articleModalSummary.textContent = cleanSummary(stripHtml(article.summary)).slice(0, 1500);
     if (article.imageUrl && article.imageUrl.startsWith('http')) {
       el.articleModalImg.src = article.imageUrl;
       el.articleModalImgWrap.style.display = 'block';
