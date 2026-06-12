@@ -95,7 +95,18 @@
     changeAvatarFallback: $('#change-avatar-fallback'),
     changeAvatarPickBtn: $('#change-avatar-pick-btn'),
     changeAvatarUploadBtn: $('#change-avatar-upload-btn'),
-    changeAvatarMsg: $('#change-avatar-msg')
+    changeAvatarMsg: $('#change-avatar-msg'),
+    commentsPage: $('#comments-page'),
+    commentsBackBtn: $('#comments-back-btn'),
+    commentsList: $('#comments-list'),
+    commentsInput: $('#comments-input'),
+    commentsPostBtn: $('#comments-post-btn'),
+    commentsReplyPreview: $('#comments-reply-preview'),
+    commentsReplyText: $('#comments-reply-text'),
+    commentsReplyCancel: $('#comments-reply-cancel'),
+    deleteCommentModal: $('#delete-comment-modal'),
+    deleteCommentConfirm: $('#delete-comment-confirm'),
+    deleteCommentCancel: $('#delete-comment-cancel')
   };
 
   if (!el.modal) return;
@@ -670,13 +681,7 @@
         const commentBtn = e.target.closest('.reels-comment-btn');
         if (commentBtn) {
           if (!requireAuth()) return;
-          const card = stack.querySelector('.reels-card');
-          const box = card?.querySelector('.reels-comment-box');
-          if (box) {
-            box.style.display = 'block';
-            const input = box.querySelector('.reels-comment-input');
-            if (input) { input.value = getArticleData(currentArticles[currentReelIndex]?.link || '').note || ''; input.focus(); }
-          }
+          openCommentsPage(currentArticles[currentReelIndex]);
           return;
         }
         const commentSubmit = e.target.closest('.reels-comment-submit');
@@ -2024,7 +2029,27 @@
         const drawX = Math.round((W - imgDrawW) / 2);
         const drawY = cursorY + ibHeaderH;
         imageTopY = drawY;
-        ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
+        // Multi-pass downscale for sharper output when source is much larger than target.
+        // Step down in halves until within 2× of target, then draw final.
+        if (imgW > imgDrawW * 2) {
+          let curW = imgW, curH = imgH;
+          let curSrc = img;
+          while (curW > imgDrawW * 2) {
+            const nextW = Math.max(imgDrawW, Math.floor(curW / 2));
+            const nextH = Math.max(Math.round(curH * nextW / curW), 1);
+            const off = document.createElement('canvas');
+            off.width = nextW; off.height = nextH;
+            const octx = off.getContext('2d');
+            octx.imageSmoothingEnabled = true;
+            octx.imageSmoothingQuality = 'high';
+            octx.drawImage(curSrc, 0, 0, nextW, nextH);
+            curSrc = off;
+            curW = nextW; curH = nextH;
+          }
+          ctx.drawImage(curSrc, drawX, drawY, imgDrawW, imgDrawH);
+        } else {
+          ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
+        }
         // Top fade: black → transparent
         const fadeH = Math.round(imgDrawH * 0.18);
         const topGrad = ctx.createLinearGradient(0, drawY, 0, drawY + fadeH);
@@ -2688,6 +2713,166 @@
     }
   }
 
+  /* ── Comments Page ── */
+  let commentsContextArticle = null; // article being viewed
+  let commentsReplyToId = null; // comment id being replied to
+  let commentsPendingDeleteId = null; // comment id pending deletion
+
+  function openCommentsPage(article) {
+    if (!article) return;
+    commentsContextArticle = article;
+    commentsReplyToId = null;
+    if (el.commentsPage) el.commentsPage.style.display = 'flex';
+    if (el.commentsInput) { el.commentsInput.value = ''; el.commentsInput.placeholder = 'Add a comment…'; }
+    if (el.commentsPostBtn) el.commentsPostBtn.disabled = true;
+    hideReplyPreview();
+    renderCommentsList();
+    setTimeout(() => el.commentsInput?.focus(), 200);
+  }
+
+  function closeCommentsPage() {
+    if (el.commentsPage) el.commentsPage.style.display = 'none';
+    commentsContextArticle = null;
+    commentsReplyToId = null;
+    hideReplyPreview();
+  }
+
+  function showReplyPreview(commentText) {
+    if (!el.commentsReplyPreview) return;
+    const txt = commentText.length > 60 ? commentText.slice(0, 60) + '…' : commentText;
+    if (el.commentsReplyText) el.commentsReplyText.textContent = 'Replying to: ' + txt;
+    el.commentsReplyPreview.style.display = 'flex';
+    if (el.commentsInput) el.commentsInput.placeholder = 'Write a reply…';
+  }
+  function hideReplyPreview() {
+    if (el.commentsReplyPreview) el.commentsReplyPreview.style.display = 'none';
+    if (el.commentsInput) el.commentsInput.placeholder = 'Add a comment…';
+  }
+
+  function renderCommentsList() {
+    if (!commentsContextArticle || !el.commentsList) return;
+    const ad = getArticleData(commentsContextArticle.link);
+    const comments = (ad.comments && Array.isArray(ad.comments)) ? ad.comments : [];
+    if (comments.length === 0) {
+      el.commentsList.innerHTML = '<div class="comments-empty">No comments yet. Be the first!</div>';
+      return;
+    }
+    // Build threads: top-level comments with nested replies
+    const topLevel = comments.filter(c => !c.parentId);
+    let html = '';
+    topLevel.forEach(c => {
+      html += renderCommentItem(c, comments);
+    });
+    el.commentsList.innerHTML = html;
+  }
+
+  function renderCommentItem(comment, allComments) {
+    const replies = allComments.filter(c => c.parentId === comment.id);
+    const isMine = currentUser && comment.userId === currentUser.id;
+    const timeAgo = formatTimeAgo(comment.timestamp);
+    const initial = (comment.author || '?').charAt(0).toUpperCase();
+    let html = '<div class="comment-item" data-comment-id="' + comment.id + '">' +
+      '<div class="comment-avatar">' + escHtml(initial) + '</div>' +
+      '<div class="comment-body">' +
+        '<div class="comment-author">' + escHtml(comment.author || 'Anonymous') + '</div>' +
+        '<div class="comment-text">' + escHtml(comment.text) + '</div>' +
+        '<div class="comment-meta">' +
+          '<span class="comment-time">' + timeAgo + '</span>' +
+          '<button class="comment-action-btn comment-reply-btn" data-comment-id="' + comment.id + '">Reply</button>' +
+          (isMine ? '<button class="comment-action-btn danger comment-delete-btn" data-comment-id="' + comment.id + '">Delete</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    if (replies.length > 0) {
+      html += '<div class="comment-replies">';
+      replies.forEach(r => {
+        const rInitial = (r.author || '?').charAt(0).toUpperCase();
+        const rMine = currentUser && r.userId === currentUser.id;
+        const rTime = formatTimeAgo(r.timestamp);
+        html += '<div class="comment-reply" data-comment-id="' + r.id + '">' +
+          '<div class="comment-avatar">' + escHtml(rInitial) + '</div>' +
+          '<div class="comment-body">' +
+            '<div class="comment-author">' + escHtml(r.author || 'Anonymous') + '</div>' +
+            '<div class="comment-text">' + escHtml(r.text) + '</div>' +
+            '<div class="comment-meta">' +
+              '<span class="comment-time">' + rTime + '</span>' +
+              '<button class="comment-action-btn comment-reply-btn" data-comment-id="' + r.id + '">Reply</button>' +
+              (rMine ? '<button class="comment-action-btn danger comment-delete-btn" data-comment-id="' + r.id + '">Delete</button>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    return html;
+  }
+
+  function formatTimeAgo(ts) {
+    if (!ts) return '';
+    const now = Date.now();
+    const diff = now - ts;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
+    return new Date(ts).toLocaleDateString();
+  }
+
+  function postComment() {
+    if (!commentsContextArticle) return;
+    const text = el.commentsInput?.value?.trim();
+    if (!text) return;
+    if (!requireAuth()) return;
+    const ad = getArticleData(commentsContextArticle.link);
+    if (!ad.comments) ad.comments = [];
+    const comment = {
+      id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      text: text,
+      author: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'User',
+      userId: currentUser?.id || '',
+      timestamp: Date.now(),
+      parentId: commentsReplyToId || null
+    };
+    ad.comments.push(comment);
+    saveArticleData(commentsContextArticle.link, ad);
+    if (el.commentsInput) el.commentsInput.value = '';
+    if (el.commentsPostBtn) el.commentsPostBtn.disabled = true;
+    commentsReplyToId = null;
+    hideReplyPreview();
+    renderCommentsList();
+    // Scroll to bottom
+    if (el.commentsList) el.commentsList.scrollTop = el.commentsList.scrollHeight;
+  }
+
+  function setReplyTo(commentId) {
+    if (!commentsContextArticle) return;
+    const ad = getArticleData(commentsContextArticle.link);
+    const comments = ad.comments || [];
+    const c = comments.find(x => x.id === commentId);
+    if (!c) return;
+    commentsReplyToId = commentId;
+    showReplyPreview(c.text);
+    el.commentsInput?.focus();
+  }
+
+  function confirmDeleteComment(commentId) {
+    commentsPendingDeleteId = commentId;
+    if (el.deleteCommentModal) el.deleteCommentModal.classList.add('open');
+  }
+
+  function doDeleteComment() {
+    if (!commentsPendingDeleteId || !commentsContextArticle) return;
+    const ad = getArticleData(commentsContextArticle.link);
+    if (ad.comments) {
+      // Remove the comment and all its replies
+      ad.comments = ad.comments.filter(c => c.id !== commentsPendingDeleteId && c.parentId !== commentsPendingDeleteId);
+      saveArticleData(commentsContextArticle.link, ad);
+    }
+    commentsPendingDeleteId = null;
+    if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+    renderCommentsList();
+  }
+
   function bindAuth() {
     const client = SupabaseStore.getClient();
 
@@ -2787,6 +2972,48 @@
     }
     const changeAvatarUpload = $('#change-avatar-upload-btn');
     if (changeAvatarUpload) changeAvatarUpload.addEventListener('click', handleAvatarUpload);
+
+    // Comments page
+    if (el.commentsBackBtn) el.commentsBackBtn.addEventListener('click', closeCommentsPage);
+    if (el.commentsPostBtn) el.commentsPostBtn.addEventListener('click', postComment);
+    if (el.commentsInput) {
+      el.commentsInput.addEventListener('input', () => {
+        if (el.commentsPostBtn) el.commentsPostBtn.disabled = !el.commentsInput.value.trim();
+        // Auto-resize
+        el.commentsInput.style.height = 'auto';
+        el.commentsInput.style.height = Math.min(el.commentsInput.scrollHeight, 120) + 'px';
+      });
+      el.commentsInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          postComment();
+        }
+      });
+    }
+    if (el.commentsReplyCancel) el.commentsReplyCancel.addEventListener('click', () => { commentsReplyToId = null; hideReplyPreview(); });
+    if (el.commentsList) {
+      el.commentsList.addEventListener('click', e => {
+        const replyBtn = e.target.closest('.comment-reply-btn');
+        if (replyBtn) { setReplyTo(replyBtn.dataset.commentId); return; }
+        const deleteBtn = e.target.closest('.comment-delete-btn');
+        if (deleteBtn) { confirmDeleteComment(deleteBtn.dataset.commentId); return; }
+      });
+    }
+    if (el.deleteCommentConfirm) el.deleteCommentConfirm.addEventListener('click', doDeleteComment);
+    if (el.deleteCommentCancel) el.deleteCommentCancel.addEventListener('click', () => {
+      commentsPendingDeleteId = null;
+      if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+    });
+    const delClose = $('#delete-comment-modal-close');
+    if (delClose) delClose.addEventListener('click', () => {
+      commentsPendingDeleteId = null;
+      if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+    });
+    const delModal = $('#delete-comment-modal');
+    if (delModal) delModal.addEventListener('click', e => { if (e.target === delModal) {
+      commentsPendingDeleteId = null;
+      delModal.classList.remove('open');
+    } });
   }
 
   /* ── Init ── */

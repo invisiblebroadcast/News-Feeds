@@ -280,7 +280,7 @@
           </select>
         </div>
         <div style="margin-top:10px;">
-          <textarea id="article-modal-notes" placeholder="Add a comment for this article\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;resize:vertical;min-height:60px;transition:border-color var(--transition);"></textarea>
+          <textarea id="article-modal-notes" placeholder="Add a comment for this article…" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;resize:vertical;min-height:60px;transition:border-color var(--transition);"></textarea>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" id="article-modal-read">Read Article</button>
@@ -332,6 +332,43 @@
           <button class="activity-tab" data-actab="flagged">Flagged</button>
         </div>
         <div id="activity-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comments Page (takes over reels view, like Instagram Reels comments) -->
+  <div class="comments-page" id="comments-page" style="display:none">
+    <div class="comments-page-header">
+      <button class="comments-back-btn" id="comments-back-btn" title="Back">&#x2190;</button>
+      <h2>Comments</h2>
+      <div style="width:32px;"></div>
+    </div>
+    <div class="comments-list" id="comments-list"></div>
+    <div class="comments-input-area">
+      <div class="comments-reply-preview" id="comments-reply-preview" style="display:none">
+        <span id="comments-reply-text"></span>
+        <button class="comments-reply-cancel" id="comments-reply-cancel">&times;</button>
+      </div>
+      <div class="comments-input-row">
+        <textarea class="comments-input" id="comments-input" placeholder="Add a comment…" rows="1"></textarea>
+        <button class="comments-post-btn" id="comments-post-btn" title="Post">&#x27A4;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Comment Confirmation Modal -->
+  <div class="modal-overlay" id="delete-comment-modal">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h2>Delete Comment</h2>
+        <button class="modal-close" id="delete-comment-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 16px;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">Are you sure you want to delete this comment? This cannot be undone.</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn" id="delete-comment-cancel">Cancel</button>
+          <button class="btn btn-danger" id="delete-comment-confirm">Delete</button>
+        </div>
       </div>
     </div>
   </div>
