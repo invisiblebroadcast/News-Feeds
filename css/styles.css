@@ -146,6 +146,8 @@ img { max-width: 100%; height: auto; }
   cursor: pointer;
 }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-spin { animation: spin 1s linear infinite; }
 .btn {
   display: inline-flex;
   align-items: center;
