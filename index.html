@@ -43,7 +43,10 @@
           </button>
           <button class="btn" id="auth-btn">Sign In</button>
           <div class="auth-user" id="auth-user" style="display:none">
-            <img class="auth-avatar" id="auth-avatar" src="" alt="">
+            <div class="auth-avatar-wrap" title="Signed in">
+              <img class="auth-avatar" id="auth-avatar" src="" alt="">
+              <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
+            </div>
             <span class="auth-name" id="auth-name"></span>
             <button class="btn btn-ghost" id="auth-signout-btn" title="Sign Out" style="padding:3px 8px;font-size:0.75rem;">&#x2716;</button>
           </div>
@@ -345,18 +348,21 @@
           <button class="auth-mode-tab active" data-authtab="signin">Sign In</button>
           <button class="auth-mode-tab" data-authtab="signup">Sign Up</button>
         </div>
-        <div id="auth-form-fields">
+        <form id="auth-form-fields" novalidate autocomplete="on">
           <div id="auth-name-field" style="display:none">
-            <input type="text" id="auth-name" placeholder="Full Name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+            <input type="text" id="auth-name" placeholder="Full Name" required minlength="2" autocomplete="name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
           </div>
-          <input type="email" id="auth-email" placeholder="Email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <input type="password" id="auth-password" placeholder="Password (min 6 chars)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="email" id="auth-email" placeholder="Email" required autocomplete="email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="auth-password" placeholder="Password (min 6 chars)" required minlength="6" autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
           <div id="auth-repeat-field" style="display:none">
-            <input type="password" id="auth-password-repeat" placeholder="Repeat Password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+            <input type="password" id="auth-password-repeat" placeholder="Repeat Password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
           </div>
-          <button class="btn btn-primary" id="auth-submit-btn" style="width:100%;justify-content:center;padding:12px;">Sign In</button>
-        </div>
-        <div id="auth-msg" style="margin-top:10px;font-size:0.82rem;color:var(--accent);text-align:center;"></div>
+          <button type="submit" class="btn btn-primary" id="auth-submit-btn" style="width:100%;justify-content:center;padding:12px;position:relative;">
+            <span class="auth-submit-text">Sign In</span>
+            <span class="auth-submit-spinner" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">&#x21BB;</span>
+          </button>
+        </form>
+        <div id="auth-msg" class="auth-msg" style="margin-top:12px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
       </div>
     </div>
   </div>

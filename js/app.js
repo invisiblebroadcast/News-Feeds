@@ -2090,6 +2090,7 @@
   /* ── Auth ── */
   let currentUser = null;
   let authMode = 'signin'; // 'signin' or 'signup'
+  let authBusy = false;
 
   function requireAuth() {
     if (currentUser) return true;
@@ -2103,14 +2104,15 @@
     authMode = mode;
     const title = $('#auth-modal-title');
     if (title) title.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
-    const submitBtn = $('#auth-submit-btn');
-    if (submitBtn) submitBtn.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
+    const submitText = document.querySelector('.auth-submit-text');
+    if (submitText) submitText.textContent = mode === 'signin' ? 'Sign In' : 'Sign Up';
     const nameField = $('#auth-name-field');
     if (nameField) nameField.style.display = mode === 'signup' ? 'block' : 'none';
     const repeatField = $('#auth-repeat-field');
     if (repeatField) repeatField.style.display = mode === 'signup' ? 'block' : 'none';
     $$('.auth-mode-tab').forEach(t => t.classList.toggle('active', t.dataset.authtab === mode));
     showAuthMsg('');
+    clearInputErrors();
   }
 
   function updateAuthUI(user) {
@@ -2122,11 +2124,18 @@
     if (user) {
       if (btn) btn.style.display = 'none';
       if (userDiv) userDiv.style.display = 'inline-flex';
-      if (avatar && user.user_metadata?.avatar_url) avatar.src = user.user_metadata.avatar_url;
+      if (avatar) {
+        if (user.user_metadata?.avatar_url) {
+          avatar.src = user.user_metadata.avatar_url;
+        } else {
+          avatar.removeAttribute('src');
+        }
+      }
       if (name) name.textContent = user.user_metadata?.full_name || user.email || '';
     } else {
       if (btn) btn.style.display = '';
       if (userDiv) userDiv.style.display = 'none';
+      if (avatar) avatar.removeAttribute('src');
     }
   }
 
@@ -2139,42 +2148,152 @@
     }
   }
 
+  function setAuthBusy(busy) {
+    authBusy = busy;
+    const submitBtn = $('#auth-submit-btn');
+    const text = document.querySelector('.auth-submit-text');
+    const spinner = document.querySelector('.auth-submit-spinner');
+    if (submitBtn) submitBtn.disabled = busy;
+    if (text) text.style.opacity = busy ? '0' : '1';
+    if (spinner) spinner.style.display = busy ? 'inline-block' : 'none';
+  }
+
+  function clearInputErrors() {
+    $$('#auth-form-fields input').forEach(i => i.classList.remove('auth-form-input-error'));
+  }
+
+  function markInputError(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('auth-form-input-error');
+  }
+
+  function isValidEmail(email) {
+    // Pragmatic email regex — covers common cases without being overly strict
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function showAuthMsg(msg, type) {
+    const el2 = $('#auth-msg');
+    if (!el2) return;
+    el2.textContent = msg;
+    el2.classList.remove('error', 'success');
+    if (type) el2.classList.add(type);
+  }
+
   async function signInWithEmail(email, password) {
-    const { error } = await SupabaseStore.getClient().auth.signInWithPassword({ email, password });
-    if (error) showAuthMsg(error.message);
-    else closeAuthModal();
+    setAuthBusy(true);
+    showAuthMsg('', null);
+    clearInputErrors();
+    try {
+      const { data, error } = await SupabaseStore.getClient().auth.signInWithPassword({ email, password });
+      if (error) {
+        showAuthMsg(error.message, 'error');
+        markInputError('auth-password');
+        return;
+      }
+      // Success — show confirmation, then close
+      showAuthMsg('Signed in successfully!', 'success');
+      setTimeout(() => {
+        closeAuthModal();
+        showAuthMsg('', null);
+      }, 600);
+    } catch (err) {
+      showAuthMsg('Sign-in failed. Please try again.', 'error');
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   async function signUpWithEmail(name, email, password) {
-    const { error } = await SupabaseStore.getClient().auth.signUp({
-      email, password,
-      options: {
-        data: { full_name: name },
-        emailRedirectTo: window.location.origin
+    setAuthBusy(true);
+    showAuthMsg('', null);
+    clearInputErrors();
+    try {
+      const { data, error } = await SupabaseStore.getClient().auth.signUp({
+        email, password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: window.location.origin
+        }
+      });
+      if (error) {
+        showAuthMsg(error.message, 'error');
+        return;
       }
-    });
-    if (error) showAuthMsg(error.message);
-    else showAuthMsg('Account created! Check your email for confirmation link.');
+      // Check if email confirmation is required (no session means confirmation needed)
+      if (data?.session) {
+        showAuthMsg('Account created and signed in!', 'success');
+        setTimeout(() => {
+          closeAuthModal();
+          showAuthMsg('', null);
+        }, 600);
+      } else {
+        showAuthMsg('Account created! Check your email for a confirmation link.', 'success');
+        setTimeout(() => {
+          closeAuthModal();
+          showAuthMsg('', null);
+        }, 2500);
+      }
+    } catch (err) {
+      showAuthMsg('Sign-up failed. Please try again.', 'error');
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   async function signOut() {
-    await SupabaseStore.getClient().auth.signOut();
-  }
-
-  function showAuthMsg(msg) {
-    const el2 = $('#auth-msg');
-    if (el2) el2.textContent = msg;
+    try {
+      await SupabaseStore.getClient().auth.signOut();
+    } catch (err) {
+      console.warn('Sign-out failed:', err.message);
+    }
   }
 
   function openAuthModal() {
-    showAuthMsg('');
+    showAuthMsg('', null);
     setAuthMode('signin');
     $$('#auth-form-fields input').forEach(i => i.value = '');
-    $('#auth-modal').classList.add('open');
+    clearInputErrors();
+    const modal = $('#auth-modal');
+    if (modal) modal.classList.add('open');
+    // Focus first field after a short delay so the modal animation completes
+    setTimeout(() => { $('#auth-email')?.focus(); }, 100);
   }
 
   function closeAuthModal() {
-    $('#auth-modal').classList.remove('open');
+    const modal = $('#auth-modal');
+    if (modal) modal.classList.remove('open');
+    setTimeout(() => {
+      showAuthMsg('', null);
+      clearInputErrors();
+    }, 200);
+  }
+
+  function handleAuthSubmit() {
+    if (authBusy) return;
+    clearInputErrors();
+
+    if (authMode === 'signin') {
+      const email = $('#auth-email')?.value.trim();
+      const pwd = $('#auth-password')?.value;
+      if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); return; }
+      if (!pwd) { showAuthMsg('Please enter your password.', 'error'); markInputError('auth-password'); return; }
+      if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); return; }
+      signInWithEmail(email, pwd);
+    } else {
+      const name = $('#auth-name')?.value.trim();
+      const email = $('#auth-email')?.value.trim();
+      const pwd = $('#auth-password')?.value;
+      const pwd2 = $('#auth-password-repeat')?.value;
+      if (!name || name.length < 2) { showAuthMsg('Please enter your name (at least 2 characters).', 'error'); markInputError('auth-name'); return; }
+      if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); return; }
+      if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); return; }
+      if (!pwd) { showAuthMsg('Please enter a password.', 'error'); markInputError('auth-password'); return; }
+      if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.', 'error'); markInputError('auth-password'); return; }
+      if (!pwd2) { showAuthMsg('Please repeat your password.', 'error'); markInputError('auth-password-repeat'); return; }
+      if (pwd !== pwd2) { showAuthMsg('Passwords do not match.', 'error'); markInputError('auth-password-repeat'); return; }
+      signUpWithEmail(name, email, pwd);
+    }
   }
 
   function bindAuth() {
@@ -2201,24 +2320,20 @@
       if (tab && authModal?.classList.contains('open')) setAuthMode(tab.dataset.authtab);
     });
 
-    const submitBtn = $('#auth-submit-btn');
-    if (submitBtn) submitBtn.addEventListener('click', async () => {
-      if (authMode === 'signin') {
-        const email = $('#auth-email')?.value.trim();
-        const pwd = $('#auth-password')?.value;
-        if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
-        await signInWithEmail(email, pwd);
-      } else {
-        const name = $('#auth-name')?.value.trim();
-        const email = $('#auth-email')?.value.trim();
-        const pwd = $('#auth-password')?.value;
-        const pwd2 = $('#auth-password-repeat')?.value;
-        if (!name) { showAuthMsg('Please enter your name.'); return; }
-        if (!email || !pwd) { showAuthMsg('Please enter email and password.'); return; }
-        if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.'); return; }
-        if (pwd !== pwd2) { showAuthMsg('Passwords do not match.'); return; }
-        await signUpWithEmail(name, email, pwd);
-      }
+    // Form submit (Enter key or button click)
+    const authForm = $('#auth-form-fields');
+    if (authForm) {
+      authForm.addEventListener('submit', e => {
+        e.preventDefault();
+        handleAuthSubmit();
+      });
+    }
+
+    // Clear error styling when user starts typing
+    $$('#auth-form-fields input').forEach(input => {
+      input.addEventListener('input', () => {
+        input.classList.remove('auth-form-input-error');
+      });
     });
 
     const signoutBtn = $('#auth-signout-btn');
