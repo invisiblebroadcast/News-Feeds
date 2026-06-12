@@ -352,16 +352,19 @@
               '</div>' +
             '</div>' +
             '<div class="reels-reader" style="display:none">' +
-              '<button class="reels-reader-close" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-primary);font-size:28px;cursor:pointer;z-index:5;line-height:1;padding:4px">&times;</button>' +
-              '<div class="reels-reader-scroll" style="overflow-y:auto;flex:1;padding:20px 16px 16px">' +
-                '<h3 style="font-size:1.05rem;font-weight:700;margin:0 0 8px;color:var(--text-primary);line-height:1.4" class="rr-title"></h3>' +
-                '<div style="display:flex;gap:12px;font-size:0.8rem;color:var(--text-tertiary);margin-bottom:12px">' +
-                  '<span style="font-weight:600;color:var(--accent-red-hover)" class="rr-source"></span>' +
+              '<div class="reels-reader-header">' +
+                '<span></span>' +
+                '<button class="reels-reader-close">&times;</button>' +
+              '</div>' +
+              '<div class="reels-reader-scroll">' +
+                '<h3 class="rr-title"></h3>' +
+                '<div class="rr-meta">' +
+                  '<span class="rr-source"></span>' +
                   '<span class="rr-date"></span>' +
                 '</div>' +
-                '<p style="font-size:0.88rem;line-height:1.6;color:var(--text-secondary);margin:0 0 16px" class="rr-summary"></p>' +
+                '<p class="rr-summary"></p>' +
                 '<div style="margin-bottom:12px">' +
-                  '<select class="rr-flag" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;cursor:pointer">' +
+                  '<select class="rr-flag">' +
                     '<option value="">No flag</option>' +
                     '<option value="save">Save for later</option>' +
                     '<option value="investigative">Investigative</option>' +
@@ -371,9 +374,9 @@
                   '</select>' +
                 '</div>' +
                 '<div style="margin-bottom:16px">' +
-                  '<textarea class="rr-notes" placeholder="Add notes\u2026" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;resize:vertical;min-height:50px"></textarea>' +
+                  '<textarea class="rr-notes" placeholder="Add notes\u2026"></textarea>' +
                 '</div>' +
-                '<div style="display:flex;gap:10px">' +
+                '<div class="rr-actions">' +
                   '<button class="btn btn-primary rr-read" style="font-size:0.85rem;padding:8px 16px">Read Article</button>' +
                   '<button class="btn btn-danger rr-open" style="font-size:0.85rem;padding:8px 16px">Open in Browser</button>' +
                 '</div>' +
@@ -387,11 +390,11 @@
       $('#reels-prev').addEventListener('click', prevReel);
       $('#reels-next').addEventListener('click', nextReel);
       el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
+        e.stopPropagation();
         const link = decodeURIComponent(e.currentTarget.dataset.article);
         if (document.fullscreenElement) {
           openReelsReader(link);
         } else {
-          exitFullscreen();
           openArticleDetail(link);
         }
       });
@@ -491,7 +494,7 @@
   function bindReelsReader() {
     const container = document.querySelector('.reels-container');
     if (!container) return;
-    container.querySelector('.reels-reader-close')?.addEventListener('click', closeReelsReader);
+    container.querySelector('.reels-reader-close')?.addEventListener('click', e => { e.stopPropagation(); closeReelsReader(); });
     container.querySelector('.rr-read')?.addEventListener('click', async function() {
       const url = this.dataset.url;
       if (!url) return;
@@ -564,6 +567,7 @@
     if (reader) reader.style.display = 'none';
     const scroll = container.querySelector('.reels-reader-scroll');
     if (scroll) { const f = scroll.querySelector('.rr-fetched'); if (f) f.remove(); }
+    if (el.articleModal.classList.contains('open')) closeArticleModal();
   }
 
   function requestReelFullscreen() {
@@ -921,7 +925,7 @@
     renderSubscriptionList();
     if (el.githubTokenInput) {
       el.githubTokenInput.value = localStorage.getItem('github_token') || '';
-      el.cloudStatus.textContent = CloudStore.hasToken() ? '\u{1F7E2}' : '\u{26AA}';
+      if (el.cloudStatus) el.cloudStatus.textContent = CloudStore.hasToken() ? '\u{1F7E2}' : '\u{26AA}';
     }
     el.modal.classList.add('open');
   }
@@ -944,7 +948,7 @@
   }
 
   function bindSettings() {
-    el.settingsBtn.addEventListener('click', openSettings);
+    el.settingsBtn.addEventListener('click', e => { e.stopPropagation(); openSettings(); });
     el.modalClose.addEventListener('click', closeSettings);
     el.modalCancel.addEventListener('click', closeSettings);
     el.modalSave.addEventListener('click', saveSettings);
@@ -953,7 +957,7 @@
       el.githubTokenInput.addEventListener('input', function() {
         const token = this.value.trim();
         try { localStorage.setItem('github_token', token); } catch {}
-        el.cloudStatus.textContent = token ? '\u{1F7E2}' : '\u{26AA}';
+        if (el.cloudStatus) el.cloudStatus.textContent = token ? '\u{1F7E2}' : '\u{26AA}';
       });
     }
   }
@@ -1339,6 +1343,7 @@
 
   function bindArticleClicks() {
     el.main.addEventListener('click', e => {
+      if (e.target.closest('.reels-container')) return;
       const se = e.target.closest('.card-share-btn');
       if (se) {
         e.stopPropagation();

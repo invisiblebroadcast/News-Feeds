@@ -155,6 +155,7 @@ img { max-width: 100%; height: auto; }
   border-radius: var(--radius);
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  touch-action: manipulation;
   font-size: 0.85rem;
   font-family: var(--font);
   font-weight: 500;
@@ -510,6 +511,82 @@ img { max-width: 100%; height: auto; }
   flex-direction: column;
   z-index: 10;
   overflow: hidden;
+}
+.reels-reader-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+.reels-reader-close {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.6rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.reels-reader-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 16px;
+}
+.reels-reader-scroll .rr-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.reels-reader-scroll .rr-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  margin-bottom: 14px;
+}
+.reels-reader-scroll .rr-source {
+  font-weight: 600;
+  color: var(--accent-red-hover);
+}
+.reels-reader-scroll .rr-summary {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  margin: 0 0 18px;
+}
+.reels-reader-scroll .rr-flag {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+}
+.reels-reader-scroll .rr-notes {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font);
+  outline: none;
+  resize: vertical;
+  min-height: 50px;
+}
+.reels-reader-scroll .rr-actions {
+  display: flex;
+  gap: 10px;
 }
 
 @media (max-width: 768px) {
@@ -894,26 +971,30 @@ img { max-width: 100%; height: auto; }
 
 .modal-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
+  flex-direction: column;
+  padding: 0;
   border-bottom: 1px solid var(--border-primary);
 }
-.modal-header h2 {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-.modal-close {
+.modal-header .modal-close {
+  align-self: flex-end;
+  order: -1;
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 1.3rem;
+  font-size: 1.5rem;
+  font-weight: 700;
   cursor: pointer;
-  padding: 4px;
+  padding: 10px 16px 4px;
   line-height: 1;
   transition: color var(--transition);
 }
-.modal-close:hover { color: var(--text-primary); }
+.modal-header .modal-close:hover { color: var(--text-primary); }
+.modal-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 4px 24px 20px;
+  margin: 0;
+}
 
 .modal-body {
   padding: 24px;
@@ -1199,7 +1280,11 @@ img { max-width: 100%; height: auto; }
     max-width: 100%;
     border-radius: var(--radius);
   }
-  .modal-header, .modal-body, .modal-footer {
+  .modal-header h2 {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .modal-body, .modal-footer {
     padding-left: 16px;
     padding-right: 16px;
   }
