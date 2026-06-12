@@ -398,6 +398,30 @@
       // Highlight the fullscreen button when active
       const fsBtns = c.querySelectorAll('.reels-fullscreen');
       fsBtns.forEach(b => b.classList.toggle('active', isReelsFullscreen));
+      // Show/hide fullscreen overlay header
+      const fsHeader = c.querySelector('#reels-fs-header');
+      if (fsHeader) {
+        fsHeader.style.display = isReelsFullscreen ? 'flex' : 'none';
+        if (isReelsFullscreen) populateFsHeader(c);
+      }
+    }
+  }
+
+  function populateFsHeader(container) {
+    const tabsEl = container.querySelector('#reels-fs-tabs');
+    const searchEl = container.querySelector('#reels-fs-search-input');
+    if (!tabsEl) return;
+    // Populate tabs: Global / India
+    const nations = FeedManager.getNations ? FeedManager.getNations() : {};
+    let html = '<button class="fs-tab ' + (currentScope === 'global' ? 'active' : '') + '" data-fs-scope="global">Global</button>';
+    for (const [key, label] of Object.entries(nations)) {
+      html += '<button class="fs-tab ' + (currentScope === 'nation' && currentNation === key ? 'active' : '') + '" data-fs-scope="nation" data-fs-nation="' + key + '">' + label + '</button>';
+    }
+    tabsEl.innerHTML = html;
+    // Search input
+    if (searchEl) {
+      const searchInput = $('#search-input');
+      searchEl.value = searchInput?.value || '';
     }
   }
   document.addEventListener('fullscreenchange', updateReelsFullscreen);
@@ -574,6 +598,11 @@
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
+          // Fullscreen overlay header — only visible in fullscreen
+          '<div class="reels-fs-header" id="reels-fs-header" style="display:none">' +
+            '<div class="reels-fs-tabs" id="reels-fs-tabs"></div>' +
+            '<div class="reels-fs-search"><input type="text" id="reels-fs-search-input" placeholder="Search..."></div>' +
+          '</div>' +
           '<div class="reels-stack">' +
             '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
             '<div class="reels-card-under">' + cardOverlayHtml(false) + '</div>' +
@@ -724,7 +753,8 @@
         }
         // Card background click → enter fullscreen (if not already)
         const card = e.target.closest('.reels-card');
-        if (card && !e.target.closest('button') && !e.target.closest('.reels-comment-box') && !e.target.closest('a')) {
+        // Only trigger on card background (not on any interactive element)
+        if (card && !e.target.closest('button, a, input, textarea, .reels-comment-box, .reels-toolbar, .reels-actions, .reels-overlay button, .reels-home-btn')) {
           e.stopPropagation();
           if (!isReelsFullscreen && !document.fullscreenElement) {
             requestReelFullscreen();
@@ -843,6 +873,14 @@
         under.className = 'reels-card-under';
         under.style.transform = 'translateX(100%)'; // explicitly off-screen right
         under.style.transition = '';
+        // Force image reload by clearing src first
+        const underImg = under.querySelector('.reels-img');
+        if (underImg) {
+          const newSrc = enhanceImageUrl(nextArticle.imageUrl) || nextArticle.imageUrl || '';
+          if (underImg.src !== newSrc) {
+            underImg.src = newSrc;
+          }
+        }
       } else {
         under.style.display = 'none';
       }
@@ -1043,6 +1081,39 @@
       btn.classList.add('active');
       displayCurrentSubcat();
     });
+    // Fullscreen header tabs and search
+    document.addEventListener('click', e => {
+      const tab = e.target.closest('.fs-tab');
+      if (tab) {
+        const scope = tab.dataset.fsScope;
+        const nation = tab.dataset.fsNation;
+        if (scope === 'global') {
+          currentScope = 'global';
+        } else if (scope === 'nation' && nation) {
+          currentScope = 'nation';
+          currentNation = nation;
+          FeedManager.setSelectedNation(nation);
+        }
+        // Re-render
+        renderTopTabs();
+        refreshAll();
+        // Update active state in both header and fs-header
+        $$('.fs-tab').forEach(t => t.classList.toggle('active', t.dataset.fsScope === currentScope && (!t.dataset.fsNation || t.dataset.fsNation === currentNation)));
+        $$('#top-tabs .tab-item').forEach(t => t.classList.toggle('active', t.dataset.scope === currentScope && (!t.dataset.nation || t.dataset.nation === currentNation)));
+      }
+    });
+    const fsSearch = document.getElementById('reels-fs-search-input');
+    if (fsSearch) {
+      fsSearch.addEventListener('input', e => {
+        const val = e.target.value;
+        // Sync with main search
+        const mainSearch = $('#search-input');
+        if (mainSearch) mainSearch.value = val;
+        // Trigger search by dispatching event or calling directly
+        const evt = new Event('input', { bubbles: true });
+        if (mainSearch) mainSearch.dispatchEvent(evt);
+      });
+    }
   }
 
   /* ── Fetch & Refresh ── */
@@ -2822,11 +2893,7 @@
     if (!article) return;
     commentsContextArticle = article;
     commentsReplyToId = null;
-    // Exit fullscreen so the comments page is visible (fullscreen hides other DOM)
-    if (document.fullscreenElement || document.webkitFullscreenElement) {
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    }
+    // Comments page uses position:fixed with high z-index, so it works in fullscreen too
     if (el.commentsPage) el.commentsPage.style.display = 'flex';
     if (el.commentsInput) { el.commentsInput.value = ''; el.commentsInput.placeholder = 'Add a comment…'; }
     if (el.commentsPostBtn) el.commentsPostBtn.disabled = true;
@@ -3095,7 +3162,7 @@
 
     // Comments page
     if (el.commentsBackBtn) el.commentsBackBtn.addEventListener('click', closeCommentsPage);
-    // Draggable resize for comments page
+    // Draggable resize for comments page — larger drag area, smoother interaction
     const dragHandle = $('#comments-drag-handle');
     if (dragHandle && el.commentsPage) {
       let dragStartY = 0, dragStartH = 0, dragging = false;
@@ -3108,7 +3175,7 @@
       const onDragMove = (clientY) => {
         if (!dragging) return;
         const dy = dragStartY - clientY;
-        const newH = Math.min(window.innerHeight * 0.9, Math.max(280, dragStartH + dy));
+        const newH = Math.min(window.innerHeight * 0.92, Math.max(250, dragStartH + dy));
         el.commentsPage.style.height = newH + 'px';
       };
       const onDragEnd = () => { dragging = false; };
