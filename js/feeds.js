@@ -240,6 +240,6 @@ const FeedManager = (() => {
     getNations, defaultNation, getSelectedNation, setSelectedNation,
     getFeeds, getFeedsBySubcat,
     getCustomFeeds, addCustomFeed, removeCustomFeed, validateFeed,
-    getSubscribableFeeds, getSubscribedFeeds, isSubscribed, toggleSubscription
+    getSubscribableFeeds, getSubscribedFeeds, saveSubscribedFeeds, isSubscribed, toggleSubscription
   };
 })();
