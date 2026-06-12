@@ -2219,12 +2219,19 @@
   }
 
   async function signUpWithEmail(name, email, password) {
+    console.log('[Auth] signUpWithEmail started for:', email);
     setAuthBusy(true);
-    showAuthMsg('', null);
+    showAuthMsg('Connecting to server...', null);
     clearInputErrors();
     try {
+      // Verify Supabase client is available
+      const client = SupabaseStore.getClient();
+      if (!client) {
+        throw new Error('Auth service is not available. Please refresh the page and try again.');
+      }
+      console.log('[Auth] Supabase client available, calling signUp...');
       const { data, error } = await withTimeout(
-        SupabaseStore.getClient().auth.signUp({
+        client.auth.signUp({
           email, password,
           options: {
             data: { full_name: name },
@@ -2234,9 +2241,10 @@
         20000,
         'Sign-up'
       );
+      console.log('[Auth] signUp response:', { hasSession: !!data?.session, hasUser: !!data?.user, error });
       if (error) {
         showAuthMsg(error.message, 'error');
-        console.warn('Auth sign-up error:', error);
+        console.warn('[Auth] sign-up error:', error);
         return;
       }
       // Check if email confirmation is required (no session means confirmation needed)
@@ -2256,7 +2264,7 @@
         }, 4000);
       }
     } catch (err) {
-      console.error('Sign-up failed:', err);
+      console.error('[Auth] Sign-up failed:', err);
       showAuthMsg(err.message || 'Sign-up failed. Please try again.', 'error');
     } finally {
       setAuthBusy(false);
@@ -2280,6 +2288,16 @@
     if (modal) modal.classList.add('open');
     // Focus first field after a short delay so the modal animation completes
     setTimeout(() => { $('#auth-email')?.focus(); }, 100);
+    // Verify auth service is available
+    try {
+      const client = SupabaseStore.getClient();
+      if (!client) {
+        showAuthMsg('Auth service unavailable. Please refresh the page.', 'error');
+      }
+    } catch (err) {
+      console.error('[Auth] Failed to get Supabase client:', err);
+      showAuthMsg('Auth service error. Please refresh the page.', 'error');
+    }
   }
 
   function closeAuthModal() {
@@ -2292,21 +2310,24 @@
   }
 
   function handleAuthSubmit() {
+    console.log('[Auth] handleAuthSubmit called, authMode =', authMode, 'authBusy =', authBusy);
     if (authBusy) return;
     clearInputErrors();
 
     if (authMode === 'signin') {
       const email = $('#auth-email')?.value.trim();
       const pwd = $('#auth-password')?.value;
-      if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); return; }
-      if (!pwd) { showAuthMsg('Please enter your password.', 'error'); markInputError('auth-password'); return; }
-      if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); return; }
+      if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); console.warn('[Auth] Sign-in: missing email'); return; }
+      if (!pwd) { showAuthMsg('Please enter your password.', 'error'); markInputError('auth-password'); console.warn('[Auth] Sign-in: missing password'); return; }
+      if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); console.warn('[Auth] Sign-in: invalid email format:', email); return; }
+      console.log('[Auth] Sign-in: calling signInWithEmail');
       signInWithEmail(email, pwd);
     } else {
       const name = $('#auth-name')?.value.trim();
       const email = $('#auth-email')?.value.trim();
       const pwd = $('#auth-password')?.value;
       const pwd2 = $('#auth-password-repeat')?.value;
+      console.log('[Auth] Sign-up attempt:', { name, email, pwdLength: pwd?.length, hasRepeat: !!pwd2 });
       if (!name || name.length < 2) { showAuthMsg('Please enter your name (at least 2 characters).', 'error'); markInputError('auth-name'); return; }
       if (!email) { showAuthMsg('Please enter your email.', 'error'); markInputError('auth-email'); return; }
       if (!isValidEmail(email)) { showAuthMsg('Please enter a valid email address.', 'error'); markInputError('auth-email'); return; }
@@ -2314,6 +2335,7 @@
       if (pwd.length < 6) { showAuthMsg('Password must be at least 6 characters.', 'error'); markInputError('auth-password'); return; }
       if (!pwd2) { showAuthMsg('Please repeat your password.', 'error'); markInputError('auth-password-repeat'); return; }
       if (pwd !== pwd2) { showAuthMsg('Passwords do not match.', 'error'); markInputError('auth-password-repeat'); return; }
+      console.log('[Auth] Sign-up: calling signUpWithEmail');
       signUpWithEmail(name, email, pwd);
     }
   }
