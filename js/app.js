@@ -996,11 +996,21 @@
   }
 
   async function refreshAll() {
-    const wasFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
     const key = scopeKey();
+    const overlay = document.createElement('div');
+    overlay.className = 'refresh-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:300';
+    overlay.innerHTML = '<div class="loading-spinner"></div>';
+    document.body.appendChild(overlay);
+    if (el.refreshBtn) el.refreshBtn.classList.add('btn-spin');
+
     scopeCache[key] = null;
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
-    if (!feeds.length) return;
+    if (!feeds.length) {
+      overlay.remove();
+      if (el.refreshBtn) el.refreshBtn.classList.remove('btn-spin');
+      return;
+    }
     const groups = {};
     const batchSize = 3;
     for (let i = 0; i < feeds.length; i += batchSize) {
@@ -1022,6 +1032,8 @@
     scopeCache[key] = { articles: allArticles, groups };
     renderSubTabs();
     updateStickyHeader();
+    if (el.refreshBtn) el.refreshBtn.classList.remove('btn-spin');
+    overlay.remove();
     displayCurrentSubcat();
   }
 
