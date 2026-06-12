@@ -2077,7 +2077,7 @@
         } else {
           ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
         }
-        // Top fade: black → transparent
+         // Top fade: black → transparent
         const fadeH = Math.round(imgDrawH * 0.18);
         const topGrad = ctx.createLinearGradient(0, drawY, 0, drawY + fadeH);
         topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
@@ -2090,6 +2090,19 @@
         botGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = botGrad;
         ctx.fillRect(drawX, drawY + imgDrawH - fadeH, imgDrawW, fadeH);
+        // Left fade: black → transparent
+        const fadeW = Math.round(imgDrawW * 0.12);
+        const leftGrad = ctx.createLinearGradient(drawX, 0, drawX + fadeW, 0);
+        leftGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
+        leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = leftGrad;
+        ctx.fillRect(drawX, drawY, fadeW, imgDrawH);
+        // Right fade: transparent → black
+        const rightGrad = ctx.createLinearGradient(drawX + imgDrawW - fadeW, 0, drawX + imgDrawW, 0);
+        rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        rightGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
+        ctx.fillStyle = rightGrad;
+        ctx.fillRect(drawX + imgDrawW - fadeW, drawY, fadeW, imgDrawH);
         cursorY += imgBlockH + gap;
       }
 
