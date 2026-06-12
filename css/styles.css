@@ -121,13 +121,19 @@ img { max-width: 100%; height: auto; }
 }
 @media (max-width: 480px) {
   .header-controls {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap;
     gap: 6px;
-    scrollbar-width: none;
   }
-  .header-controls::-webkit-scrollbar { display: none; }
+  .date-range {
+    flex-basis: 100%;
+    order: 99;
+    margin-top: 8px;
+    justify-content: flex-start;
+  }
+  .date-range input[type="date"] {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .date-range {

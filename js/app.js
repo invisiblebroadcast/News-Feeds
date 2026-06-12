@@ -365,6 +365,7 @@
     var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     if (includeToolbar !== false) {
       html += '<div class="reels-toolbar">' +
+        '<button class="reels-tool-btn reels-home-btn" title="Back to Home">&#x1F3E0;</button>' +
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
         '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
@@ -525,6 +526,8 @@
         }
         const fs = e.target.closest('.reels-fullscreen');
         if (fs) { e.stopPropagation(); toggleFullscreen(); return; }
+        const home = e.target.closest('.reels-home-btn');
+        if (home) { e.stopPropagation(); forceExitToHome(); return; }
         if (e.target.closest('.reels-reader-close')) {
           e.stopPropagation();
           closeReelsReader();
@@ -821,6 +824,14 @@
     currentView = 'list';
     updateStickyHeader();
     displayCurrentSubcat();
+  }
+
+  function forceExitToHome() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+    exitReels();
   }
 
   /* ── Toggle Filters Panel ── */
@@ -1904,14 +1915,16 @@
       if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
 
       const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
-      const canNativeShare = navigator.share && (typeof navigator.canShare !== 'function' || (() => { try { return navigator.canShare({ files: [file] }); } catch { return false; } })());
-      if (canNativeShare) {
+      // Always try native share first if available (don't gate on canShare — some mobile browsers
+      // report canShare=false for files even though share() works fine)
+      if (navigator.share) {
         try {
           await navigator.share({ files: [file], title: article.title });
           btn && btn.classList.remove('btn-busy');
           return;
         } catch (err) {
           if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
+          // Any other error (NotAllowedError, etc.) — fall through to clipboard
         }
       }
       try {
