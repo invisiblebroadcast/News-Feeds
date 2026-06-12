@@ -317,78 +317,100 @@
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
     const bgStyle = hasThumb ? article.imageUrl : '';
 
-    const bgHtml = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
+    const existing = el.main.querySelector('.reels-container');
 
-    el.main.innerHTML =
-      '<div class="reels-container">' +
-        '<div class="reels-progress">' +
-          articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('') +
-        '</div>' +
-        '<div class="reels-card"' + bgHtml + '>' +
-          '<div class="reels-overlay">' +
-            '<div class="reels-toolbar">' +
-              '<button class="reels-tool-btn" id="reels-share-text" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Text">&#x21AA;</button>' +
-              '<button class="reels-tool-btn" id="reels-share-image" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x1F5BC;</button>' +
-              '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
-            '</div>' +
-            '<span class="reels-count">' + (idx + 1) + ' / ' + total + '</span>' +
-            '<h2 class="reels-title">' + escHtml(article.title) + '</h2>' +
-            '<div class="reels-meta">' +
-              '<span class="reels-source">' + escHtml(article.source) + '</span>' +
-              '<span class="reels-date">' + formatDateShort(article.pubDate) + '</span>' +
-            '</div>' +
-            '<p class="reels-summary">' + stripHtml(article.summary).slice(0, 350) + '</p>' +
-            '<button class="btn btn-primary reels-read-btn" data-article="' + encodeURIComponent(article.link) + '">Read Original Article</button>' +
-            '<div class="reels-watermark">' +
-              '<span class="wm-brand">Invisible Broadcast</span>' +
+    if (!existing) {
+      // First render — build the full DOM
+      const bgHtml = bgStyle ? ' style="background-image:url(\'' + bgStyle.replace(/'/g, '%27') + '\')"' : '';
+      el.main.innerHTML =
+        '<div class="reels-container">' +
+          '<div class="reels-progress"></div>' +
+          '<div class="reels-card"' + bgHtml + '>' +
+            '<div class="reels-overlay">' +
+              '<div class="reels-toolbar">' +
+                '<button class="reels-tool-btn" id="reels-share-text" title="Share as Text">&#x21AA;</button>' +
+                '<button class="reels-tool-btn" id="reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
+                '<button class="reels-tool-btn" id="reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
+              '</div>' +
+              '<span class="reels-count"></span>' +
+              '<h2 class="reels-title"></h2>' +
+              '<div class="reels-meta">' +
+                '<span class="reels-source"></span>' +
+                '<span class="reels-date"></span>' +
+              '</div>' +
+              '<p class="reels-summary"></p>' +
+              '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
+              '<div class="reels-watermark">' +
+                '<span class="wm-brand">Invisible Broadcast</span>' +
+              '</div>' +
             '</div>' +
           '</div>' +
-        '</div>' +
-        '<button class="reels-nav reels-prev" id="reels-prev">\u2039</button>' +
-        '<button class="reels-nav reels-next" id="reels-next">\u203A</button>' +
-      '</div>';
+          '<button class="reels-nav reels-prev" id="reels-prev">\u2039</button>' +
+          '<button class="reels-nav reels-next" id="reels-next">\u203A</button>' +
+        '</div>';
 
-    $('#reels-prev').addEventListener('click', prevReel);
-    $('#reels-next').addEventListener('click', nextReel);
-    el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
-      const link = decodeURIComponent(e.currentTarget.dataset.article);
-      openArticleDetail(link);
-    });
-    const shareText = $('#reels-share-text');
-    if (shareText) shareText.addEventListener('click', e => {
-      e.stopPropagation();
-      handleShare(
-        decodeURIComponent(shareText.dataset.url),
-        shareText.dataset.title,
-        shareText.dataset.source
-      );
-    });
-    const shareImage = $('#reels-share-image');
-    if (shareImage) shareImage.addEventListener('click', e => {
-      e.stopPropagation();
-      handleShareImage(currentArticles[currentReelIndex]);
-    });
-    const fsBtn = $('#reels-fullscreen');
-    if (fsBtn) fsBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleFullscreen();
-    });
+      $('#reels-prev').addEventListener('click', prevReel);
+      $('#reels-next').addEventListener('click', nextReel);
+      el.main.querySelector('.reels-read-btn').addEventListener('click', e => {
+        const link = decodeURIComponent(e.currentTarget.dataset.article);
+        openArticleDetail(link);
+      });
+      const st = $('#reels-share-text');
+      if (st) st.addEventListener('click', e => {
+        e.stopPropagation();
+        handleShare(decodeURIComponent(st.dataset.url), st.dataset.title, st.dataset.source);
+      });
+      const si = $('#reels-share-image');
+      if (si) si.addEventListener('click', e => {
+        e.stopPropagation();
+        handleShareImage(currentArticles[currentReelIndex]);
+      });
+      const fs = $('#reels-fullscreen');
+      if (fs) fs.addEventListener('click', e => { e.stopPropagation(); toggleFullscreen(); });
+    }
+
+    // Update content in-place (no innerHTML replacement — preserves fullscreen DOM)
+    const container = existing || el.main.querySelector('.reels-container');
+    if (!container) return;
+
+    const dots = container.querySelector('.reels-progress');
+    if (dots) dots.innerHTML = articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
+
+    const card = container.querySelector('.reels-card');
+    if (card) {
+      if (hasThumb) { card.style.backgroundImage = 'url(\'' + bgStyle.replace(/'/g, '%27') + '\')'; card.style.backgroundSize = 'cover'; card.style.backgroundPosition = 'center'; }
+      else { card.style.backgroundImage = ''; }
+    }
+
+    const count = container.querySelector('.reels-count');
+    if (count) count.textContent = (idx + 1) + ' / ' + total;
+    const title = container.querySelector('.reels-title');
+    if (title) title.textContent = article.title;
+    const source = container.querySelector('.reels-source');
+    if (source) source.textContent = article.source;
+    const date = container.querySelector('.reels-date');
+    if (date) date.textContent = formatDateShort(article.pubDate);
+    const summary = container.querySelector('.reels-summary');
+    if (summary) summary.textContent = stripHtml(article.summary).slice(0, 350);
+
+    const readBtn = container.querySelector('.reels-read-btn');
+    if (readBtn) readBtn.dataset.article = encodeURIComponent(article.link);
+    const st2 = container.querySelector('#reels-share-text');
+    if (st2) { st2.dataset.url = encodeURIComponent(article.link); st2.dataset.title = article.title; st2.dataset.source = article.source; }
+    const si2 = container.querySelector('#reels-share-image');
+    if (si2) { si2.dataset.url = encodeURIComponent(article.link); si2.dataset.title = article.title; si2.dataset.source = article.source; }
   }
 
   function prevReel() {
     if (currentReelIndex < 1) return;
-    const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     currentReelIndex--;
     showReel();
-    if (wasFs) requestAnimationFrame(() => setTimeout(requestReelFullscreen, 50));
   }
 
   function nextReel() {
     if (currentReelIndex >= currentArticles.length - 1) return;
-    const wasFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     currentReelIndex++;
     showReel();
-    if (wasFs) requestAnimationFrame(() => setTimeout(requestReelFullscreen, 50));
   }
 
   function requestReelFullscreen() {
