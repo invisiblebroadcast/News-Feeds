@@ -66,7 +66,12 @@
     viewToggle: $('#view-toggle'),
     githubTokenInput: $('#github-token-input'),
     cloudStatus: $('#cloud-status'),
-    refreshBtn: $('#refresh-btn')
+    refreshBtn: $('#refresh-btn'),
+    hardRefreshBtn: $('#hard-refresh-btn'),
+    hardRefreshModal: $('#hard-refresh-modal'),
+    hardRefreshModalClose: $('#hard-refresh-modal-close'),
+    hardRefreshCancel: $('#hard-refresh-cancel'),
+    hardRefreshConfirm: $('#hard-refresh-confirm')
   };
 
   if (!el.modal) return;
@@ -369,8 +374,11 @@
   function cardOverlayHtml(includeToolbar) {
     var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     if (includeToolbar !== false) {
+      // Home button — top-left, inside the card border (separate from toolbar)
+      html += '<button class="reels-tool-btn reels-home-btn" title="Back to Home">&#x1F3E0;</button>';
+      // Toolbar — top-right, same row as home
       html += '<div class="reels-toolbar">' +
-        '<button class="reels-tool-btn reels-home-btn" title="Back to Home">&#x1F3E0;</button>' +
+        '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
         '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
@@ -494,7 +502,6 @@
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
-          '<button class="reels-tool-btn" id="reels-refresh" title="Refresh">&#x21BB;</button>' +
           '<button class="reels-nav-arrow reels-nav-prev" title="Previous">&#x25C0;</button>' +
           '<button class="reels-nav-arrow reels-nav-next" title="Next">&#x25B6;</button>' +
           '<div class="reels-stack">' +
@@ -533,6 +540,8 @@
         if (fs) { e.stopPropagation(); toggleFullscreen(); return; }
         const home = e.target.closest('.reels-home-btn');
         if (home) { e.stopPropagation(); forceExitToHome(); return; }
+        const refresh = e.target.closest('.reels-refresh-btn');
+        if (refresh) { e.stopPropagation(); refreshAll(); return; }
         if (e.target.closest('.reels-reader-close')) {
           e.stopPropagation();
           closeReelsReader();
@@ -607,9 +616,6 @@
           return;
         }
       });
-
-      const rf = container.querySelector('#reels-refresh');
-      if (rf) rf.addEventListener('click', e => { e.stopPropagation(); refreshAll(); });
 
       const prevBtn = container.querySelector('.reels-nav-prev');
       if (prevBtn) prevBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(-1); });
@@ -1156,13 +1162,13 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:300';
     overlay.innerHTML = '<div class="loading-spinner"></div>';
     document.body.appendChild(overlay);
-    document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.add('btn-spin'));
+    document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.add('btn-spin'));
 
     scopeCache[key] = null;
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
     if (!feeds.length) {
       overlay.remove();
-      document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
+      document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
       return;
     }
     const groups = {};
@@ -1187,8 +1193,38 @@
     renderSubTabs();
     updateStickyHeader();
     await displayCurrentSubcat();
-    document.querySelectorAll('#reels-refresh, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
+    document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
     overlay.remove();
+  }
+
+  /* ── Hard Refresh ── */
+  function openHardRefreshModal() {
+    if (el.hardRefreshModal) el.hardRefreshModal.classList.add('open');
+  }
+  function closeHardRefreshModal() {
+    if (el.hardRefreshModal) el.hardRefreshModal.classList.remove('open');
+  }
+  function performHardRefresh() {
+    // Clear all app caches from localStorage, but preserve the Supabase auth session
+    const PRESERVE_KEYS = ['supabase.auth.token'];
+    const CLEAR_PREFIXES = [
+      'newsfeeds_', // settings, article data, custom feeds, subscriptions, selected nation
+      'github_token' // legacy GitHub PAT
+    ];
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (PRESERVE_KEYS.includes(key)) continue;
+      if (CLEAR_PREFIXES.some(prefix => key.startsWith(prefix))) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    // Clear sessionStorage too (in case anything is stored there)
+    try { sessionStorage.clear(); } catch {}
+    // Force reload from server (bypass cache)
+    window.location.reload();
   }
 
   /* ── Date Toggle ── */
@@ -1239,6 +1275,11 @@
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
+    if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
+    if (el.hardRefreshModalClose) el.hardRefreshModalClose.addEventListener('click', closeHardRefreshModal);
+    if (el.hardRefreshCancel) el.hardRefreshCancel.addEventListener('click', closeHardRefreshModal);
+    if (el.hardRefreshConfirm) el.hardRefreshConfirm.addEventListener('click', performHardRefresh);
+    if (el.hardRefreshModal) el.hardRefreshModal.addEventListener('click', e => { if (e.target === el.hardRefreshModal) closeHardRefreshModal(); });
   }
 
   /* ── Activity ── */
@@ -2034,7 +2075,8 @@
         if (e.key === 'Escape') { exitReels(); e.preventDefault(); return; }
       }
       if (e.key === 'Escape') {
-        if (el.sourceModal.classList.contains('open')) closeSourceModal();
+        if (el.hardRefreshModal && el.hardRefreshModal.classList.contains('open')) closeHardRefreshModal();
+        else if (el.sourceModal.classList.contains('open')) closeSourceModal();
         else if (el.articleModal.classList.contains('open')) closeArticleModal();
         else if (el.modal.classList.contains('open')) closeSettings();
       }

@@ -28,8 +28,13 @@
             <span style="color:var(--text-tertiary)">to</span>
             <input type="date" id="date-to">
           </div>
-          <button class="btn" id="refresh-btn" title="Refresh">
-            &#x21BB; Refresh
+          <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
+            &#x21BB;
+          </button>
+          <button class="btn btn-ghost btn-icon" id="hard-refresh-btn" title="Hard Refresh (clears cache)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/>
+            </svg>
           </button>
           <button class="btn btn-ghost btn-icon" id="activity-btn" title="Activity">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -299,6 +304,27 @@
           <button class="activity-tab" data-actab="flagged">Flagged</button>
         </div>
         <div id="activity-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="hard-refresh-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Hard Refresh</h2>
+        <button class="modal-close" id="hard-refresh-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 12px;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">
+          This will clear the local cache (saved articles, settings, custom feeds) and reload the page with a fresh copy from the server.
+        </p>
+        <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">
+          <strong style="color:var(--text-primary);">Your sign-in session will be preserved.</strong>
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="hard-refresh-cancel">Cancel</button>
+        <button class="btn btn-primary" id="hard-refresh-confirm">Hard Refresh</button>
       </div>
     </div>
   </div>
