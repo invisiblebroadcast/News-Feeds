@@ -908,6 +908,7 @@
 
   function exitReels() {
     currentView = 'list';
+    document.body.classList.remove('cards-view');
     updateStickyHeader();
     displayCurrentSubcat();
   }
@@ -998,6 +999,7 @@
       currentView = btn.dataset.view;
       $$('#view-toggle .mode-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      document.body.classList.toggle('cards-view', currentView === 'reels');
       displayCurrentSubcat();
     });
   }
