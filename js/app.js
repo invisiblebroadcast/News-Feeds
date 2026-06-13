@@ -72,6 +72,12 @@
     hardRefreshModalClose: $('#hard-refresh-modal-close'),
     hardRefreshCancel: $('#hard-refresh-cancel'),
     hardRefreshConfirm: $('#hard-refresh-confirm'),
+    dateToggle: $('#date-toggle-btn'),
+    dateFilterModal: $('#date-filter-modal'),
+    dateFilterModalClose: $('#date-filter-modal-close'),
+    dateFilterCancel: $('#date-filter-cancel'),
+    dateFilterApply: $('#date-filter-apply'),
+    dateFilterClear: $('#date-filter-clear'),
     authAvatarBtn: $('#auth-avatar-btn'),
     authDropdown: $('#auth-dropdown'),
     authDropdownName: $('#auth-dropdown-name'),
@@ -1309,10 +1315,32 @@
     window.location.reload();
   }
 
-  /* ── Date Range (always visible) ── */
+  /* ── Date Filter Modal ── */
+  function openDateFilterModal() {
+    if (!el.dateFilterModal) return;
+    el.dateFilterModal.classList.add('open');
+  }
+  function closeDateFilterModal() {
+    if (!el.dateFilterModal) return;
+    el.dateFilterModal.classList.remove('open');
+  }
+  function applyDateFilter() {
+    closeDateFilterModal();
+    refreshAll();
+  }
+  function clearDateFilter() {
+    if (el.dateFrom) el.dateFrom.value = '';
+    if (el.dateTo) el.dateTo.value = '';
+    closeDateFilterModal();
+    refreshAll();
+  }
   function bindDateToggle() {
-    if (el.dateFrom) el.dateFrom.addEventListener('change', refreshAll);
-    if (el.dateTo) el.dateTo.addEventListener('change', refreshAll);
+    if (el.dateToggle) el.dateToggle.addEventListener('click', openDateFilterModal);
+    if (el.dateFilterModalClose) el.dateFilterModalClose.addEventListener('click', closeDateFilterModal);
+    if (el.dateFilterCancel) el.dateFilterCancel.addEventListener('click', closeDateFilterModal);
+    if (el.dateFilterApply) el.dateFilterApply.addEventListener('click', applyDateFilter);
+    if (el.dateFilterClear) el.dateFilterClear.addEventListener('click', clearDateFilter);
+    if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
   }
 
   /* ── Settings Modal ── */
@@ -2321,6 +2349,7 @@
       }
       if (e.key === 'Escape') {
         if (el.hardRefreshModal && el.hardRefreshModal.classList.contains('open')) closeHardRefreshModal();
+        else if (el.dateFilterModal && el.dateFilterModal.classList.contains('open')) closeDateFilterModal();
         else if (el.sourceModal.classList.contains('open')) closeSourceModal();
         else if (el.articleModal.classList.contains('open')) closeArticleModal();
         else if (el.modal.classList.contains('open')) closeSettings();

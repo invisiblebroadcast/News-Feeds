@@ -74,6 +74,11 @@
           </div>
         </div>
         <div class="header-controls-extras" id="header-extras" style="display:none">
+          <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Date filter">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
+            </svg>
+          </button>
           <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
             &#x21BB;
           </button>
@@ -90,20 +95,6 @@
         </div>
       </div>
     </header>
-    <!-- Date range row — sits below the header, always visible -->
-    <div class="date-range-row" id="date-range-row">
-      <div class="date-range-fields">
-        <label class="date-field">
-          <span class="date-field-label">From</span>
-          <input type="date" id="date-from">
-        </label>
-        <span class="date-sep">→</span>
-        <label class="date-field">
-          <span class="date-field-label">To</span>
-          <input type="date" id="date-to">
-        </label>
-      </div>
-    </div>
   </div>
 
   <main class="app-main" id="main-content">
@@ -417,6 +408,35 @@
       <div class="modal-footer">
         <button class="btn" id="hard-refresh-cancel">Cancel</button>
         <button class="btn btn-primary" id="hard-refresh-confirm">Hard Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="date-filter-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Date Filter</h2>
+        <button class="modal-close" id="date-filter-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 16px;color:var(--text-secondary);font-size:0.88rem;line-height:1.5;">
+          Show articles published within this date range. Leave both fields empty to show all articles.
+        </p>
+        <div class="date-filter-fields">
+          <label class="date-field">
+            <span class="date-field-label">From</span>
+            <input type="date" id="date-from">
+          </label>
+          <label class="date-field">
+            <span class="date-field-label">To</span>
+            <input type="date" id="date-to">
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="date-filter-clear">Clear</button>
+        <button class="btn" id="date-filter-cancel">Cancel</button>
+        <button class="btn btn-primary" id="date-filter-apply">Apply</button>
       </div>
     </div>
   </div>

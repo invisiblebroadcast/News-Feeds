@@ -141,54 +141,47 @@ img { max-width: 100%; height: auto; }
 }
 
 /* ── Date range row — sits below the header ── */
-.date-range-row {
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-primary);
-  padding: 8px 16px;
-}
-.date-range-fields {
-  max-width: var(--max-width);
-  margin: 0 auto;
+.date-filter-fields {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .date-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 .date-field-label {
   font-size: 0.78rem;
   color: var(--text-secondary);
   font-weight: 500;
+  flex-shrink: 0;
 }
-.date-range-fields input[type="date"] {
+.date-filter-fields input[type="date"] {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  padding: 8px 10px;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-family: var(--font);
   cursor: pointer;
   outline: none;
   transition: border-color var(--transition);
-  min-width: 130px;
+  min-width: 0;
+  width: 100%;
   color-scheme: dark;
 }
-.date-range-fields input[type="date"]:focus {
+.date-filter-fields input[type="date"]:focus {
   border-color: var(--accent);
 }
-.date-range-fields input[type="date"]::-webkit-calendar-picker-indicator {
+.date-filter-fields input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
-}
-.date-sep {
-  color: var(--text-tertiary);
-  font-size: 0.9rem;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -1852,15 +1845,9 @@ body.cards-view {
   .header-controls .btn-label {
     display: none;
   }
-  .date-range-row {
+  .date-filter-fields input[type="date"] {
     padding: 6px 8px;
-  }
-  .date-range-fields input[type="date"] {
-    min-width: 0;
-    width: auto;
-    flex: 1;
-    padding: 6px 8px;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
   }
   .date-field-label {
     font-size: 0.72rem;
