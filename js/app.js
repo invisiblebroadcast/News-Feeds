@@ -454,8 +454,8 @@
           '<span class="reels-source"></span>' +
           '<span class="reels-date"></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
+          '<a class="reels-read-link reels-read-btn" href="javascript:void(0)">Read article &rarr;</a>' +
         '</div>' +
-        '<a class="reels-read-link reels-read-btn" href="javascript:void(0)">Read article &rarr;</a>' +
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
         '<div class="reels-watermark">' +
           '<span class="wm-brand">Invisible Broadcast</span>' +

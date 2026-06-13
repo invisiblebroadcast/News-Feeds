@@ -456,6 +456,9 @@ img { max-width: 100%; height: auto; }
 .app-main {
   padding-bottom: 80px;
 }
+body.cards-view .app-main {
+  padding-bottom: 0;
+}
 
 /* Decent padding for the main content area */
 .article-grid {
@@ -625,12 +628,13 @@ img { max-width: 100%; height: auto; }
 /* ─── Reels View (static single card, no scrollbar) ─── */
 .reels-container {
   position: relative;
-  height: calc(100vh - 220px);
+  height: calc(100vh - 140px);
   min-height: 400px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   touch-action: pan-y;
+  padding: 0 8px 8px;
 }
 body.cards-view {
   overflow: hidden;
@@ -644,14 +648,6 @@ body.cards-view {
   overflow: hidden;
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
-}
-.reels-stack {
-  position: relative;
-  flex: 1;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
 }
 .reels-stack .reels-card {
   position: absolute;
@@ -719,16 +715,14 @@ body.cards-view {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 12px 24px 16px;
+  padding: 12px 8px 16px;
   z-index: 2;
   flex: 1;
   min-height: 0;
 }
 .reels-card.has-image .reels-overlay {
-  margin-top: -32px;
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-  padding-top: 16px;
+  margin-top: 0;
+  padding-top: 12px;
 }
 .reels-count {
   font-size: 0.78rem;
@@ -736,7 +730,7 @@ body.cards-view {
   margin-bottom: 8px;
 }
 .reels-title {
-  font-size: 1.3rem;
+  font-size: 1.05rem;
   font-weight: 700;
   line-height: 1.3;
   margin-bottom: 6px;
@@ -761,7 +755,7 @@ body.cards-view {
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
-  margin-bottom: 8px;
+  margin-left: auto;
   cursor: pointer;
 }
 .reels-read-link:hover {
