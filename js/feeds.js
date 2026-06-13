@@ -135,14 +135,14 @@ const FeedManager = (() => {
 
   function addGoogleNewsToSubscribable() {
     const gnews = feedData?.googleNews;
-    if (!gnews) return;
+    if (!gnews || !feedData.subscribableFeeds) return;
     // Global Google News topic feeds
     const globalLocale = gnews.locales?.global;
     if (globalLocale) {
       for (const cat of subcategories()) {
         const topic = gnews.topicMapping?.[cat];
         if (topic) {
-          gnews.subscribableFeeds.push({
+          feedData.subscribableFeeds.push({
             region: 'Google News',
             name: 'Google News - ' + (SUBCAT_LABELS[cat] || cat) + ' (Global)',
             url: googleNewsUrl(topic, globalLocale),
@@ -161,7 +161,7 @@ const FeedManager = (() => {
       for (const cat of subcategories()) {
         const topic = gnews.topicMapping?.[cat];
         if (topic) {
-          gnews.subscribableFeeds.push({
+          feedData.subscribableFeeds.push({
             region: 'Google News',
             name: 'Google News - ' + (SUBCAT_LABELS[cat] || cat) + ' (' + (feedData.nations?.[nationKey]?.label || nationKey) + ')',
             url: googleNewsUrl(topic, locale),
@@ -177,7 +177,7 @@ const FeedManager = (() => {
     }
     // Add extraFeeds (BBC, Nat Geo, etc.) to the subscribable list as well
     for (const f of (gnews.extraFeeds || [])) {
-      gnews.subscribableFeeds.push({
+      feedData.subscribableFeeds.push({
         region: 'Extra',
         name: f.name,
         url: f.url,
