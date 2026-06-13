@@ -1,7 +1,9 @@
 const FeedFetcher = (() => {
   const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json?rss_url=';
   const CORS_PROXY = 'https://corsproxy.io/?url=';
-  const FETCH_TIMEOUT = 15000;
+  // Generous timeout because some feeds publish thousands of items in 10 days
+  // and the proxy has to fetch + transfer the entire XML payload.
+  const FETCH_TIMEOUT = 30000;
 
   async function fetchWithTimeout(url, timeout = FETCH_TIMEOUT) {
     const controller = new AbortController();
@@ -97,49 +99,50 @@ const FeedFetcher = (() => {
       }
     }
 
-    // For non-Google feeds, also add a multi-proxy fallback chain.
-    // rss2json sometimes 500s on some feeds, so we wrap it in the same
-    // multi-proxy approach: rss2json first, then proxyFetch.
-    const encodedUrl = encodeURIComponent(feed.url);
-    // Request up to 100 items per source (rss2json free tier max).
-    // Without `count`, rss2json returns only 10 items.
-    const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
-
+    // For non-Google feeds, prefer raw RSS XML via the CORS proxy because it
+    // returns ALL items the feed publishes (no rss2json-style 100-item cap).
+    // A single feed can publish thousands of items in 10 days, so the raw
+    // XML path is essential for top-mode ranking.
     try {
-      const res = await fetchWithTimeout(rss2jsonUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await proxyFetch(feed);
+    } catch (proxyErr) {
+      // Fall back to rss2json if the proxy fails (network, 503, etc.)
+      const encodedUrl = encodeURIComponent(feed.url);
+      // rss2json free tier caps at 100 items, but it's a good fallback
+      const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
 
-      const data = await res.json();
-
-      if (data.status !== 'ok') {
-        throw new Error(data.message || 'Unknown RSS2JSON error');
-      }
-
-      return (data.items || []).map(item => {
-        let imageUrl = item.thumbnail || '';
-        if (!imageUrl && item.description) {
-          imageUrl = extractImageFromHtml(item.description);
-        }
-        return {
-          title: (item.title || '').trim(),
-          link: (item.link || '').trim(),
-          summary: (item.description || '')
-            .replace(/<[^>]*>/g, '').trim()
-            .slice(0, 300),
-          pubDate: item.pubDate || '',
-          author: item.author || '',
-          imageUrl,
-          source: feed.name,
-          feedUrl: feed.url,
-          feedHint: feed.hint || 'politics',
-          guid: item.guid || item.link || ''
-        };
-      });
-    } catch (err) {
       try {
-        return await proxyFetch(feed);
-      } catch (fallbackErr) {
-        console.warn(`Feed failed: ${feed.name} (${feed.url})`, err.message, fallbackErr.message);
+        const res = await fetchWithTimeout(rss2jsonUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.status !== 'ok') {
+          throw new Error(data.message || 'Unknown RSS2JSON error');
+        }
+
+        return (data.items || []).map(item => {
+          let imageUrl = item.thumbnail || '';
+          if (!imageUrl && item.description) {
+            imageUrl = extractImageFromHtml(item.description);
+          }
+          return {
+            title: (item.title || '').trim(),
+            link: (item.link || '').trim(),
+            summary: (item.description || '')
+              .replace(/<[^>]*>/g, '').trim()
+              .slice(0, 300),
+            pubDate: item.pubDate || '',
+            author: item.author || '',
+            imageUrl,
+            source: feed.name,
+            feedUrl: feed.url,
+            feedHint: feed.hint || 'politics',
+            guid: item.guid || item.link || ''
+          };
+        });
+      } catch (rssErr) {
+        console.warn(`Feed failed: ${feed.name} (${feed.url})`, proxyErr.message, rssErr.message);
         return [];
       }
     }
