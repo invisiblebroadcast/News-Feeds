@@ -483,13 +483,32 @@ img { max-width: 100%; height: auto; }
   background: transparent;
 }
 
-/* ─── Reels View ─── */
+/* ─── Reels View (scrollable card feed) ─── */
 .reels-container {
   position: relative;
-  height: calc(100vh - 330px);
-  min-height: 400px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  padding: 16px 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
+}
+.reels-container::-webkit-scrollbar { width: 6px; }
+.reels-container::-webkit-scrollbar-track { background: transparent; }
+.reels-container::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+.reels-container::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+.reels-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
 }
 .reels-stack .reels-home-btn {
   position: absolute;
@@ -504,8 +523,9 @@ img { max-width: 100%; height: auto; }
   border-radius: var(--radius-lg);
 }
 .reels-stack .reels-card {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  width: 100%;
+  min-height: 400px;
   z-index: 2;
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -513,7 +533,7 @@ img { max-width: 100%; height: auto; }
   border: 1px solid var(--border-primary);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   opacity: 1;
 }

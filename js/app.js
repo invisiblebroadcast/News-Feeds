@@ -389,25 +389,12 @@
 
   /* ── Reels View ── */
   let currentReelIndex = 0;
-  let isReelsFullscreen = false;
-  function updateReelsFullscreen() {
-    isReelsFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    const c = el.main && el.main.querySelector && el.main.querySelector('.reels-container');
-    if (c) {
-      updateNavArrows(c);
-      // Highlight the fullscreen button when active
-      const fsBtns = c.querySelectorAll('.reels-fullscreen');
-      fsBtns.forEach(b => b.classList.toggle('active', isReelsFullscreen));
-    }
-  }
-
-  document.addEventListener('fullscreenchange', updateReelsFullscreen);
-  document.addEventListener('webkitfullscreenchange', updateReelsFullscreen);
+  // Fullscreen removed — swipe always works in cards view (no fullscreen gate)
 
   function updateNavArrows(container) {
     if (!container) return;
-    container.classList.toggle('reels-show-arrows', !isReelsFullscreen);
-    container.style.touchAction = isReelsFullscreen ? 'none' : '';
+    container.classList.add('reels-show-arrows');
+    container.style.touchAction = 'pan-y';
   }
 
   function renderReels(articles) {
@@ -433,7 +420,6 @@
         '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
-        '<button class="reels-tool-btn reels-fullscreen" title="Full Screen">&#x26F6;</button>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
       html += '<div class="reels-actions">' +
@@ -566,17 +552,21 @@
   function showReel() {
     const articles = currentArticles;
     const idx = currentReelIndex;
-    const article = articles[idx];
     const total = articles.length;
 
     const existing = el.main.querySelector('.reels-container');
 
     if (!existing) {
+      // Build a vertical feed of cards (all articles)
+      let cardsHtml = '';
+      for (let i = 0; i < articles.length; i++) {
+        cardsHtml += '<div class="reels-card" data-article-idx="' + i + '">' + cardOverlayHtml() + '</div>';
+      }
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<div class="reels-stack" id="reels-stack">' +
-            '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
+            cardsHtml +
             readerHtml() +
           '</div>' +
         '</div>';
@@ -586,12 +576,16 @@
 
       // Event delegation on stack for card button actions (using closest)
       stack.addEventListener('click', e => {
+        // Find which card was clicked
+        const clickedCard = e.target.closest('.reels-card');
+        const cardIdx = clickedCard ? parseInt(clickedCard.dataset.articleIdx, 10) : 0;
+        const cardArticle = currentArticles[cardIdx];
+
         const readBtn = e.target.closest('.reels-read-btn');
         if (readBtn) {
           e.stopPropagation();
           const link = decodeURIComponent(readBtn.dataset.article);
-          if (document.fullscreenElement) openReelsReader(link);
-          else openArticleDetail(link);
+          openArticleDetail(link);
           return;
         }
         const st = e.target.closest('.reels-share-text');
@@ -603,11 +597,9 @@
         const si = e.target.closest('.reels-share-image');
         if (si) {
           e.stopPropagation();
-          handleShareImage(currentArticles[currentReelIndex], si);
+          handleShareImage(cardArticle, si);
           return;
         }
-        const fs = e.target.closest('.reels-fullscreen');
-        if (fs) { e.stopPropagation(); toggleFullscreen(); return; }
         const home = e.target.closest('.reels-home-btn');
         if (home) { e.stopPropagation(); forceExitToHome(); return; }
         const refresh = e.target.closest('.reels-refresh-btn');
@@ -660,35 +652,40 @@
         const likeBtn = e.target.closest('.reels-like-btn');
         if (likeBtn) {
           if (!requireAuth()) return;
-          const a = currentArticles[currentReelIndex];
-          if (!a) return;
-          const ad = getArticleData(a.link);
+          if (!cardArticle) return;
+          const ad = getArticleData(cardArticle.link);
           if (ad.like) { ad.like = false; } else { ad.like = true; ad.dislike = false; }
-          saveArticleData(a.link, ad);
-          const cards = stack.querySelectorAll('.reels-like-btn');
-          cards.forEach(b => b.classList.toggle('active', !!ad.like));
-          const db = stack.querySelectorAll('.reels-dislike-btn');
-          db.forEach(b => b.classList.toggle('active', !!ad.dislike));
+          saveArticleData(cardArticle.link, ad);
+          // Update only this card's buttons
+          const card = likeBtn.closest('.reels-card');
+          if (card) {
+            const lBtn = card.querySelector('.reels-like-btn');
+            const dBtn = card.querySelector('.reels-dislike-btn');
+            if (lBtn) lBtn.classList.toggle('active', !!ad.like);
+            if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
+          }
           return;
         }
         const dislikeBtn = e.target.closest('.reels-dislike-btn');
         if (dislikeBtn) {
           if (!requireAuth()) return;
-          const a = currentArticles[currentReelIndex];
-          if (!a) return;
-          const ad = getArticleData(a.link);
+          if (!cardArticle) return;
+          const ad = getArticleData(cardArticle.link);
           if (ad.dislike) { ad.dislike = false; } else { ad.dislike = true; ad.like = false; }
-          saveArticleData(a.link, ad);
-          const db = stack.querySelectorAll('.reels-dislike-btn');
-          db.forEach(b => b.classList.toggle('active', !!ad.dislike));
-          const cards = stack.querySelectorAll('.reels-like-btn');
-          cards.forEach(b => b.classList.toggle('active', !!ad.like));
+          saveArticleData(cardArticle.link, ad);
+          const card = dislikeBtn.closest('.reels-card');
+          if (card) {
+            const lBtn = card.querySelector('.reels-like-btn');
+            const dBtn = card.querySelector('.reels-dislike-btn');
+            if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
+            if (lBtn) lBtn.classList.toggle('active', !!ad.like);
+          }
           return;
         }
         const commentBtn = e.target.closest('.reels-comment-btn');
         if (commentBtn) {
           if (!requireAuth()) return;
-          openCommentsPage(currentArticles[currentReelIndex]);
+          if (cardArticle) openCommentsPage(cardArticle);
           return;
         }
         const commentSubmit = e.target.closest('.reels-comment-submit');
@@ -738,64 +735,87 @@
         if (dir > 0) nextReel(); else prevReel();
       }
       let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 left, 1 right
+      let swipeStartY = 0, swipeDy = 0; // for swipe down features
+      let swipeDownTriggered = false;
       container.addEventListener('touchstart', e => {
-        if (!isReelsFullscreen) return;
         if (e.touches.length !== 1) return;
         swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
         swipeDx = 0;
+        swipeDy = 0;
+        swipeDownTriggered = false;
         isSwiping = false;
         swipeDir = 0;
       }, { passive: true });
       container.addEventListener('touchmove', e => {
-        if (!isReelsFullscreen) return;
-        if (!swipeStartX) return;
-        const card = stack.querySelector('.reels-card');
-        if (!card) return;
-        swipeDx = e.touches[0].clientX - swipeStartX;
-        if (Math.abs(swipeDx) > 5) isSwiping = true;
+        if (!swipeStartX && !swipeStartY) return;
+        const cards = stack.querySelectorAll('.reels-card');
+        if (cards.length === 0) return;
+        const cy = e.touches[0].clientY;
+        const cx = e.touches[0].clientX;
+        swipeDy = cy - swipeStartY;
+        swipeDx = cx - swipeStartX;
+
+        // Only detect downward swipe
+        if (!isSwiping && swipeDy > 30 && swipeDy > Math.abs(swipeDx)) {
+          isSwiping = true;
+          swipeDir = 1; // vertical down
+        }
         if (!isSwiping) return;
 
-        // Simple slide animation — card follows finger with slight rotation for visual feedback
-        const rotation = swipeDx / 20; // subtle tilt effect
-        card.style.transition = 'none';
-        card.style.transform = 'translateX(' + swipeDx + 'px) rotate(' + rotation + 'deg)';
-        card.style.opacity = 1 - Math.abs(swipeDx) / 500; // slight fade
-        e.preventDefault();
+        if (swipeDir === 1 && swipeDy > 0) {
+          // Apply swipe-down animation to all cards
+          const translateY = Math.min(swipeDy * 0.4, 80);
+          const scale = 1 - Math.min(swipeDy / 1200, 0.04);
+          const opacity = 1 - Math.min(swipeDy / 800, 0.25);
+          cards.forEach(card => {
+            card.style.transition = 'none';
+            card.style.transform = `translateY(${translateY}px) scale(${scale})`;
+            card.style.opacity = opacity;
+          });
+        }
       }, { passive: false });
       container.addEventListener('touchend', e => {
-        if (!swipeStartX) return;
-        const card = stack.querySelector('.reels-card');
-        const dx = swipeStartX - e.changedTouches[0].clientX;
+        if (!swipeStartX && !swipeStartY) return;
+        const cards = stack.querySelectorAll('.reels-card');
+        const dy = e.changedTouches[0].clientY - swipeStartY;
+        const wasDir = swipeDir;
+        const triggered = swipeDownTriggered;
         swipeStartX = 0;
-        if (card) {
-          if (isSwiping && Math.abs(dx) > 60) {
-            // Swipe out: animate off-screen, then navigate
-            const dir = dx > 0 ? -1 : 1; // dx>0 means swipe left
-            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-            card.style.transform = dir < 0 ? 'translateX(-110%) rotate(-5deg)' : 'translateX(110%) rotate(5deg)';
-            card.style.opacity = '0';
-            setTimeout(() => {
-              if (dir < 0) nextReel(); else prevReel();
-              // Reset card position
-              if (card) {
-                card.style.transition = 'none';
-                card.style.transform = 'translateX(0) rotate(0)';
-                card.style.opacity = '1';
-                setTimeout(() => { if (card) card.style.transition = ''; }, 20);
-              }
-            }, 200);
-          } else {
-            // Snap back to center
-            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-            card.style.transform = 'translateX(0) rotate(0)';
-            card.style.opacity = '1';
-            setTimeout(() => { if (card) { card.style.transition = ''; } }, 200);
-          }
-        }
+        swipeStartY = 0;
+        swipeDownTriggered = false;
         isSwiping = false;
         swipeDir = 0;
+        if (wasDir === 1 && dy > 120) {
+          // Swipe down enough — exit to list view
+          cards.forEach(card => {
+            card.style.transition = 'transform 0.25s ease-out, opacity 0.25s ease-out';
+            card.style.transform = 'translateY(100%) scale(0.9)';
+            card.style.opacity = '0';
+          });
+          setTimeout(() => {
+            exitReels();
+            // Reset card positions
+            setTimeout(() => {
+              cards.forEach(card => {
+                card.style.transition = 'none';
+                card.style.transform = '';
+                card.style.opacity = '';
+                setTimeout(() => { card.style.transition = ''; }, 20);
+              });
+            }, 50);
+          }, 250);
+        } else {
+          // Snap back
+          cards.forEach(card => {
+            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+            card.style.transform = '';
+            card.style.opacity = '';
+            setTimeout(() => { card.style.transition = ''; }, 200);
+          });
+        }
       }, { passive: true });
-      container.addEventListener('touchcancel', () => { swipeStartX = 0; isSwiping = false; swipeDir = 0; }, { passive: true });
+      container.addEventListener('touchcancel', () => { swipeStartX = 0; swipeStartY = 0; isSwiping = false; swipeDir = 0; }, { passive: true });
     }
 
     // In-place DOM updates
@@ -807,14 +827,13 @@
     const dots = container.querySelector('.reels-progress');
     if (dots) dots.innerHTML = articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
 
-    const fg = stack.querySelector('.reels-card');
-    if (fg) {
-      updateCard(fg, article, idx, total);
-      // Reset card position for new article
-      fg.style.transition = 'none';
-      fg.style.transform = 'translateX(0)';
-      requestAnimationFrame(() => { fg.style.transition = ''; });
-    }
+    // Populate all cards in the feed
+    const cards = stack.querySelectorAll('.reels-card');
+    cards.forEach((card, i) => {
+      if (articles[i]) {
+        updateCard(card, articles[i], i, total);
+      }
+    });
   }
 
   function prevReel() {
@@ -1691,13 +1710,15 @@
     if (flagEl) {
       flagEl.value = ad.flag || '';
       flagEl.disabled = !currentUser;
-      flagEl.onchange = function() {
+      const flagHandler = function() {
         if (!requireAuth()) { flagEl.value = ad.flag || ''; return; }
         const newData = getArticleData(article.link);
         newData.flag = flagEl.value || '';
         saveArticleData(article.link, newData);
         renderCurrentList();
       };
+      flagEl.onchange = flagHandler;
+      flagEl.oninput = flagHandler;
     }
 
     el.articleModal.classList.add('open');
