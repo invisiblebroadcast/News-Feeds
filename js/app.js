@@ -425,10 +425,10 @@
   function cardOverlayHtml(includeToolbar) {
     var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     if (includeToolbar !== false) {
-      // Toolbar — top-right
-      html += '<div class="reels-toolbar">' +
+      // Toolbar — top-left
+      html += '<div class="reels-toolbar reels-toolbar-left">' +
         '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
-        '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
+        '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)

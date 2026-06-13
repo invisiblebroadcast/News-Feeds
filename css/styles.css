@@ -2065,6 +2065,10 @@ body.cards-view {
   gap: 6px;
   z-index: 3;
 }
+.reels-toolbar-left {
+  right: auto;
+  left: 16px;
+}
 
 /* Vertical action bar — right side, center (like YT Shorts / Reels) */
 .reels-actions {
