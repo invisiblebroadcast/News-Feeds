@@ -678,7 +678,7 @@ body.cards-view {
   width: 100%;
   height: auto;
   object-fit: contain;
-  max-height: 45vh;
+  max-height: 35vh;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: high-quality;
 }
@@ -719,41 +719,77 @@ body.cards-view {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 24px 32px 32px;
+  padding: 12px 24px 16px;
   z-index: 2;
+  flex: 1;
+  min-height: 0;
+}
+.reels-card.has-image .reels-overlay {
+  margin-top: -32px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  padding-top: 16px;
 }
 .reels-count {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 .reels-title {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  line-height: 1.35;
-  margin-bottom: 8px;
+  line-height: 1.3;
+  margin-bottom: 6px;
   color: #fff;
 }
 .reels-meta {
   display: flex;
-  gap: 12px;
-  font-size: 0.85rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 .reels-meta .reels-source {
   color: var(--accent);
   font-weight: 600;
 }
+.reels-read-link {
+  display: inline-block;
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.reels-read-link:hover {
+  text-decoration: underline;
+}
+.reels-summary-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+.reels-summary-wrap::-webkit-scrollbar {
+  width: 6px;
+}
+.reels-summary-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.reels-summary-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 3px;
+}
 .reels-summary {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: rgba(255,255,255,0.7);
-  margin-bottom: 20px;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.8);
+  margin: 0;
 }
 .reels-nav {
   position: absolute;

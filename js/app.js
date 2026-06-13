@@ -455,9 +455,8 @@
           '<span class="reels-date"></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
         '</div>' +
-        '<p class="reels-summary"></p>' +
-        '<button class="reels-readmore-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;padding:0;text-align:left;display:none">Read more</button>' +
-        '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
+        '<a class="reels-read-link reels-read-btn" href="javascript:void(0)">Read article &rarr;</a>' +
+        '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
         '<div class="reels-watermark">' +
           '<span class="wm-brand">Invisible Broadcast</span>' +
         '</div>' +
@@ -502,6 +501,7 @@
   function updateCard(cardEl, article, idx, total) {
     if (!cardEl || !article) return;
     const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+    cardEl.classList.toggle('has-image', !!hasThumb);
     const imgWrap = cardEl.querySelector('.reels-img-wrap');
     const imgEl = cardEl.querySelector('.reels-img');
     if (hasThumb && imgEl && imgWrap) {
@@ -525,13 +525,7 @@
     const summaryText = cleanSummary(stripHtml(article.summary));
     const summary = cardEl.querySelector('.reels-summary');
     if (summary) {
-      summary.textContent = summaryText.slice(0, 350);
-      summary.dataset.full = summaryText;
-    }
-    const readmoreBtn = cardEl.querySelector('.reels-readmore-btn');
-    if (readmoreBtn) {
-      readmoreBtn.style.display = summaryText.length > 350 ? 'block' : 'none';
-      readmoreBtn.textContent = 'Read more';
+      summary.textContent = summaryText;
     }
     const ad = getArticleData(article.link);
     const flagEl = cardEl.querySelector('.reels-flag');
@@ -628,20 +622,6 @@
         if (e.target.closest('.rr-open')) {
           const btn = e.target.closest('.rr-open');
           if (btn.href) window.open(btn.href, '_blank');
-          return;
-        }
-        const rmBtn = e.target.closest('.reels-readmore-btn');
-        if (rmBtn) {
-          const card = stack.querySelector('.reels-card');
-          const summary = card.querySelector('.reels-summary');
-          if (!summary) return;
-          if (summary.textContent === summary.dataset.full) {
-            summary.textContent = summary.dataset.full.slice(0, 350);
-            rmBtn.textContent = 'Read more';
-          } else {
-            summary.textContent = summary.dataset.full;
-            rmBtn.textContent = 'Show less';
-          }
           return;
         }
         const likeBtn = e.target.closest('.reels-like-btn');
