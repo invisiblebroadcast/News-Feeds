@@ -774,6 +774,12 @@ body.cards-view {
 .reels-read-link:hover {
   text-decoration: underline;
 }
+.reels-read-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
 .reels-summary-wrap {
   flex: 1;
   min-height: 0;
