@@ -95,6 +95,11 @@
   </main>
 
   <div class="bottom-bar" id="bottom-bar">
+    <nav class="tab-bar sub-tab-bar" id="sub-tab-bar" style="display:none">
+      <ul class="tab-list" id="sub-tab-list">
+        <li class="tab-item active">All</li>
+      </ul>
+    </nav>
     <div class="section-header" id="section-header">
       <div class="section-header-top">
         <h2 id="section-title"></h2>
@@ -104,11 +109,6 @@
       </div>
       <span class="section-meta" id="section-meta"></span>
     </div>
-    <nav class="tab-bar sub-tab-bar" id="sub-tab-bar" style="display:none">
-      <ul class="tab-list" id="sub-tab-list">
-        <li class="tab-item active">All</li>
-      </ul>
-    </nav>
     <nav class="tab-bar top-tab-bar" id="top-tab-bar">
       <ul class="tab-list" id="top-tab-list">
         <li class="tab-item active" data-scope="global">Global</li>
@@ -125,6 +125,9 @@
       <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;max-width:240px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
       <button class="btn btn-ghost btn-icon filter-icon-btn" id="tools-toggle-btn" title="Toggle Filters">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
+      </button>
+      <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-toggle-btn" title="Sort">
+        <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
       </button>
     </div>
     <!-- Filter tools row — toggleable, hidden by default -->

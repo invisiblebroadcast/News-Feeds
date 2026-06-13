@@ -1382,6 +1382,13 @@
         toolsToggleBtn.classList.toggle('active', hidden);
       });
     }
+    // Sort toggle — same as tools toggle, opens the filters/sort panel
+    const sortToggleBtn = $('#sort-toggle-btn');
+    if (sortToggleBtn && toolsToggleBtn) {
+      sortToggleBtn.addEventListener('click', () => {
+        toolsToggleBtn.click();
+      });
+    }
   }
 
   /* ── Activity ── */
