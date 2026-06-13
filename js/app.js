@@ -331,16 +331,18 @@
       totalShown = display.length;
     }
 
+    const hasMoreInScope = (currentMode === 'live' && totalShown < articles.length);
+
     updateStickyHeader(totalShown + ' of ' + articles.length);
 
     el.main.innerHTML =
       '<div class="article-grid">' +
         display.map((a, i) => renderCard(a, i)).join('') +
       '</div>' +
-      (currentMode === 'live' && totalShown < articles.length
+      (hasMoreInScope
         ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
         : '') +
-      (currentMode === 'top' && articles.length > perPage
+      (currentMode === 'top' && articles.length >= perPage
         ? '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem;">Showing top ' + perPage + ' of ' + articles.length + ' articles</div>'
         : '');
 
@@ -1151,9 +1153,16 @@
 
     updateStickyHeader();
 
-    const articles = getFilteredArticles(currentSubcat, cached);
+    let articles = getFilteredArticles(currentSubcat, cached);
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
+
+    // Cap the number of articles sent to the renderer to prevent mobile crashes
+    // (translation pipeline + DOM render both scale with article count).
+    const settings = Settings.load();
+    const perPage = settings.articlesPerPage || 10;
+    const maxRender = currentMode === 'live' ? perPage * 3 : perPage;
+    if (articles.length > maxRender) articles = articles.slice(0, maxRender);
 
     await renderTranslated(articles);
   }
@@ -1225,6 +1234,12 @@
     if (article.pubDate) {
       const age = Date.now() - new Date(article.pubDate).getTime();
       const hours = age / 3600000;
+      // In top mode, articles older than 10 days get 0 points from age
+      const maxAgeHours = 10 * 24;
+      if (hours > maxAgeHours) {
+        // Still return 0 so they sink to the bottom of top mode
+        return 0;
+      }
       score += Math.max(0, 100 - hours);
     }
     if (article.imageUrl && article.imageUrl.startsWith('http')) score += 20;
@@ -1276,9 +1291,10 @@
     }
 
     if (currentMode === 'top') {
-      const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // Top mode: only consider articles from the last 10 days
+      const last10d = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
       const to = new Date();
-      return FeedFetcher.filterByDate(articles, last24h.toISOString().slice(0, 10), to.toISOString().slice(0, 10));
+      return FeedFetcher.filterByDate(articles, last10d.toISOString().slice(0, 10), to.toISOString().slice(0, 10));
     }
 
     return articles;
