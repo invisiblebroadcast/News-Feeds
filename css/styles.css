@@ -302,6 +302,14 @@ img { max-width: 100%; height: auto; }
   color: var(--text-primary);
   font-weight: 500;
 }
+.section-view-toggle {
+  margin: 0;
+  padding: 0;
+}
+.section-view-toggle .mode-btn {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+}
 .bottom-bar.collapsed .top-tab-bar,
 .bottom-bar.collapsed .sub-tab-bar,
 .bottom-bar.collapsed .bottom-view-row,
@@ -625,12 +633,6 @@ body.cards-view {
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
-}
-.reels-stack .reels-home-btn {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 4;
 }
 .reels-stack {
   position: relative;
@@ -2009,6 +2011,13 @@ body.cards-view {
   flex-direction: column;
   gap: 16px;
   z-index: 3;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+  pointer-events: auto;
+}
+.reels-actions.reels-actions-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 .reels-action-btn {
   display: flex;

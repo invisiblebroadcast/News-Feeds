@@ -267,15 +267,9 @@
         '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + scopeLabel + '</span>';
     }
     if (el.sectionMeta) {
-      const pageMatch = (metaText || '').match(/(\d+)\s*of\s*(\d+)/);
-      if (pageMatch) {
-        const settings = Settings.load();
-        const perPage = settings.articlesPerPage || 10;
-        const pageNum = Math.ceil(parseInt(pageMatch[1], 10) / perPage) || 1;
-        el.sectionMeta.textContent = 'Page ' + pageNum;
-      } else {
-        el.sectionMeta.textContent = '';
-      }
+      el.sectionMeta.innerHTML = '';
+      const leftHtml = updateViewToggleInline();
+      if (leftHtml) el.sectionMeta.innerHTML = leftHtml;
     }
     if (el.modeToggle) {
       $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
@@ -400,6 +394,11 @@
     container.innerHTML = renderViewToggle();
   }
 
+  function updateViewToggleInline() {
+    return '<div class="mode-toggle view-toggle section-view-toggle" data-view-toggle-inline>' +
+      renderViewToggle() + '</div>';
+  }
+
   /* ── Reels View ── */
   let currentReelIndex = 0;
   // Fullscreen removed — swipe always works in cards view (no fullscreen gate)
@@ -426,16 +425,14 @@
   function cardOverlayHtml(includeToolbar) {
     var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     if (includeToolbar !== false) {
-      // Home button — top-left, inside the card border (separate from toolbar)
-      html += '<button class="reels-tool-btn reels-home-btn" title="Back to Home">&#x1F3E0;</button>';
-      // Toolbar — top-right, same row as home
+      // Toolbar — top-right
       html += '<div class="reels-toolbar">' +
         '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
         '<button class="reels-tool-btn reels-share-text" title="Share as Text">&#x21AA;</button>' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
-      html += '<div class="reels-actions">' +
+      html += '<div class="reels-actions reels-actions-hidden">' +
         '<button class="reels-action-btn reels-like-btn" title="Like">' +
           '<span class="reels-action-icon">&#x1F44D;</span>' +
           '<span class="reels-action-label">Like</span>' +
@@ -684,16 +681,11 @@
           e.stopPropagation();
           const actions = stack.querySelector('.reels-actions');
           if (actions) {
-            const isVisible = actions.style.opacity !== '0' && actions.style.display !== 'none';
-            if (isVisible) {
-              actions.style.transition = 'opacity 0.25s ease';
-              actions.style.opacity = '0';
-              setTimeout(() => { actions.style.display = 'none'; }, 250);
+            const isHidden = actions.classList.contains('reels-actions-hidden');
+            if (isHidden) {
+              actions.classList.remove('reels-actions-hidden');
             } else {
-              actions.style.display = 'flex';
-              actions.style.transition = 'opacity 0.25s ease';
-              actions.style.opacity = '0';
-              requestAnimationFrame(() => { actions.style.opacity = '1'; });
+              actions.classList.add('reels-actions-hidden');
             }
           }
           return;
@@ -796,6 +788,8 @@
       fg.style.transition = 'none';
       fg.style.transform = 'translateX(0)';
       requestAnimationFrame(() => { fg.style.transition = ''; });
+      const actions = fg.querySelector('.reels-actions');
+      if (actions) actions.classList.add('reels-actions-hidden');
     }
   }
 
@@ -994,11 +988,13 @@
 
   function bindViewToggle() {
     document.addEventListener('click', e => {
-      const btn = e.target.closest('#view-toggle .mode-btn');
+      const btn = e.target.closest('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn');
       if (!btn || btn.classList.contains('active')) return;
       currentView = btn.dataset.view;
-      $$('#view-toggle .mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => b.classList.remove('active'));
+      $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+        if (b.dataset.view === currentView) b.classList.add('active');
+      });
       document.body.classList.toggle('cards-view', currentView === 'reels');
       displayCurrentSubcat();
     });

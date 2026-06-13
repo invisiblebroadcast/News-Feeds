@@ -17,17 +17,27 @@
           <span class="logo-icon">IB</span>
         </div>
         <div class="header-controls">
-          <button class="btn" id="settings-btn">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/>
-            </svg>
-            <span class="btn-label">Settings</span>
-          </button>
           <button class="btn btn-ghost btn-icon" id="options-btn" title="Options">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/>
             </svg>
           </button>
+          <div class="lang-select" style="flex-shrink:0;">
+            <select id="lang-select" title="Translate">
+              <option value="en">EN</option>
+              <option value="hi">HI</option><option value="kn">KN</option>
+              <option value="ta">TA</option><option value="te">TE</option>
+              <option value="ml">ML</option><option value="bn">BN</option>
+              <option value="mr">MR</option><option value="gu">GU</option>
+              <option value="pa">PA</option><option value="ur">UR</option>
+              <option value="es">ES</option><option value="fr">FR</option>
+              <option value="ar">AR</option><option value="zh">ZH</option>
+              <option value="ja">JA</option>
+              <option value="de">DE</option>
+              <option value="ru">RU</option>
+              <option value="pt">PT</option>
+            </select>
+          </div>
           <button class="btn" id="auth-btn">Sign In</button>
           <div class="auth-user" id="auth-user" style="display:none">
             <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
@@ -56,22 +66,12 @@
               </button>
             </div>
           </div>
-          <div class="lang-select" style="flex-shrink:0;">
-            <select id="lang-select" title="Translate">
-              <option value="en">EN</option>
-              <option value="hi">HI</option><option value="kn">KN</option>
-              <option value="ta">TA</option><option value="te">TE</option>
-              <option value="ml">ML</option><option value="bn">BN</option>
-              <option value="mr">MR</option><option value="gu">GU</option>
-              <option value="pa">PA</option><option value="ur">UR</option>
-              <option value="es">ES</option><option value="fr">FR</option>
-              <option value="ar">AR</option><option value="zh">ZH</option>
-              <option value="ja">JA</option>
-              <option value="de">DE</option>
-              <option value="ru">RU</option>
-              <option value="pt">PT</option>
-            </select>
-          </div>
+          <button class="btn" id="settings-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/>
+            </svg>
+            <span class="btn-label">Settings</span>
+          </button>
         </div>
         <div class="header-controls-extras" id="header-extras" style="display:none">
           <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Toggle date filter">
@@ -139,13 +139,12 @@
         <button class="mode-btn active" data-mode="live">Live</button>
       </div>
     </nav>
-    <!-- View toggle + tools row -->
+    <!-- Tools row: filter | search | sort -->
     <div class="bottom-view-row">
-      <div class="mode-toggle view-toggle" id="view-toggle"></div>
-      <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;max-width:200px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
       <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
       </button>
+      <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;max-width:200px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
       <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-btn" title="Sort">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
       </button>
