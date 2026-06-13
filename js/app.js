@@ -251,6 +251,10 @@
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       displayCurrentSubcat();
+      // Hide the sub-tab-bar after selection
+      el.subBar.style.display = 'none';
+      const catToggle = $('#cat-toggle-btn');
+      if (catToggle) catToggle.classList.remove('active');
     });
   }
 
@@ -1365,13 +1369,16 @@
         catToggleBtn.classList.toggle('active', hidden);
       });
     }
-    // Tools toggle button — show/hide the filter/search/sort/translate row
+    // Tools toggle button — show/hide filter row and filters panel
     const toolsToggleBtn = $('#tools-toggle-btn');
     const toolsRow = $('#bottom-tools-row');
     if (toolsToggleBtn && toolsRow) {
       toolsToggleBtn.addEventListener('click', () => {
         const hidden = toolsRow.style.display === 'none' || !toolsRow.style.display;
         toolsRow.style.display = hidden ? 'flex' : 'none';
+        if (el.filtersPanel) {
+          el.filtersPanel.style.display = hidden ? 'block' : 'none';
+        }
         toolsToggleBtn.classList.toggle('active', hidden);
       });
     }
