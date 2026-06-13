@@ -117,20 +117,27 @@
       </ul>
       <div class="mode-toggle view-toggle" id="view-toggle"></div>
     </nav>
-    <div class="bottom-bar-inner">
+    <!-- Top/Live — standalone centered row -->
+    <div class="bottom-mode-row">
       <div class="mode-toggle" id="mode-toggle">
         <button class="mode-btn" data-mode="top">Top</button>
         <button class="mode-btn active" data-mode="live">Live</button>
       </div>
+    </div>
+    <!-- Filter tools row — toggleable -->
+    <div class="bottom-tools-row" id="bottom-tools-row">
       <div class="bottom-controls">
         <button class="btn btn-icon btn-ghost filter-icon-btn" id="search-toggle" title="Search">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3.5 3.5"/></svg>
         </button>
-        <button class="btn btn-icon btn-ghost filter-icon-btn" id="filter-toggle" title="Filter by source">
+        <button class="btn btn-icon btn-ghost filter-icon-btn" id="filter-toggle" title="Filter">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
         </button>
         <button class="btn btn-icon btn-ghost filter-icon-btn" id="sort-toggle" title="Sort">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
+        </button>
+        <button class="btn btn-icon btn-ghost filter-icon-btn" id="tools-toggle-btn" title="Toggle Tools">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 12l5-5 3 3 5-5"/><path d="M13 3v4h-4"/></svg>
         </button>
         <div class="select-wrapper lang-select">
           <select id="lang-select">

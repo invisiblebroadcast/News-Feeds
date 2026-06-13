@@ -1365,6 +1365,16 @@
         catToggleBtn.classList.toggle('active', hidden);
       });
     }
+    // Tools toggle button — show/hide the filter/search/sort/translate row
+    const toolsToggleBtn = $('#tools-toggle-btn');
+    const toolsRow = $('#bottom-tools-row');
+    if (toolsToggleBtn && toolsRow) {
+      toolsToggleBtn.addEventListener('click', () => {
+        const hidden = toolsRow.style.display === 'none' || !toolsRow.style.display;
+        toolsRow.style.display = hidden ? 'flex' : 'none';
+        toolsToggleBtn.classList.toggle('active', hidden);
+      });
+    }
   }
 
   /* ── Activity ── */
