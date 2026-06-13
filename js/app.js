@@ -60,9 +60,10 @@
     filterSource: $('#filter-source'),
     sortBy: $('#sort-by'),
     searchToggle: $('#search-toggle'),
-    filterToggle: $('#filter-toggle'),
-    sortToggle: $('#sort-toggle'),
-    filtersPanel: $('#filters-panel'),
+    filterToggle: $('#filter-btn'),
+    sortBtn: $('#sort-btn'),
+    filterPanel: $('#filter-panel'),
+    sortPanel: $('#sort-panel'),
     viewToggle: $('#view-toggle'),
     githubTokenInput: $('#github-token-input'),
     cloudStatus: $('#cloud-status'),
@@ -913,19 +914,26 @@
 
   /* ── Toggle Filters Panel ── */
   function bindFilterToggles() {
-    function togglePanel(btnId, panelId) {
-      const btn = document.getElementById(btnId);
-      if (!btn) return;
-      btn.addEventListener('click', () => {
-        const open = el.filtersPanel.classList.contains('open');
-        el.filtersPanel.classList.toggle('open');
-        $$('.filter-icon-btn').forEach(b => b.classList.remove('active'));
-        if (!open) btn.classList.add('active');
+    // Filter button → toggle source filter panel
+    if (el.filterToggle) {
+      el.filterToggle.addEventListener('click', () => {
+        const hidden = el.filterPanel.style.display === 'none' || !el.filterPanel.style.display;
+        el.filterPanel.style.display = hidden ? 'block' : 'none';
+        if (el.sortPanel) el.sortPanel.style.display = 'none';
+        el.filterToggle.classList.toggle('active', hidden);
+        if (el.sortBtn) el.sortBtn.classList.remove('active');
       });
     }
-    togglePanel('search-toggle', 'filters-panel');
-    togglePanel('filter-toggle', 'filters-panel');
-    togglePanel('sort-toggle', 'filters-panel');
+    // Sort button → toggle sort panel
+    if (el.sortBtn) {
+      el.sortBtn.addEventListener('click', () => {
+        const hidden = el.sortPanel.style.display === 'none' || !el.sortPanel.style.display;
+        el.sortPanel.style.display = hidden ? 'block' : 'none';
+        if (el.filterPanel) el.filterPanel.style.display = 'none';
+        el.sortBtn.classList.toggle('active', hidden);
+        if (el.filterToggle) el.filterToggle.classList.remove('active');
+      });
+    }
   }
 
   function bindLangSelect() {
@@ -1367,26 +1375,6 @@
         const hidden = subTabBar.style.display === 'none' || !subTabBar.style.display;
         subTabBar.style.display = hidden ? 'block' : 'none';
         catToggleBtn.classList.toggle('active', hidden);
-      });
-    }
-    // Tools toggle button — show/hide filter row and filters panel
-    const toolsToggleBtn = $('#tools-toggle-btn');
-    const toolsRow = $('#bottom-tools-row');
-    if (toolsToggleBtn && toolsRow) {
-      toolsToggleBtn.addEventListener('click', () => {
-        const hidden = toolsRow.style.display === 'none' || !toolsRow.style.display;
-        toolsRow.style.display = hidden ? 'flex' : 'none';
-        if (el.filtersPanel) {
-          el.filtersPanel.style.display = hidden ? 'block' : 'none';
-        }
-        toolsToggleBtn.classList.toggle('active', hidden);
-      });
-    }
-    // Sort toggle — same as tools toggle, opens the filters/sort panel
-    const sortToggleBtn = $('#sort-toggle-btn');
-    if (sortToggleBtn && toolsToggleBtn) {
-      sortToggleBtn.addEventListener('click', () => {
-        toolsToggleBtn.click();
       });
     }
   }

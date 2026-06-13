@@ -95,6 +95,7 @@
   </main>
 
   <div class="bottom-bar" id="bottom-bar">
+    <div class="bottom-bar-container">
     <nav class="tab-bar sub-tab-bar" id="sub-tab-bar" style="display:none">
       <ul class="tab-list" id="sub-tab-list">
         <li class="tab-item active">All</li>
@@ -122,17 +123,34 @@
     <!-- View toggle + tools row -->
     <div class="bottom-view-row">
       <div class="mode-toggle view-toggle" id="view-toggle"></div>
-      <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;max-width:240px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
-      <button class="btn btn-ghost btn-icon filter-icon-btn" id="tools-toggle-btn" title="Toggle Filters">
+      <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;max-width:200px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
+      <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
       </button>
-      <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-toggle-btn" title="Sort">
+      <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-btn" title="Sort">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
       </button>
     </div>
-    <!-- Filter tools row — toggleable, hidden by default -->
-    <div class="bottom-tools-row" id="bottom-tools-row" style="display:none">
-      <div class="bottom-controls">
+    <!-- Filter panel — toggleable, hidden by default -->
+    <div class="bottom-tools-row" id="filter-panel" style="display:none">
+      <div class="filters-row">
+        <div class="select-wrapper">
+          <select id="filter-source">
+            <option value="">All Sources</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <!-- Sort panel — toggleable, hidden by default -->
+    <div class="bottom-tools-row" id="sort-panel" style="display:none">
+      <div class="filters-row">
+        <div class="select-wrapper">
+          <select id="sort-by">
+            <option value="date-desc">Date ↓</option>
+            <option value="date-asc">Date ↑</option>
+            <option value="source">Source A–Z</option>
+          </select>
+        </div>
         <div class="select-wrapper lang-select">
           <select id="lang-select">
             <option value="en">EN</option>
@@ -149,21 +167,6 @@
         </div>
       </div>
     </div>
-    <div class="filters-panel" id="filters-panel">
-      <div class="filters-row">
-        <div class="select-wrapper">
-          <select id="filter-source">
-            <option value="">All Sources</option>
-          </select>
-        </div>
-        <div class="select-wrapper">
-          <select id="sort-by">
-            <option value="date-desc">Date ↓</option>
-            <option value="date-asc">Date ↑</option>
-            <option value="source">Source A–Z</option>
-          </select>
-        </div>
-      </div>
     </div>
   </div>
 

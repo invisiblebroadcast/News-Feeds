@@ -266,6 +266,10 @@ img { max-width: 100%; height: auto; }
   border-top: 1px solid var(--border-primary);
   padding: 0;
 }
+.bottom-bar-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
 .bottom-bar .section-header {
   display: flex;
   justify-content: space-between;
