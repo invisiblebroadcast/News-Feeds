@@ -425,10 +425,13 @@
   function cardOverlayHtml(includeToolbar) {
     var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     if (includeToolbar !== false) {
-      // Toolbar — top-left
+      // Toolbar — top-left (refresh + copy link)
       html += '<div class="reels-toolbar reels-toolbar-left">' +
         '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
         '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
+      '</div>';
+      // Toolbar — top-right (share as image)
+      html += '<div class="reels-toolbar reels-toolbar-right">' +
         '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
@@ -448,7 +451,10 @@
       '</div>';
     }
     html += '<div class="reels-overlay">' +
-        '<span class="reels-count"></span>' +
+        '<div class="reels-count-row">' +
+          '<span class="reels-count"></span>' +
+          '<span class="reels-mode-badge"></span>' +
+        '</div>' +
         '<h2 class="reels-title"></h2>' +
         '<div class="reels-meta">' +
           '<span class="reels-source"></span>' +
@@ -513,6 +519,13 @@
 
     const count = cardEl.querySelector('.reels-count');
     if (count) count.textContent = (idx + 1) + ' / ' + total;
+    const modeBadge = cardEl.querySelector('.reels-mode-badge');
+    if (modeBadge) {
+      const isTop = currentMode === 'top';
+      modeBadge.textContent = isTop ? 'TOP' : 'LIVE';
+      modeBadge.classList.toggle('mode-top', isTop);
+      modeBadge.classList.toggle('mode-live', !isTop);
+    }
     const title = cardEl.querySelector('.reels-title');
     if (title) title.textContent = article.title;
     const source = cardEl.querySelector('.reels-source');

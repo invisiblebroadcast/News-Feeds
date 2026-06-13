@@ -737,10 +737,34 @@ body.cards-view {
   margin-top: 0;
   padding-top: 12px;
 }
+.reels-count-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
 .reels-count {
   font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+}
+.reels-mode-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.reels-mode-badge.mode-live {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.4);
+}
+.reels-mode-badge.mode-top {
+  background: rgba(255, 41, 41, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 41, 41, 0.4);
 }
 .reels-title {
   font-size: 1.05rem;
@@ -2068,6 +2092,10 @@ body.cards-view {
 .reels-toolbar-left {
   right: auto;
   left: 16px;
+}
+.reels-toolbar-right {
+  right: 16px;
+  left: auto;
 }
 
 /* Vertical action bar — right side, center (like YT Shorts / Reels) */
