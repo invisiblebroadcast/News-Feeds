@@ -1414,7 +1414,7 @@
     if (!el.dateFilterModal) return;
     el.dateFilterModal.classList.remove('open');
   }
-  function applyDateFilter() {
+  function onApplyDateFilter() {
     closeDateFilterModal();
     refreshAll();
   }
@@ -1428,7 +1428,7 @@
     if (el.dateToggle) el.dateToggle.addEventListener('click', openDateFilterModal);
     if (el.dateFilterModalClose) el.dateFilterModalClose.addEventListener('click', closeDateFilterModal);
     if (el.dateFilterCancel) el.dateFilterCancel.addEventListener('click', closeDateFilterModal);
-    if (el.dateFilterApply) el.dateFilterApply.addEventListener('click', applyDateFilter);
+    if (el.dateFilterApply) el.dateFilterApply.addEventListener('click', onApplyDateFilter);
     if (el.dateFilterClear) el.dateFilterClear.addEventListener('click', clearDateFilter);
     if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
   }
