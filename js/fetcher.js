@@ -87,8 +87,6 @@ const FeedFetcher = (() => {
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     const xmlText = await res.text();
     // Quick parse to count items before we build full article objects.
-    // Helps diagnose "only 100 items" complaints — the count tells us whether
-    // the publisher's RSS itself is capped, or if our pipeline is dropping items.
     try {
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, 'text/xml');
@@ -96,6 +94,40 @@ const FeedFetcher = (() => {
       console.log(`[FeedFetcher] ${feed.name}: ${itemCount} items in RSS XML (${(xmlText.length / 1024).toFixed(1)} KB)`);
     } catch {}
     return parseRssXml(xmlText, feed);
+  }
+
+  // Some RSS feeds (WordPress-style, BlogEngine, etc.) support pagination via
+  // `?p=N` or `?page=N`. When a feed has exactly the typical cap (50-100 items),
+  // we try fetching the next page(s) to pull more history. This can multiply
+  // the article count significantly for blogs that publish heavily.
+  async function proxyFetchPaginated(feed) {
+    const baseArticles = await proxyFetch(feed);
+    // If the base fetch already returned a lot, skip pagination
+    if (baseArticles.length < 50) return baseArticles;
+
+    const maxPages = 3; // cap pages to keep mobile fast
+    const collected = [...baseArticles];
+
+    for (let page = 2; page <= maxPages + 1; page++) {
+      try {
+        const sep = feed.url.includes('?') ? '&' : '?';
+        const pagedUrl = `${feed.url}${sep}p=${page}`;
+        const articles = await proxyFetch({ ...feed, url: pagedUrl });
+        if (!articles.length) break;
+        // Only add items we haven't seen (by guid or link)
+        const seen = new Set(collected.map(a => a.guid || a.link));
+        let added = 0;
+        for (const a of articles) {
+          const key = a.guid || a.link;
+          if (!seen.has(key)) { collected.push(a); seen.add(key); added++; }
+        }
+        if (added === 0) break; // no new items = we've exhausted history
+        console.log(`[FeedFetcher] ${feed.name} page ${page}: +${added} new items (total: ${collected.length})`);
+      } catch (e) {
+        break; // pagination not supported for this feed
+      }
+    }
+    return collected;
   }
 
   async function fetchFeed(feed) {
@@ -110,10 +142,10 @@ const FeedFetcher = (() => {
 
     // For non-Google feeds, prefer raw RSS XML via the CORS proxy because it
     // returns ALL items the feed publishes (no rss2json-style 100-item cap).
-    // A single feed can publish thousands of items in 10 days, so the raw
-    // XML path is essential for top-mode ranking.
+    // We also try paginated fetching (?p=2, ?p=3) to go beyond the publisher's
+    // default cap, which is critical for top-mode ranking.
     try {
-      return await proxyFetch(feed);
+      return await proxyFetchPaginated(feed);
     } catch (proxyErr) {
       // Fall back to rss2json if the proxy fails (network, 503, etc.)
       const encodedUrl = encodeURIComponent(feed.url);
