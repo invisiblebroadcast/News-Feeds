@@ -1149,10 +1149,9 @@
           let articles = getFilteredArticles(currentSubcat, scopeCache[key]);
           updateFilterSourceOptions(articles);
           if (articles.length) {
-            // Cap during progressive loading too
-            const perPage = (Settings.load().articlesPerPage) || 10;
-            const maxRender = currentMode === 'live' ? perPage * 3 : perPage;
-            if (articles.length > maxRender) articles = articles.slice(0, maxRender);
+            // Don't cap during progressive loading — the renderer itself
+            // paginates to perPage (or 3x perPage in top mode) and offers
+            // Load More. Show everything the user asked for.
             hasRendered = true;
             el.main.innerHTML = '';
             if (currentView === 'reels') renderReels(articles);

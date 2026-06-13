@@ -101,7 +101,9 @@ const FeedFetcher = (() => {
     // rss2json sometimes 500s on some feeds, so we wrap it in the same
     // multi-proxy approach: rss2json first, then proxyFetch.
     const encodedUrl = encodeURIComponent(feed.url);
-    const rss2jsonUrl = RSS2JSON_API + encodedUrl;
+    // Request up to 100 items per source (rss2json free tier max).
+    // Without `count`, rss2json returns only 10 items.
+    const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
 
     try {
       const res = await fetchWithTimeout(rss2jsonUrl);
