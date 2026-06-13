@@ -459,6 +459,9 @@ img { max-width: 100%; height: auto; }
 body.cards-view .app-main {
   padding-bottom: 0;
 }
+body.cards-view .app-footer {
+  display: none;
+}
 
 /* Decent padding for the main content area */
 .article-grid {
@@ -628,7 +631,7 @@ body.cards-view .app-main {
 /* ─── Reels View (static single card, no scrollbar) ─── */
 .reels-container {
   position: relative;
-  height: calc(100vh - 140px);
+  height: calc(100vh - 80px);
   min-height: 400px;
   display: flex;
   flex-direction: column;
@@ -1115,7 +1118,7 @@ body.cards-view {
 
 @media (max-width: 768px) {
   .reels-container {
-    height: calc(100vh - 290px);
+    height: calc(100vh - 140px);
     min-height: 350px;
   }
   .reels-overlay {
@@ -2003,11 +2006,7 @@ body.cards-view {
 }
 
 .reels-watermark {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.3);
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  display: none;
 }
 .reels-watermark .wm-brand {
   font-weight: 600;

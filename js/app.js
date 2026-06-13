@@ -457,9 +457,6 @@
           '<a class="reels-read-link reels-read-btn" href="javascript:void(0)">Read article &rarr;</a>' +
         '</div>' +
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
-        '<div class="reels-watermark">' +
-          '<span class="wm-brand">Invisible Broadcast</span>' +
-        '</div>' +
       '</div>';
     return html;
   }
