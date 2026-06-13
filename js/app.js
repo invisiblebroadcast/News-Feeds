@@ -2,7 +2,7 @@
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
-  let currentScope = 'global';
+  let currentScope = 'nation';
   let currentNation = FeedManager.getSelectedNation();
   let currentSubcat = 'all';
   let currentMode = 'live';
@@ -78,6 +78,10 @@
     dateFilterCancel: $('#date-filter-cancel'),
     dateFilterApply: $('#date-filter-apply'),
     dateFilterClear: $('#date-filter-clear'),
+    sourcesConfigModal: $('#sources-config-modal'),
+    sourcesConfigModalClose: $('#sources-config-modal-close'),
+    sourcesConfigSearch: $('#sources-config-search'),
+    sourcesConfigDone: $('#sources-config-done'),
     authAvatarBtn: $('#auth-avatar-btn'),
     authDropdown: $('#auth-dropdown'),
     authDropdownName: $('#auth-dropdown-name'),
@@ -1558,6 +1562,18 @@
     if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
   }
 
+  function bindSourcesConfig() {
+    if (el.sourcesConfigModalClose) el.sourcesConfigModalClose.addEventListener('click', closeSourcesConfigModal);
+    if (el.sourcesConfigDone) el.sourcesConfigDone.addEventListener('click', closeSourcesConfigModal);
+    if (el.sourcesConfigModal) el.sourcesConfigModal.addEventListener('click', e => { if (e.target === el.sourcesConfigModal) closeSourcesConfigModal(); });
+    if (el.sourcesConfigSearch) {
+      el.sourcesConfigSearch.addEventListener('input', () => {
+        subsConfigFilter = el.sourcesConfigSearch.value;
+        renderSourcesConfigTable();
+      });
+    }
+  }
+
   /* ── Settings Modal ── */
   function openSettings() {
     const settings = Settings.load();
@@ -1833,75 +1849,141 @@
     saveArticleData(link, ad);
   }
 
+  // Settings → Subscriptions now shows a single "Configure Sources" button
+  // that opens a modal with a search bar and a checkbox table of all sources.
+  // This replaces the previous long inline list.
   function renderSubscriptionList() {
     const container = $('#subscription-list');
     if (!container) return;
     const allFeeds = FeedManager.getSubscribableFeeds();
-    let subscribed = FeedManager.getSubscribedFeeds();
+    const subscribed = FeedManager.getSubscribedFeeds();
 
     if (allFeeds.length === 0) {
       container.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.85rem;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius);">No feeds available yet. Add custom feeds below to get started.</p>';
       return;
     }
 
-    // One-time first-run init: only auto-subscribe to all if the user has NEVER
-    // visited the settings page before. The flag is stored as the array itself
-    // (we track that the user has interacted by checking if the localStorage
-    // key exists — even an empty array means "user has explicitly unchecked all").
+    // One-time first-run init
     const hasUserToggled = localStorage.getItem('newsfeeds_subscriptions_initialized') === '1';
-    if (!hasUserToggled && subscribed.length === 0 && allFeeds.length > 0) {
+    if (!hasUserToggled && subscribed.length === 0) {
       const allUrls = allFeeds.filter(f => f.hasRss && f.url).map(f => f.url);
       FeedManager.saveSubscribedFeeds(allUrls);
-      subscribed = allUrls;
     }
+
+    const subscribedCount = FeedManager.getSubscribedFeeds().length;
+    const totalCount = allFeeds.filter(f => f.hasRss && f.url).length;
+
+    container.innerHTML =
+      '<div class="subs-config-row">' +
+        '<div class="subs-config-info">' +
+          '<div class="subs-config-title">Source Subscriptions</div>' +
+          '<div class="subs-config-meta">' + subscribedCount + ' of ' + totalCount + ' sources enabled</div>' +
+        '</div>' +
+        '<button class="btn btn-primary" id="open-subs-config">Configure Sources</button>' +
+      '</div>' +
+      '<p class="subs-config-hint">Subscription changes apply on next fetch. Close settings to refresh.</p>';
+
+    const btn = $('#open-subs-config');
+    if (btn) btn.addEventListener('click', openSourcesConfigModal);
+  }
+
+  // Modal state for sources config
+  let subsConfigFilter = '';
+  let subsConfigRegion = 'all';
+
+  function openSourcesConfigModal() {
+    if (!$('#sources-config-modal')) return;
+    subsConfigFilter = '';
+    subsConfigRegion = 'all';
+    $('#sources-config-modal').classList.add('open');
+    renderSourcesConfigTable();
+  }
+
+  function closeSourcesConfigModal() {
+    const m = $('#sources-config-modal');
+    if (m) m.classList.remove('open');
+  }
+
+  function renderSourcesConfigTable() {
+    const body = $('#sources-config-body');
+    if (!body) return;
+    const allFeeds = FeedManager.getSubscribableFeeds();
+    const subscribed = new Set(FeedManager.getSubscribedFeeds());
+
+    // Apply filters
+    const q = (subsConfigFilter || '').toLowerCase().trim();
     const grouped = {};
     for (const f of allFeeds) {
+      if (!f.hasRss || !f.url) continue;
+      if (subsConfigRegion !== 'all' && f.region !== subsConfigRegion) continue;
+      if (q) {
+        const hay = ((f.name || '') + ' ' + (f.region || '') + ' ' + (f.lang || '')).toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
       const region = f.region || 'Other';
       if (!grouped[region]) grouped[region] = [];
       grouped[region].push(f);
     }
-    let html = '';
+
+    // Build region selector
+    const regions = [...new Set(allFeeds.filter(f => f.hasRss).map(f => f.region || 'Other'))].sort();
+    const regionSelector =
+      '<div class="scm-regions">' +
+        '<button class="scm-region-btn' + (subsConfigRegion === 'all' ? ' active' : '') + '" data-region="all">All</button>' +
+        regions.map(r => '<button class="scm-region-btn' + (subsConfigRegion === r ? ' active' : '') + '" data-region="' + escAttr(r) + '">' + escHtml(r) + '</button>').join('') +
+      '</div>';
+
+    // Build source rows
+    let rowsHtml = '';
     for (const [region, feeds] of Object.entries(grouped)) {
-      const hasRssFeeds = feeds.some(f => f.hasRss);
-      html += '<div class="sub-region"><h4 class="sub-region-title">' + region + '</h4>';
-      if (!hasRssFeeds) {
-        html += '<div class="sub-no-rss">';
-        for (const f of feeds) {
-          html += '<div class="sub-item"><span class="sub-name sub-no">' + f.name + '</span><span class="sub-no-badge">No RSS</span>' +
-            (f.note ? '<span class="sub-note">' + f.note + '</span>' : '') + '</div>';
-        }
-        html += '</div></div>';
-        continue;
-      }
+      rowsHtml += '<tr class="scm-region-header"><td colspan="4">' + escHtml(region) + '</td></tr>';
       for (const f of feeds) {
-        if (!f.hasRss) continue;
-        const checked = subscribed.includes(f.url) ? ' checked' : '';
+        const checked = subscribed.has(f.url);
         const isG = f.isGoogleNews || (f.url && f.url.includes('news.google.com'));
-        html += '<label class="sub-item' + (checked ? ' sub-active' : '') + (isG ? ' sub-google' : '') + '">' +
-          '<input type="checkbox" class="sub-checkbox" data-url="' + f.url + '"' + checked + '>' +
-          '<span class="sub-name">' + f.name + (isG ? ' <span class="sub-google-badge">Google</span>' : '') + '</span>' +
-          '<span class="sub-lang">' + (f.lang || 'en').toUpperCase() + '</span>' +
-          '</label>';
+        rowsHtml +=
+          '<tr class="scm-row' + (checked ? ' scm-active' : '') + (isG ? ' scm-google' : '') + '">' +
+            '<td class="scm-check"><input type="checkbox" class="scm-checkbox" data-url="' + escAttr(f.url) + '"' + (checked ? ' checked' : '') + '></td>' +
+            '<td class="scm-name">' + escHtml(f.name) + (isG ? ' <span class="sub-google-badge">Google</span>' : '') + '</td>' +
+            '<td class="scm-cat">' + escHtml(f.hint || '') + '</td>' +
+            '<td class="scm-lang">' + (f.lang || 'en').toUpperCase() + '</td>' +
+          '</tr>';
       }
-      html += '</div>';
     }
-    container.innerHTML = html;
-    container.querySelectorAll('.sub-checkbox').forEach(cb => {
-      cb.addEventListener('change', () => {
-        FeedManager.toggleSubscription(cb.dataset.url);
-        cb.closest('.sub-item').classList.toggle('sub-active', cb.checked);
-        localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
-        syncSubscriptionsToCloud();
+
+    if (!rowsHtml) {
+      rowsHtml = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-tertiary);">No sources match your search.</td></tr>';
+    }
+
+    body.innerHTML =
+      regionSelector +
+      '<table class="scm-table">' +
+        '<thead><tr><th></th><th>Name</th><th>Category</th><th>Lang</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>';
+
+    // Bind region selector
+    body.querySelectorAll('.scm-region-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        subsConfigRegion = b.dataset.region;
+        renderSourcesConfigTable();
       });
     });
-    const msg = $('#sub-refresh-note');
-    if (!msg) {
-      const note = document.createElement('p');
-      note.id = 'sub-refresh-note';
-      note.style.cssText = 'font-size:0.78rem;color:var(--text-tertiary);margin-top:8px;font-style:italic;';
-      note.textContent = 'Subscription changes apply on next fetch. Close settings to refresh.';
-      container.parentElement.appendChild(note);
-    }
+
+    // Bind checkboxes
+    body.querySelectorAll('.scm-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        FeedManager.toggleSubscription(cb.dataset.url);
+        localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+        syncSubscriptionsToCloud();
+        // Lightweight refresh of just the count in the settings page
+        const subscribedCount = FeedManager.getSubscribedFeeds().length;
+        const meta = document.querySelector('.subs-config-meta');
+        if (meta) {
+          const total = document.querySelectorAll('.scm-checkbox').length;
+          meta.textContent = subscribedCount + ' of ' + total + ' sources enabled';
+        }
+      });
+    });
   }
 
   function bindFeedControls() {
@@ -3503,6 +3585,7 @@
     bindArticleClicks();
     bindFeedControls();
     bindDateToggle();
+    bindSourcesConfig();
     await renderContent();
   }
 
