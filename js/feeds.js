@@ -25,64 +25,16 @@ const FeedManager = (() => {
     if (feedData) return feedData;
     if (loadPromise) return loadPromise;
 
-    loadPromise = Promise.all([
-      fetch('data/feeds.json').then(r => { if (!r.ok) throw new Error('Failed to load feeds'); return r.json(); }),
-      fetch('data/deepseek_json_20260611_0bffae.json').then(r => { if (!r.ok) throw new Error('Failed to load subscribable feeds'); return r.json(); })
-    ]).then(([feedsData, dsData]) => {
-      feedData = feedsData;
-      feedData.subscribableFeeds = flattenDeepSeek(dsData);
-      // Add Google News topic feeds (and extras) to the subscribable list so
-      // they can be checked/unchecked in Settings like any other source.
-      addGoogleNewsToSubscribable();
-      return feedData;
-    }).catch(err => { loadPromise = null; throw err; });
+    loadPromise = fetch('data/feeds.json')
+      .then(r => { if (!r.ok) throw new Error('Failed to load feeds'); return r.json(); })
+      .then(data => {
+        feedData = data;
+        feedData.subscribableFeeds = feedData.subscribableFeeds || [];
+        return feedData;
+      })
+      .catch(err => { loadPromise = null; throw err; });
 
     return loadPromise;
-  }
-
-  function flattenDeepSeek(data) {
-    const result = [];
-    const cats = data.categories || {};
-    function add(items, region, hint) {
-      for (const item of (items || [])) {
-        result.push({
-          region: region || 'Global',
-          name: item.name || '',
-          url: item.url || '',
-          scope: (region === 'Global' || region === 'By Country') ? 'global' : 'nation',
-          nation: (region === 'Global' || region === 'By Country') ? null : 'india',
-          hint: hint || 'politics',
-          lang: item.lang || 'en',
-          hasRss: true
-        });
-      }
-    }
-    add(cats.world?.international_agencies, 'Global');
-    add(cats.world?.by_country, 'By Country');
-    add(cats.india_national?.english_newspapers, 'India (English)');
-    add(cats.india_national?.news_agencies, 'India (English)');
-    add(cats.india_national?.hindi, 'Hindi');
-    add(cats.india_national?.tamil, 'Tamil');
-    for (const key of Object.keys(cats.tv_channels || {})) {
-      add(cats.tv_channels[key], 'TV Channels');
-    }
-    for (const [region, items] of Object.entries(cats.regional || {})) {
-      add(items, region.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
-    }
-    add(cats.science_technology?.science, 'Science', 'science');
-    add(cats.science_technology?.space, 'Science', 'science');
-    add(cats.science_technology?.technology, 'Technology', 'technology');
-    add(cats.business_finance, 'Business & Finance', 'business');
-    add(cats.sports, 'Sports', 'sports');
-    add(cats.education, 'Education', 'education');
-    add(cats.legal, 'Legal');
-    for (const key of Object.keys(cats.agriculture_environment || {})) {
-      add(cats.agriculture_environment[key], 'Environment', 'environment');
-    }
-    for (const key of Object.keys(cats.entertainment_lifestyle || {})) {
-      add(cats.entertainment_lifestyle[key], 'Entertainment', 'entertainment');
-    }
-    return result;
   }
 
   function subcategories() {
@@ -122,101 +74,9 @@ const FeedManager = (() => {
     localStorage.setItem(SELECTED_NATION_KEY, nation);
   }
 
-  function googleNewsUrl(topic, locale) {
-    return 'https://news.google.com/rss/headlines/section/topic/' + topic + '?hl=' + locale.hl + '&gl=' + locale.gl + '&ceid=' + locale.ceid;
-  }
-
-  function getLocale(scope, nation) {
-    const gnews = feedData?.googleNews;
-    if (!gnews) return null;
-    if (scope === 'global') return gnews.locales.global;
-    return gnews.locales.nations?.[nation] || gnews.locales.global;
-  }
-
-  function addGoogleNewsToSubscribable() {
-    const gnews = feedData?.googleNews;
-    if (!gnews || !feedData.subscribableFeeds) return;
-    // Global Google News topic feeds
-    const globalLocale = gnews.locales?.global;
-    if (globalLocale) {
-      for (const cat of subcategories()) {
-        const topic = gnews.topicMapping?.[cat];
-        if (topic) {
-          feedData.subscribableFeeds.push({
-            region: 'Google News',
-            name: 'Google News - ' + (SUBCAT_LABELS[cat] || cat) + ' (Global)',
-            url: googleNewsUrl(topic, globalLocale),
-            scope: 'global',
-            nation: null,
-            hint: cat,
-            lang: 'en',
-            hasRss: true,
-            isGoogleNews: true
-          });
-        }
-      }
-    }
-    // Nation-specific Google News topic feeds
-    for (const [nationKey, locale] of Object.entries(gnews.locales?.nations || {})) {
-      for (const cat of subcategories()) {
-        const topic = gnews.topicMapping?.[cat];
-        if (topic) {
-          feedData.subscribableFeeds.push({
-            region: 'Google News',
-            name: 'Google News - ' + (SUBCAT_LABELS[cat] || cat) + ' (' + (feedData.nations?.[nationKey]?.label || nationKey) + ')',
-            url: googleNewsUrl(topic, locale),
-            scope: 'nation',
-            nation: nationKey,
-            hint: cat,
-            lang: 'en',
-            hasRss: true,
-            isGoogleNews: true
-          });
-        }
-      }
-    }
-    // Add extraFeeds (BBC, Nat Geo, etc.) to the subscribable list as well
-    for (const f of (gnews.extraFeeds || [])) {
-      feedData.subscribableFeeds.push({
-        region: 'Extra',
-        name: f.name,
-        url: f.url,
-        scope: f.scope,
-        nation: f.nation || null,
-        hint: f.hint || 'politics',
-        lang: f.lang || 'en',
-        hasRss: true
-      });
-    }
-  }
-
   function getFeeds(scope, nation) {
     const feeds = [];
-    const gnews = feedData?.googleNews;
-    if (!gnews) return feeds;
-
-    const locale = getLocale(scope, nation);
     const subscribedUrls = getSubscribedFeeds();
-
-    // Google News topic feeds — only include subscribed ones
-    const subs = subcategories();
-    for (const cat of subs) {
-      const topic = gnews.topicMapping?.[cat];
-      if (topic) {
-        const url = googleNewsUrl(topic, locale);
-        if (subscribedUrls.includes(url)) {
-          feeds.push({ name: 'Google News - ' + (SUBCAT_LABELS[cat] || cat), url, hint: cat, lang: 'en', isGoogleNews: true });
-        }
-      }
-    }
-
-    // Extra direct-RSS feeds (BBC Environment, The Hindu, etc.) — only if subscribed
-    const extras = gnews.extraFeeds || [];
-    for (const f of extras) {
-      if (!subscribedUrls.includes(f.url)) continue;
-      if (f.scope === 'global' && scope === 'global') feeds.push({ ...f });
-      if (f.scope === 'nation' && scope === 'nation' && f.nation === nation) feeds.push({ ...f });
-    }
 
     // Custom feeds are always included (user explicitly added them)
     const custom = getCustomFeeds();

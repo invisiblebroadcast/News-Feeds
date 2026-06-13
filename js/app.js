@@ -158,7 +158,7 @@
   }
 
   function cleanSummary(text) {
-    let t = text
+    return text
       .replace(/\s*\[\.\.\.\]\s*$/, '')
       .replace(/\s*\[\.\.\]\s*$/, '')
       .replace(/\s*\[\.\s*\.\s*\.\s*\]\s*$/, '')
@@ -172,90 +172,6 @@
       .replace(/\s*&hellip;\s*$/i, '')
       .replace(/\s*&#8230;\s*$/i, '')
       .trim();
-    t = stripNewsPrefix(t);
-    return t;
-  }
-
-  function stripNewsPrefix(text) {
-    if (!text) return text;
-    let t = text.trim();
-
-    // ---- Approach 1: Google News chained clusters ----
-    // Real-world Google News often concatenates multiple "Title Source" pairs:
-    //   "Title1 Source1 Title2? Source2 Title3... Source3 Title4... Actual body"
-    // After HTML stripping these all run together with single/double spaces.
-    // The actual body is whatever is left after the last "Title... Source" pair.
-    //
-    // Strategy: keep peeling off "SourceName + Title..." prefixes from the
-    // start. A "Source" is a short, no-period word/phrase (1-3 words, <= 40
-    // chars). A "Title" is a longer string that ends with "..." or "?" or
-    // contains typical title punctuation.
-    //
-    // We do this iteratively until we either:
-    //   - hit actual content (a sentence with a real period), or
-    //   - run out of pattern matches, or
-    //   - go past a safety limit (5 iterations / 600 chars peeled).
-
-    const clusterSep = /[\s\u00a0]+/;
-    let safety = 0;
-    while (safety++ < 6) {
-      const before = t;
-
-      // Try: "Source(1-3 words)  Title...  " — peel both
-      // The title may end with "...", "?", "!", or just be a long phrase.
-      let m = t.match(/^(\s*[^\s.][\s\S]{0,40}?)\s{2,}([\s\S]{4,200}?(\.{2,}|\u2026|\?|\!))\s{1,}/);
-      if (m) {
-        const source = m[1].trim();
-        const title = m[2].trim();
-        // Source must be a short, no-period phrase
-        if (source.length <= 40 && !/\.\s/.test(source) && /[\.\?\!\u2026]$/.test(title)) {
-          t = t.slice(m[0].length).trim();
-          continue;
-        }
-      }
-
-      // Try: "...Title...Source..." pattern (title + source adjacent, no clear sep)
-      // e.g., "...Title...vocal.mediaTitle..." or "Title?SourceTitle..."
-      m = t.match(/^([\s\S]{4,200}?(\.{2,}|\u2026|\?|\!))([A-Z][A-Za-z0-9.\-]{0,30})\s{1,}/);
-      if (m) {
-        const title = m[1].trim();
-        const source = m[3].trim();
-        if (source.length <= 30 && /[\.\?\!\u2026]$/.test(title) && title.length <= 200) {
-          t = t.slice(m[0].length).trim();
-          continue;
-        }
-      }
-
-      // Try: "Title - Source - " pattern with em-dash, en-dash, hyphen, colon
-      m = t.match(/^([\s\S]{4,200}?)\s*[\u2014\u2013\-:]\s*([A-Z][A-Za-z0-9 &.\-]{0,30}?)\s*[\u2014\u2013\-:]\s*/);
-      if (m) {
-        const title = m[1].trim();
-        const source = m[2].trim();
-        if (title.length <= 200 && source.length <= 30 && !/\.\s/.test(source)) {
-          t = t.slice(m[0].length).trim();
-          continue;
-        }
-      }
-
-      // No more matches — stop
-      if (t === before) break;
-    }
-
-    // If the result is just a title+source cluster (no real content), return empty
-    // Detect: if t still ends with a title-like pattern without a real sentence,
-    // strip down further.
-    if (t && !/\.\s+[A-Z]/.test(t.slice(0, 200))) {
-      // Try one more aggressive peel: if the whole remaining text is <200 chars
-      // and contains no real sentence (no ". X" pattern), it's likely just
-      // more title/source noise.
-      const looksLikeRealContent = /\b(is|are|was|were|has|have|had|will|would|can|could|may|might|the|a|an|this|that|these|those|in|on|at|for|to|of|with|by|from|as|it|its|he|she|they|we|his|her|their|our|its|and|or|but|if|then|than|so|not|also|more|some|any|all|no|after|before|during|over|under|while|when|where|why|how|what|who|whom|which)\b/i.test(t);
-      if (!looksLikeRealContent && t.length < 200) {
-        // No real content words — likely a leftover cluster
-        t = '';
-      }
-    }
-
-    return t || text.trim();
   }
 
   function getDomain(url) {
@@ -1161,7 +1077,7 @@
 
       const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
       if (!feeds.length) {
-        showError('No feed sources for this scope.');
+        showError('No feed sources available. Open Settings to add custom feeds.');
         isFetching = false;
         return;
       }
@@ -1740,6 +1656,12 @@
     if (!container) return;
     const allFeeds = FeedManager.getSubscribableFeeds();
     let subscribed = FeedManager.getSubscribedFeeds();
+
+    if (allFeeds.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.85rem;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius);">No feeds available yet. Add custom feeds below to get started.</p>';
+      return;
+    }
+
     // One-time first-run init: only auto-subscribe to all if the user has NEVER
     // visited the settings page before. The flag is stored as the array itself
     // (we track that the user has interacted by checking if the localStorage

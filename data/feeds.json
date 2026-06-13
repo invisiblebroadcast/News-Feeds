@@ -3,30 +3,5 @@
   "nations": {
     "india": { "label": "India", "icon": "\ud83c\uddee\ud83c\uddf3" }
   },
-  "googleNews": {
-    "locales": {
-      "global": { "hl": "en-US", "gl": "US", "ceid": "US:en" },
-      "nations": {
-        "india": { "hl": "en-IN", "gl": "IN", "ceid": "IN:en" }
-      }
-    },
-    "topicMapping": {
-      "politics": "WORLD",
-      "business": "BUSINESS",
-      "technology": "TECHNOLOGY",
-      "science": "SCIENCE",
-      "health": "HEALTH",
-      "sports": "SPORTS",
-      "entertainment": "ENTERTAINMENT",
-      "environment": null,
-      "education": null
-    },
-    "extraFeeds": [
-      { "name": "BBC Environment", "url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "scope": "global", "hint": "environment", "lang": "en" },
-      { "name": "The Hindu Environment", "url": "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "environment", "lang": "en" },
-      { "name": "Nat Geo Environment", "url": "https://www.nationalgeographic.com/rss/news", "scope": "global", "hint": "environment", "lang": "en" },
-      { "name": "BBC Education", "url": "https://feeds.bbci.co.uk/news/education/rss.xml", "scope": "global", "hint": "education", "lang": "en" },
-      { "name": "The Hindu Education", "url": "https://www.thehindu.com/education/feeder/default.rss", "scope": "nation", "nation": "india", "hint": "education", "lang": "en" }
-    ]
-  }
+  "subscribableFeeds": []
 }
