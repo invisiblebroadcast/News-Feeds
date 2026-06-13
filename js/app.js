@@ -267,7 +267,15 @@
         '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + scopeLabel + '</span>';
     }
     if (el.sectionMeta) {
-      el.sectionMeta.textContent = metaText || '';
+      const pageMatch = (metaText || '').match(/(\d+)\s*of\s*(\d+)/);
+      if (pageMatch) {
+        const settings = Settings.load();
+        const perPage = settings.articlesPerPage || 10;
+        const pageNum = Math.ceil(parseInt(pageMatch[1], 10) / perPage) || 1;
+        el.sectionMeta.textContent = 'Page ' + pageNum;
+      } else {
+        el.sectionMeta.textContent = '';
+      }
     }
     if (el.modeToggle) {
       $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
@@ -1344,6 +1352,15 @@
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
+    const ibBtn = $('#ib-refresh-btn');
+    if (ibBtn) ibBtn.addEventListener('click', refreshAll);
+    const collapseBtn = $('#collapse-btn');
+    const bottomBar = $('#bottom-bar');
+    if (collapseBtn && bottomBar) {
+      collapseBtn.addEventListener('click', () => {
+        bottomBar.classList.toggle('collapsed');
+      });
+    }
     if (el.hardRefreshModalClose) el.hardRefreshModalClose.addEventListener('click', closeHardRefreshModal);
     if (el.hardRefreshCancel) el.hardRefreshCancel.addEventListener('click', closeHardRefreshModal);
     if (el.hardRefreshConfirm) el.hardRefreshConfirm.addEventListener('click', performHardRefresh);

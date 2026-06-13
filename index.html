@@ -13,7 +13,7 @@
   <div class="sticky-zone" id="sticky-zone">
     <header class="app-header">
       <div class="app-header-inner">
-        <div class="app-logo">
+        <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds" style="cursor:pointer;">
           <span class="logo-icon">IB</span>
         </div>
         <div class="header-controls">
@@ -56,8 +56,8 @@
               </button>
             </div>
           </div>
-          <div class="select-wrapper lang-select" style="flex-shrink:0;">
-            <select id="lang-select" style="font-size:0.75rem;padding:4px 8px;">
+          <div class="lang-select" style="flex-shrink:0;">
+            <select id="lang-select" title="Translate">
               <option value="en">EN</option>
               <option value="hi">HI</option><option value="kn">KN</option>
               <option value="ta">TA</option><option value="te">TE</option>
@@ -66,8 +66,10 @@
               <option value="pa">PA</option><option value="ur">UR</option>
               <option value="es">ES</option><option value="fr">FR</option>
               <option value="ar">AR</option><option value="zh">ZH</option>
-              <option value="ja">JA</option><option value="de">DE</option>
-              <option value="ru">RU</option><option value="pt">PT</option>
+              <option value="ja">JA</option>
+              <option value="de">DE</option>
+              <option value="ru">RU</option>
+              <option value="pt">PT</option>
             </select>
           </div>
         </div>
@@ -108,7 +110,6 @@
   </main>
 
   <div class="bottom-bar" id="bottom-bar">
-    <div class="bottom-bar-container">
     <nav class="tab-bar sub-tab-bar" id="sub-tab-bar" style="display:none">
       <ul class="tab-list" id="sub-tab-list">
         <li class="tab-item active">All</li>
@@ -116,12 +117,17 @@
     </nav>
     <div class="section-header" id="section-header">
       <div class="section-header-top">
-        <h2 id="section-title"></h2>
-        <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
-        </button>
+        <span class="section-meta" id="section-meta"></span>
+        <div class="section-header-right">
+          <h2 id="section-title"></h2>
+          <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-icon" id="collapse-btn" title="Collapse / Expand">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 8,11 13,6"/></svg>
+          </button>
+        </div>
       </div>
-      <span class="section-meta" id="section-meta"></span>
     </div>
     <nav class="tab-bar top-tab-bar" id="top-tab-bar">
       <ul class="tab-list" id="top-tab-list">
@@ -165,7 +171,6 @@
           </select>
         </div>
       </div>
-    </div>
     </div>
   </div>
 
