@@ -86,6 +86,15 @@ const FeedFetcher = (() => {
     const res = await fetchWithTimeout(proxyUrl);
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     const xmlText = await res.text();
+    // Quick parse to count items before we build full article objects.
+    // Helps diagnose "only 100 items" complaints — the count tells us whether
+    // the publisher's RSS itself is capped, or if our pipeline is dropping items.
+    try {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, 'text/xml');
+      const itemCount = xml.querySelectorAll('item').length;
+      console.log(`[FeedFetcher] ${feed.name}: ${itemCount} items in RSS XML (${(xmlText.length / 1024).toFixed(1)} KB)`);
+    } catch {}
     return parseRssXml(xmlText, feed);
   }
 
