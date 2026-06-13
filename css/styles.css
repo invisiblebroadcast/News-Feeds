@@ -1297,6 +1297,27 @@ body.cards-view {
 .sub-item.sub-active {
   background: rgba(31,111,235,0.08);
 }
+.sub-item.sub-google {
+  border-left: 3px solid #4285f4;
+  padding-left: 8px;
+}
+.sub-google-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4285f4, #34a853, #fbbc05, #ea4335);
+  color: #fff;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+.feed-list .feed-google {
+  border-left: 3px solid #4285f4;
+  padding-left: 8px;
+}
 .sub-checkbox {
   accent-color: var(--accent);
   flex-shrink: 0;

@@ -1705,12 +1705,15 @@
       el.feedCustomList.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.82rem;">No custom feeds added.</p>';
       return;
     }
-    el.feedCustomList.innerHTML = '<ul class="feed-list">' + feeds.map(f =>
-      '<li><div><span class="feed-source">' + f.name + '</span><span class="feed-cat">' +
-      (f.scope === 'nation' ? (FeedManager.getNations()[f.nation] || f.nation) + ' / ' : 'Global / ') +
-      FeedManager.subcatLabel(f.subcat, 'global') + '</span></div>' +
-      '<span class="feed-remove" data-url="' + f.url + '">Remove</span></li>'
-    ).join('') + '</ul>';
+    el.feedCustomList.innerHTML = '<ul class="feed-list">' + feeds.map(f => {
+      const isG = f.isGoogleNews || (f.url && f.url.includes('news.google.com'));
+      return '<li' + (isG ? ' class="feed-google"' : '') + '><div><span class="feed-source">' + f.name +
+        (isG ? ' <span class="sub-google-badge">Google</span>' : '') +
+        '</span><span class="feed-cat">' +
+        (f.scope === 'nation' ? (FeedManager.getNations()[f.nation] || f.nation) + ' / ' : 'Global / ') +
+        FeedManager.subcatLabel(f.subcat, 'global') + '</span></div>' +
+        '<span class="feed-remove" data-url="' + f.url + '">Remove</span></li>';
+    }).join('') + '</ul>';
     el.feedCustomList.querySelectorAll('.feed-remove').forEach(btn => {
       btn.addEventListener('click', () => { FeedManager.removeCustomFeed(btn.dataset.url); renderCustomFeedList(); });
     });
@@ -1761,9 +1764,10 @@
       for (const f of feeds) {
         if (!f.hasRss) continue;
         const checked = subscribed.includes(f.url) ? ' checked' : '';
-        html += '<label class="sub-item' + (checked ? ' sub-active' : '') + '">' +
+        const isG = f.isGoogleNews || (f.url && f.url.includes('news.google.com'));
+        html += '<label class="sub-item' + (checked ? ' sub-active' : '') + (isG ? ' sub-google' : '') + '">' +
           '<input type="checkbox" class="sub-checkbox" data-url="' + f.url + '"' + checked + '>' +
-          '<span class="sub-name">' + f.name + '</span>' +
+          '<span class="sub-name">' + f.name + (isG ? ' <span class="sub-google-badge">Google</span>' : '') + '</span>' +
           '<span class="sub-lang">' + (f.lang || 'en').toUpperCase() + '</span>' +
           '</label>';
       }
