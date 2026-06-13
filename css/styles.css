@@ -96,7 +96,7 @@ img { max-width: 100%; height: auto; }
   padding: 16px 24px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -377,7 +377,7 @@ img { max-width: 100%; height: auto; }
 .header-controls-extras {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 4px 0 8px;
   flex-wrap: wrap;
