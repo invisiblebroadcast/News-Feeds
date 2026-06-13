@@ -741,6 +741,7 @@
           e.stopPropagation();
           const current = Settings.get('showDescription');
           Settings.set('showDescription', !current);
+          syncSettingsToCloud();
           // Re-render the current card to apply the setting
           showReel();
           return;
@@ -1076,6 +1077,7 @@
     el.langSelect.value = Settings.get('language') || 'en';
     el.langSelect.addEventListener('change', () => {
       Settings.save({ language: el.langSelect.value });
+      syncSettingsToCloud();
       const key = scopeKey();
       const cached = scopeCache[key];
       if (!cached) return;
@@ -1487,6 +1489,7 @@
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
     Settings.save({ articlesPerPage: perPage, language: lang });
+    syncSettingsToCloud();
     closeSettings();
     displayCurrentSubcat();
   }
@@ -1737,7 +1740,12 @@
     if (!container) return;
     const allFeeds = FeedManager.getSubscribableFeeds();
     let subscribed = FeedManager.getSubscribedFeeds();
-    if (subscribed.length === 0 && allFeeds.length > 0) {
+    // One-time first-run init: only auto-subscribe to all if the user has NEVER
+    // visited the settings page before. The flag is stored as the array itself
+    // (we track that the user has interacted by checking if the localStorage
+    // key exists — even an empty array means "user has explicitly unchecked all").
+    const hasUserToggled = localStorage.getItem('newsfeeds_subscriptions_initialized') === '1';
+    if (!hasUserToggled && subscribed.length === 0 && allFeeds.length > 0) {
       const allUrls = allFeeds.filter(f => f.hasRss && f.url).map(f => f.url);
       FeedManager.saveSubscribedFeeds(allUrls);
       subscribed = allUrls;
@@ -1778,6 +1786,8 @@
       cb.addEventListener('change', () => {
         FeedManager.toggleSubscription(cb.dataset.url);
         cb.closest('.sub-item').classList.toggle('sub-active', cb.checked);
+        localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+        syncSubscriptionsToCloud();
       });
     });
     const msg = $('#sub-refresh-note');
@@ -2536,6 +2546,8 @@
       }
       if (dropdownName) dropdownName.textContent = user.user_metadata?.full_name || 'User';
       if (dropdownEmail) dropdownEmail.textContent = user.email || '';
+      // Pull any cloud-synced preferences for this user
+      pullSettingsFromCloud();
     } else {
       if (btn) btn.style.display = '';
       if (userDiv) userDiv.style.display = 'none';
@@ -2544,6 +2556,50 @@
       const dropdown = $('#auth-dropdown');
       if (dropdown) dropdown.style.display = 'none';
     }
+  }
+
+  /* ── Cloud Sync of Settings (Supabase user_metadata) ── */
+  let cloudSyncTimer = null;
+
+  function pullSettingsFromCloud() {
+    if (!currentUser) return;
+    const meta = currentUser.user_metadata || {};
+    // Pull subscriptions
+    if (Array.isArray(meta.subscriptions)) {
+      FeedManager.saveSubscribedFeeds(meta.subscriptions);
+      localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+    }
+    // Pull settings (articlesPerPage, language, showDescription)
+    const cloudSettings = meta.app_settings;
+    if (cloudSettings && typeof cloudSettings === 'object') {
+      Settings.save(cloudSettings);
+    }
+  }
+
+  function pushSettingsToCloud() {
+    if (!currentUser) return;
+    // Debounce to avoid hammering the API on every checkbox change
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(async () => {
+      try {
+        const client = SupabaseStore.getClient();
+        await client.auth.updateUser({
+          data: {
+            subscriptions: FeedManager.getSubscribedFeeds(),
+            app_settings: Settings.load()
+          }
+        });
+      } catch (e) {
+        console.warn('Cloud sync failed:', e.message);
+      }
+    }, 600);
+  }
+
+  function syncSubscriptionsToCloud() {
+    pushSettingsToCloud();
+  }
+  function syncSettingsToCloud() {
+    pushSettingsToCloud();
   }
 
   async function handleAuthChange(event, session) {
