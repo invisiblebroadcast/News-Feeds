@@ -294,10 +294,13 @@ img { max-width: 100%; height: auto; }
 .bottom-bar-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
   gap: 10px;
-  flex-wrap: wrap;
+  padding: 8px 16px;
+}
+.bottom-bar-inner .mode-toggle {
+  flex: 1;
+  display: flex;
+  justify-content: center;
 }
 .header-controls-extras {
   display: flex;

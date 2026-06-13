@@ -1365,15 +1365,6 @@
         catToggleBtn.classList.toggle('active', hidden);
       });
     }
-    // Filter toggle — enable/disable the filter panel
-    const filterToggleBtn = $('#filter-toggle');
-    const filtersPanel = $('#filters-panel');
-    if (filterToggleBtn && filtersPanel) {
-      filterToggleBtn.addEventListener('click', () => {
-        const open = filtersPanel.classList.toggle('open');
-        filterToggleBtn.classList.toggle('active', open);
-      });
-    }
   }
 
   /* ── Activity ── */
