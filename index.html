@@ -74,11 +74,6 @@
           </div>
         </div>
         <div class="header-controls-extras" id="header-extras" style="display:none">
-          <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Toggle date filter">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
-            </svg>
-          </button>
           <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
             &#x21BB;
           </button>
@@ -95,8 +90,8 @@
         </div>
       </div>
     </header>
-    <!-- Date range row — sits below the header, hidden by default -->
-    <div class="date-range-row" id="date-range-row" style="display:none">
+    <!-- Date range row — sits below the header, always visible -->
+    <div class="date-range-row" id="date-range-row">
       <div class="date-range-fields">
         <label class="date-field">
           <span class="date-field-label">From</span>
@@ -107,9 +102,6 @@
           <span class="date-field-label">To</span>
           <input type="date" id="date-to">
         </label>
-        <button class="btn btn-ghost btn-icon" id="date-clear-btn" title="Clear date filter">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M4 4v10M12 4v10M5 4V2h6v2M6 7v4M10 7v4"/></svg>
-        </button>
       </div>
     </div>
   </div>

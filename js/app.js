@@ -24,9 +24,7 @@
     modalSave: $('#modal-save'),
     dateFrom: $('#date-from'),
     dateTo: $('#date-to'),
-    dateToggle: $('#date-toggle-btn'),
     dateRange: $('#date-range-row'),
-    dateClear: $('#date-clear-btn'),
     articleModal: $('#article-modal'),
     articleModalClose: $('#article-modal-close'),
     articleModalTitle: $('#article-modal-title'),
@@ -1311,26 +1309,10 @@
     window.location.reload();
   }
 
-  /* ── Date Toggle ── */
+  /* ── Date Range (always visible) ── */
   function bindDateToggle() {
-    el.dateToggle.addEventListener('click', () => {
-      const hidden = el.dateRange.style.display === 'none' || !el.dateRange.style.display;
-      el.dateRange.style.display = hidden ? 'flex' : 'none';
-      if (hidden) {
-        const today = new Date().toISOString().slice(0, 10);
-        if (!el.dateFrom.value) el.dateFrom.value = today;
-        if (!el.dateTo.value) el.dateTo.value = today;
-      }
-    });
-    el.dateFrom.addEventListener('change', refreshAll);
-    el.dateTo.addEventListener('change', refreshAll);
-    if (el.dateClear) {
-      el.dateClear.addEventListener('click', () => {
-        el.dateFrom.value = '';
-        el.dateTo.value = '';
-        refreshAll();
-      });
-    }
+    if (el.dateFrom) el.dateFrom.addEventListener('change', refreshAll);
+    if (el.dateTo) el.dateTo.addEventListener('change', refreshAll);
   }
 
   /* ── Settings Modal ── */
