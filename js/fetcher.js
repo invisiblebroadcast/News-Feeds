@@ -1,15 +1,6 @@
 const FeedFetcher = (() => {
   const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json?rss_url=';
-  // List of CORS proxies to try in order. If one fails (network error or non-2xx),
-  // the next one is attempted. This gives resilience when any single proxy is down
-  // or rate-limiting.
-  const CORS_PROXIES = [
-    u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
-    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-    u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u),
-    u => 'https://cors-anywhere.herokuapp.com/' + u,
-    u => 'https://thingproxy.freeboard.io/fetch/' + u
-  ];
+  const CORS_PROXY = 'https://corsproxy.io/?url=';
   const FETCH_TIMEOUT = 15000;
 
   async function fetchWithTimeout(url, timeout = FETCH_TIMEOUT) {
@@ -89,28 +80,11 @@ const FeedFetcher = (() => {
   }
 
   async function proxyFetch(feed) {
-    let lastErr = null;
-    for (const makeUrl of CORS_PROXIES) {
-      const proxyUrl = makeUrl(feed.url);
-      try {
-        const res = await fetchWithTimeout(proxyUrl);
-        if (!res.ok) {
-          lastErr = new Error(`Proxy HTTP ${res.status} (${proxyUrl.split('?')[0]})`);
-          continue;
-        }
-        const xmlText = await res.text();
-        // Basic sanity check — should at least contain <rss or <channel
-        if (!xmlText || (!xmlText.includes('<rss') && !xmlText.includes('<channel'))) {
-          lastErr = new Error(`Proxy returned non-RSS content (${proxyUrl.split('?')[0]})`);
-          continue;
-        }
-        return parseRssXml(xmlText, feed);
-      } catch (e) {
-        lastErr = e;
-        continue;
-      }
-    }
-    throw lastErr || new Error('All proxies failed');
+    const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url);
+    const res = await fetchWithTimeout(proxyUrl);
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const xmlText = await res.text();
+    return parseRssXml(xmlText, feed);
   }
 
   async function fetchFeed(feed) {

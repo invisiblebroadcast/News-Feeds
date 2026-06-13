@@ -178,53 +178,91 @@
 
   function stripNewsPrefix(text) {
     if (!text) return text;
-    // Google News often prefixes the description with the article title (possibly
-    // truncated with "...") followed by a dash/separator and the source name.
-    // Examples we want to strip:
-    //   "Article title - Source Name - Actual description..."
-    //   "Article title: ... Source Name:  Actual description..."
-    //   "Article title — Source Name. Actual description..."
-    const t = text.trim();
-    // Try common separators in order of how often they appear
-    const seps = [
-      /^\s*[\u2014\u2013\-:]\s*/, // em-dash, en-dash, hyphen, colon
-      /^\s*[|]\s*/,              // pipe
-      /^\s*[.]\s+/               // period followed by space (last resort)
-    ];
-    // The pattern is: up to 2 leading "segments" separated by these separators,
-    // then a "body" that's the actual description.
-    let work = t;
-    let stripped = 0;
-    for (let i = 0; i < 2; i++) {
-      // Find the first separator
-      let firstMatch = null;
-      let firstIdx = -1;
-      for (const sep of seps) {
-        const m = work.match(sep);
-        if (m && (firstIdx === -1 || m.index < firstIdx)) {
-          firstIdx = m.index;
-          firstMatch = sep;
+    let t = text.trim();
+
+    // ---- Approach 1: Google News HTML pattern ----
+    // Many Google News RSS items have description like:
+    //   <a href="...">Source Name</a>&nbsp;<font color="#6f6f6f">Title text...</font><br>Actual description...
+    // After HTML stripping it becomes:
+    //   "Source Name Title text... Actual description..."
+    // We detect a leading "Source-like + Title-like" pair by looking for the
+    // pattern where the FIRST chunk is short and looks like a source name
+    // (no sentence-ending period, often a single word/short phrase), and the
+    // SECOND chunk is a title (may end with "...") and the rest is the body.
+    //
+    // We use a regex to split on a likely title-terminator: the first "..." or
+    // sequence of 3+ dots that appears AFTER a short source-like prefix.
+
+    // Pattern: "SourceName  Title..."  where title ends with "..."
+    const titleWithEllipsis = /^(\S[^.\n]{0,60}?)\s+([^\n]{4,160}?\.\.\.|\u2026)\s*([\s\S]+)$/;
+    const m1 = t.match(titleWithEllipsis);
+    if (m1) {
+      const source = m1[1].trim();
+      const title = m1[2].trim();
+      const body = m1[3].trim();
+      // Source must be short, no sentence-ending period
+      if (source.length <= 40 && !/\.\s/.test(source) && body.length >= 30) {
+        // Make sure the title looks like a title (not a sentence) - i.e., it
+        // does not end in punctuation other than ellipsis, and is reasonably
+        // short.
+        if (title.length <= 200 && /(\.\.\.|\u2026)\s*$/.test(title)) {
+          t = body;
         }
       }
-      if (firstIdx === -1 || firstIdx > 80) break; // safety: don't strip huge prefix
-      // Make sure what comes before looks like a title (not a long sentence)
-      const before = work.slice(0, firstIdx).trim();
-      if (before.length < 5) break;
-      // Heuristic: the leading "segment" should not contain a period that
-      // ends a sentence (i.e., it's a title, not a sentence). Check if there's
-      // a ". " in the first 40 chars.
-      if (/\.\s/.test(before.slice(0, 60))) break;
-      // If we've stripped already once and the previous separator ended with
-      // a period+space, stop.
-      if (stripped >= 1 && /\.\s*$/.test(before)) break;
-      work = work.slice(firstIdx).replace(firstMatch, '').trim();
-      stripped++;
     }
-    // Only return the stripped version if we actually removed something AND
-    // the remaining text is still substantial
-    if (stripped > 0 && work.length >= 30 && work.length < t.length) {
-      return work;
+
+    // ---- Approach 2: "Title - Source - Body" or "Title: Source: Body" ----
+    if (t === text.trim()) {
+      // Try common separator patterns
+      const seps = [
+        /^\s*[\u2014\u2013\-:]\s*/, // em-dash, en-dash, hyphen, colon
+        /^\s*[|]\s*/,              // pipe
+        /^\s*[.]\s+/               // period followed by space
+      ];
+      let work = t;
+      let stripped = 0;
+      for (let i = 0; i < 2; i++) {
+        let firstMatch = null;
+        let firstIdx = -1;
+        for (const sep of seps) {
+          const m = work.match(sep);
+          if (m && (firstIdx === -1 || m.index < firstIdx)) {
+            firstIdx = m.index;
+            firstMatch = sep;
+          }
+        }
+        if (firstIdx === -1 || firstIdx > 100) break;
+        const before = work.slice(0, firstIdx).trim();
+        if (before.length < 3) break;
+        // First segment (title) must be title-like, not a full sentence
+        if (i === 0 && /[.!?]\s+[A-Z]/.test(before.slice(0, 200))) break;
+        if (i === 1) {
+          // Second segment is the source — should be short, no sentence period
+          if (before.length > 50) break;
+          if (/[.!?]\s+[A-Z]/.test(before)) break;
+        }
+        work = work.slice(firstIdx).replace(firstMatch, '').trim();
+        stripped++;
+      }
+      if (stripped > 0 && work.length >= 30 && work.length < t.length) {
+        t = work;
+      }
     }
+
+    // ---- Approach 3: catch any leading "Word... Word... Body" pattern ----
+    // Sometimes Google News has "SourceName  ... Title... Actual body" where
+    // the source is followed by an ellipsis and then the title.
+    if (t === text.trim()) {
+      const m2 = t.match(/^(\S[^.\n]{0,40}?)\s+(\.{2,}|\u2026)\s*([\s\S]+)$/);
+      if (m2 && m2[1].length <= 40 && m2[3].length >= 30) {
+        // Check if the body itself still has a similar prefix to strip
+        const m3 = m2[3].match(/^([^\n]{4,160}?\.\.\.|\u2026)\s*([\s\S]+)$/);
+        if (m3 && m3[2].length >= 30) {
+          t = m3[2];
+        }
+      }
+    }
+
     return t;
   }
 
@@ -496,16 +534,17 @@
   }
 
   function cardOverlayHtml(includeToolbar) {
-    var html = '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
+    var html = '';
     if (includeToolbar !== false) {
-      // Toolbar — top-left (refresh + copy link)
-      html += '<div class="reels-toolbar reels-toolbar-left">' +
-        '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
-        '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
-      '</div>';
-      // Toolbar — top-right (share as image)
-      html += '<div class="reels-toolbar reels-toolbar-right">' +
-        '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
+      // Standalone toolbar row — sits above image/text, no overlap.
+      html += '<div class="reels-toolbar-row">' +
+        '<div class="reels-toolbar-group reels-toolbar-left">' +
+          '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
+          '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
+        '</div>' +
+        '<div class="reels-toolbar-group reels-toolbar-right">' +
+          '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
+        '</div>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
       html += '<div class="reels-actions reels-actions-hidden">' +
@@ -523,6 +562,7 @@
         '</button>' +
       '</div>';
     }
+    html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
     html += '<div class="reels-overlay">' +
         '<div class="reels-count-row">' +
           '<span class="reels-count"></span>' +
@@ -755,7 +795,7 @@
           return;
         }
         // Card background click → toggle action bar visibility (soft fade)
-        if (e.target.closest('.reels-card') && !e.target.closest('button, a, input, textarea, .reels-comment-box, .reels-overlay button, .reels-home-btn, .reels-toolbar')) {
+        if (e.target.closest('.reels-card') && !e.target.closest('button, a, input, textarea, .reels-comment-box, .reels-overlay button, .reels-home-btn, .reels-toolbar, .reels-toolbar-row')) {
           e.stopPropagation();
           const actions = stack.querySelector('.reels-actions');
           if (actions) {
@@ -2022,7 +2062,7 @@
     btn && btn.classList.add('btn-busy');
     try {
       const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-      const fullSummary = stripHtml(article.summary);
+      const fullSummary = cleanSummary(stripHtml(article.summary));
       const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
 
       let img = null;

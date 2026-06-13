@@ -743,7 +743,7 @@ body.cards-view {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 48px 8px 20px;
+  padding: 16px 8px 20px;
   z-index: 2;
   flex: 1;
   min-height: 0;
@@ -2089,6 +2089,31 @@ body.cards-view {
   border-color: var(--text-tertiary);
 }
 
+/* Standalone toolbar row — sits above the image and text, no overlap */
+.reels-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 8px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
+  z-index: 3;
+}
+.reels-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.reels-toolbar-left {
+  justify-content: flex-start;
+}
+.reels-toolbar-right {
+  justify-content: flex-end;
+}
+/* Legacy absolutely-positioned toolbars kept for backward compat */
 .reels-toolbar {
   position: absolute;
   top: 16px;
@@ -2096,14 +2121,6 @@ body.cards-view {
   display: flex;
   gap: 6px;
   z-index: 3;
-}
-.reels-toolbar-left {
-  right: auto;
-  left: 16px;
-}
-.reels-toolbar-right {
-  right: 16px;
-  left: auto;
 }
 
 /* Vertical action bar — right side, center (like YT Shorts / Reels) */
