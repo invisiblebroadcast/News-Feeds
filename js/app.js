@@ -1336,6 +1336,26 @@
     if (el.hardRefreshCancel) el.hardRefreshCancel.addEventListener('click', closeHardRefreshModal);
     if (el.hardRefreshConfirm) el.hardRefreshConfirm.addEventListener('click', performHardRefresh);
     if (el.hardRefreshModal) el.hardRefreshModal.addEventListener('click', e => { if (e.target === el.hardRefreshModal) closeHardRefreshModal(); });
+    // Options button toggles the extras row (date, refresh, hard refresh, activity)
+    const optionsBtn = $('#options-btn');
+    const headerExtras = $('#header-extras');
+    if (optionsBtn && headerExtras) {
+      optionsBtn.addEventListener('click', () => {
+        const hidden = headerExtras.style.display === 'none' || !headerExtras.style.display;
+        headerExtras.style.display = hidden ? 'flex' : 'none';
+        optionsBtn.classList.toggle('active', hidden);
+      });
+    }
+    // Category toggle button shows/hides the sub-tab-bar
+    const catToggleBtn = $('#cat-toggle-btn');
+    const subTabBar = $('#sub-tab-bar');
+    if (catToggleBtn && subTabBar) {
+      catToggleBtn.addEventListener('click', () => {
+        const hidden = subTabBar.style.display === 'none' || !subTabBar.style.display;
+        subTabBar.style.display = hidden ? 'block' : 'none';
+        catToggleBtn.classList.toggle('active', hidden);
+      });
+    }
   }
 
   /* ── Activity ── */

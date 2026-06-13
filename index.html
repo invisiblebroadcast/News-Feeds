@@ -15,32 +15,8 @@
       <div class="app-header-inner">
         <div class="app-logo">
           <span class="logo-icon">IB</span>
-          <span>Invisible Broadcast</span>
         </div>
         <div class="header-controls">
-          <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Toggle date filter">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
-            </svg>
-          </button>
-          <div class="date-range" id="date-range" style="display:none">
-            <input type="date" id="date-from">
-            <span style="color:var(--text-tertiary)">to</span>
-            <input type="date" id="date-to">
-          </div>
-          <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
-            &#x21BB;
-          </button>
-          <button class="btn btn-ghost btn-icon" id="hard-refresh-btn" title="Hard Refresh (clears cache)">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/>
-            </svg>
-          </button>
-          <button class="btn btn-ghost btn-icon" id="activity-btn" title="Activity">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/>
-            </svg>
-          </button>
           <button class="btn" id="auth-btn">Sign In</button>
           <div class="auth-user" id="auth-user" style="display:none">
             <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
@@ -76,27 +52,39 @@
             </svg>
             Settings
           </button>
+          <button class="btn btn-ghost btn-icon" id="options-btn" title="Options">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="header-controls-extras" id="header-extras" style="display:none">
+          <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Toggle date filter">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
+            </svg>
+          </button>
+          <div class="date-range" id="date-range" style="display:none">
+            <input type="date" id="date-from">
+            <span style="color:var(--text-tertiary)">to</span>
+            <input type="date" id="date-to">
+          </div>
+          <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
+            &#x21BB;
+          </button>
+          <button class="btn btn-ghost btn-icon" id="hard-refresh-btn" title="Hard Refresh (clears cache)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/>
+            </svg>
+          </button>
+          <button class="btn btn-ghost btn-icon" id="activity-btn" title="Activity">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/>
+            </svg>
+          </button>
         </div>
       </div>
-      <nav class="tab-bar" id="top-tab-bar">
-        <ul class="tab-list" id="top-tab-list">
-          <li class="tab-item active" data-scope="global">Global</li>
-          <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-        </ul>
-        <div class="mode-toggle view-toggle" id="view-toggle"></div>
-      </nav>
     </header>
-    <nav class="tab-bar" id="sub-tab-bar">
-      <ul class="tab-list" id="sub-tab-list">
-        <li class="tab-item active">All</li>
-      </ul>
-    </nav>
-    <div class="section-header" id="section-header">
-      <div><h2 id="section-title"></h2></div>
-      <div class="section-controls">
-        <span class="section-meta" id="section-meta"></span>
-      </div>
-    </div>
   </div>
 
   <main class="app-main" id="main-content">
@@ -107,6 +95,27 @@
   </main>
 
   <div class="bottom-bar" id="bottom-bar">
+    <div class="section-header" id="section-header">
+      <div class="section-header-top">
+        <h2 id="section-title"></h2>
+        <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+        </button>
+      </div>
+      <span class="section-meta" id="section-meta"></span>
+    </div>
+    <nav class="tab-bar sub-tab-bar" id="sub-tab-bar">
+      <ul class="tab-list" id="sub-tab-list">
+        <li class="tab-item active">All</li>
+      </ul>
+    </nav>
+    <nav class="tab-bar top-tab-bar" id="top-tab-bar">
+      <ul class="tab-list" id="top-tab-list">
+        <li class="tab-item active" data-scope="global">Global</li>
+        <li class="tab-item" data-scope="nation" data-nation="india">India</li>
+      </ul>
+      <div class="mode-toggle view-toggle" id="view-toggle"></div>
+    </nav>
     <div class="bottom-bar-inner">
       <div class="mode-toggle" id="mode-toggle">
         <button class="mode-btn" data-mode="top">Top</button>
