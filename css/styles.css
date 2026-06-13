@@ -96,7 +96,7 @@ img { max-width: 100%; height: auto; }
   padding: 16px 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -377,6 +377,7 @@ img { max-width: 100%; height: auto; }
 .header-controls-extras {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 4px 0 8px;
   flex-wrap: wrap;
@@ -631,8 +632,7 @@ body.cards-view .app-footer {
 /* ─── Reels View (static single card, no scrollbar) ─── */
 .reels-container {
   position: relative;
-  height: calc(100vh - 80px);
-  min-height: 400px;
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1118,8 +1118,7 @@ body.cards-view {
 
 @media (max-width: 768px) {
   .reels-container {
-    height: calc(100vh - 140px);
-    min-height: 350px;
+    min-height: 300px;
     padding-bottom: 14px;
   }
   .reels-overlay {

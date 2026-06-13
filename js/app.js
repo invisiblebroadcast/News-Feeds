@@ -542,11 +542,26 @@
     if (dislikeBtn) dislikeBtn.classList.toggle('active', !!ad.dislike);
   }
 
+  function sizeReelsContainer() {
+    const container = el.main.querySelector('.reels-container');
+    const bottomBar = document.getElementById('bottom-bar');
+    const header = document.querySelector('.app-header');
+    if (!container) return;
+    requestAnimationFrame(() => {
+      const headerH = header ? header.getBoundingClientRect().height : 0;
+      const bottomH = bottomBar ? bottomBar.getBoundingClientRect().height : 0;
+      const available = window.innerHeight - headerH - bottomH;
+      container.style.height = Math.max(300, available - 8) + 'px';
+    });
+  }
+
   function showReel() {
     const articles = currentArticles;
     const idx = currentReelIndex;
     const article = articles[idx];
     const total = articles.length;
+
+    sizeReelsContainer();
 
     const existing = el.main.querySelector('.reels-container');
 
@@ -974,6 +989,10 @@
       });
       document.body.classList.toggle('cards-view', currentView === 'reels');
       displayCurrentSubcat();
+      sizeReelsContainer();
+    });
+    window.addEventListener('resize', () => {
+      if (currentView === 'reels') sizeReelsContainer();
     });
   }
 
@@ -1334,6 +1353,7 @@
     if (collapseBtn && bottomBar) {
       collapseBtn.addEventListener('click', () => {
         bottomBar.classList.toggle('collapsed');
+        sizeReelsContainer();
       });
     }
     if (el.hardRefreshModalClose) el.hardRefreshModalClose.addEventListener('click', closeHardRefreshModal);
