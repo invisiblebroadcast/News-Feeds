@@ -2308,6 +2308,19 @@ body.cards-view {
   font-size: 0.7rem;
   font-weight: 600;
 }
+.activity-item .ai-archived-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: rgba(110, 118, 129, 0.3);
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.activity-item.activity-archived .ai-title {
+  color: var(--text-secondary);
+}
 .activity-empty {
   text-align: center;
   padding: 40px 20px;

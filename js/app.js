@@ -235,14 +235,16 @@
       // many sources cover the same story (importance of the concept).
       const conceptCounts = buildConceptCounts(articles);
       // Cap at 1500 articles to keep scoring fast on mobile.
-      // Beyond that, the trailing items get score 0 and sink to the bottom.
       const scoreLimit = 1500;
       const toScore = articles.length > scoreLimit ? articles.slice(0, scoreLimit) : articles;
       for (const a of toScore) {
         const key = normalizeTitle(a.title);
-        a._score = scoreArticle(a, conceptCounts.get(key) || 0);
+        a._score = scoreArticle(a, conceptCounts.get(key) || 0, articles);
       }
       for (let i = scoreLimit; i < articles.length; i++) articles[i]._score = 0;
+      // Boost the OLDEST article in each concept cluster — the "primary
+      // source" that broke the story gets +50 points.
+      applyOldestSourceBonus(toScore);
     }
     const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
     articles = applySort(articles, sortMode);
@@ -1270,6 +1272,46 @@
 
   const TOP_SOURCES = ['BBC', 'CNN', 'Reuters', 'The Hindu', 'NYT', 'New York Times', 'Guardian', 'Times of India', 'NDTV', 'Al Jazeera', 'Washington Post', 'NPR', 'DW', 'Bloomberg', 'Forbes', 'ESPN', 'AP', 'Associated Press', 'Indian Express', 'Hindustan Times', 'The Print', 'The Wire', 'Scroll', 'Firstpost'];
 
+  // Alarming / emergency words — strong signal that something important is happening.
+  // Matched in title or summary, case-insensitive, whole-word.
+  const ALARMING_PATTERNS = [
+    /\b(breaking|just\s*in|developing)\b/i,
+    /\b(urgent|emergency|crisis|disaster)\b/i,
+    /\b(attack(ed|s)?|shoot(ing|out)?|killed|killed|dead|death|deadly)\b/i,
+    /\b(bomb(ing|ed)?|blast|explosion|terror(ism|ist|ist)\b/i,
+    /\b(war|invasion|military|missile|strike|raid)\b/i,
+    /\b(earthquake|flood|cyclone|tsunami|wildfire|volcano)\b/i,
+    /\b(pandemic|outbreak|epidemic|virus|covid)\b/i,
+    /\b(collapse(d)?|crash(es|ed|ing)?|default|bankruptcy)\b/i,
+    /\b(resign(ed|ation|s)?|ousted|impeach(ed|ment)?|coup)\b/i,
+    /\b(protest(s|ed|ing)?|riot(s|ing)?|strike|clash(es)?)\b/i
+  ];
+
+  // Buzz / trending words — stories that are getting attention.
+  const BUZZ_PATTERNS = [
+    /\b(exclusive|breaking|scoop|first\s+report)\b/i,
+    /\b(viral|trending|widely\s+shared|everyone'?s\s+talking)\b/i,
+    /\b(launch(es|ed|ing)?|unveil(s|ed|ing)?|announce(s|d|ment)?|reveal(s|ed)?)\b/i,
+    /\b(maiden|first-ever|historic|unprecedented|record-breaking)\b/i,
+    /\b(wins|won|victory|triumph|champion)\b/i,
+    /\b(scandal|controversy|outrage|backlash|condemn(s|ed)?)\b/i,
+    /\b(major|big|significant|massive|huge|enormous)\b/i,
+    /\b(alert|warning|notice|caution)\b/i
+  ];
+
+  // Combined "this is important" detector.
+  function getAlarmingScore(text) {
+    if (!text) return 0;
+    let score = 0;
+    for (const re of ALARMING_PATTERNS) {
+      if (re.test(text)) score += 60; // each alarming match = +60
+    }
+    for (const re of BUZZ_PATTERNS) {
+      if (re.test(text)) score += 25; // each buzz match = +25
+    }
+    return score;
+  }
+
   // Normalize a title for concept clustering: lowercase, strip punctuation,
   // remove common stopwords, take first 6 meaningful words. Articles with
   // similar normalized titles are considered the same "concept" (same story).
@@ -1308,36 +1350,63 @@
     return counts;
   }
 
-  function scoreArticle(article, conceptCount) {
+  function scoreArticle(article, conceptCount, allArticles) {
     let score = 0;
 
     // 1. CONCEPT IMPORTANCE (the biggest factor):
     //    How many sources cover this same story? More sources = more important concept.
-    //    Range: 0 to ~200 points (cap at 20 sources).
+    //    Range: 0 to ~250 points (capped at 20 sources).
     if (conceptCount && conceptCount > 0) {
-      score += Math.min(200, conceptCount * 15);
+      score += Math.min(250, conceptCount * 15);
     }
 
-    // 2. SOURCE AUTHORITY: 0 to 70 points
+    // 2. ALARMING / BUZZ WORD DETECTION (titles + summaries):
+    //    Words like "breaking", "emergency", "attack", "earthquake", "viral"
+    //    signal an important event is unfolding. These stories get a
+    //    significant boost regardless of how many other sources cover them.
+    const text = (article.title || '') + ' ' + (article.summary || '');
+    score += getAlarmingScore(text);
+
+    // 3. SOURCE AUTHORITY: 0 to 70 points
     if (TOP_SOURCES.some(s => (article.source || '').includes(s))) {
       score += 70;
     }
 
-    // 3. CONTENT QUALITY: 0 to 30 points
+    // 4. CONTENT QUALITY: 0 to 30 points
     if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) {
       score += 12;
     }
     const summaryLen = (article.summary || '').length;
-    // Richer summaries indicate more substantive articles
     score += Math.min(12, summaryLen / 25);
     if (article.author) score += 6;
 
     // NOTE: Recency is intentionally NOT scored. In top mode the 10-day
-    // window is the time scope; the ranking is purely on content signals
-    // (how many sources cover this concept, source authority, content depth).
-    // This way, an important 8-day-old story outranks a fresh trivial one.
+    // window is the time scope; the ranking is purely on content signals.
 
     return Math.round(score);
+  }
+
+  // For each concept (cluster of articles with similar titles), find the
+  // OLDEST one. Apply a "primary source" bonus to it: the first source to
+  // break a story is generally the most authoritative. This way an 8-day-old
+  // story that 12 outlets are still covering outranks a 1-hour-old trivial post.
+  function applyOldestSourceBonus(articles) {
+    if (!articles.length) return;
+    const conceptFirst = new Map(); // conceptKey -> oldest article
+    for (const a of articles) {
+      const key = normalizeTitle(a.title);
+      if (!key) continue;
+      const existing = conceptFirst.get(key);
+      const aTime = a.pubDate ? new Date(a.pubDate).getTime() : Infinity;
+      const eTime = existing?.pubDate ? new Date(existing.pubDate).getTime() : Infinity;
+      if (!existing || aTime < eTime) {
+        conceptFirst.set(key, a);
+      }
+    }
+    for (const primary of conceptFirst.values()) {
+      // Primary source bonus: +50 points for the article that broke the story
+      primary._score = (primary._score || 0) + 50;
+    }
   }
 
   let currentSourceFilter = '';
@@ -1600,25 +1669,32 @@
       return;
     }
 
-    // Use currentArticles to find titles/sources for links
+    // Use currentArticles to find titles/sources for links (in case the
+    // article is still in the current feed). Otherwise, fall back to the
+    // articleTitle / articleSource that was stored when the user liked/flagged
+    // the article — so 1-year-old activity still shows proper titles.
     const articleMap = {};
     if (currentArticles) currentArticles.forEach(a => articleMap[a.link] = a);
 
     container.innerHTML = filtered.map(([link, data]) => {
       const article = articleMap[link];
-      const title = article ? article.title : link;
-      const source = article ? article.source : '';
+      // Prefer the live article, fall back to stored data
+      const title = article?.title || data.articleTitle || link;
+      const source = article?.source || data.articleSource || '';
       const time = data.viewed ? formatDateShort(data.viewed) : '';
       const badges = [];
       if (data.like) badges.push('<span class="ai-badge" style="background:var(--accent-dim);color:#fff">&#x1F44D;</span>');
       if (data.dislike) badges.push('<span class="ai-badge" style="background:var(--text-tertiary);color:#fff">&#x1F44E;</span>');
       if (data.flag) badges.push('<span class="ai-badge" style="background:' + (FLAG_COLORS[data.flag] || 'var(--text-tertiary)') + ';color:#000">' + data.flag + '</span>');
-      return '<div class="activity-item">' +
+      // Show a small indicator if this article is no longer in the current feed
+      const isArchived = !article;
+      return '<div class="activity-item' + (isArchived ? ' activity-archived' : '') + '">' +
         '<div class="ai-title" data-link="' + encodeURIComponent(link) + '">' + escHtml(title) +
           (source ? '<div class="ai-source">' + escHtml(source) + '</div>' : '') +
         '</div>' +
         '<div class="ai-meta">' +
           (time ? '<span>' + time + '</span>' : '') +
+          (isArchived ? '<span class="ai-archived-badge" title="No longer in current feed">archived</span>' : '') +
           (badges.length ? '<span>' + badges.join(' ') + '</span>' : '') +
           (data.note ? '<span style="color:var(--text-secondary);font-size:0.7rem">&#x1F4DD;</span>' : '') +
         '</div>' +
