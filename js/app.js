@@ -1313,41 +1313,29 @@
 
     // 1. CONCEPT IMPORTANCE (the biggest factor):
     //    How many sources cover this same story? More sources = more important concept.
-    //    Range: 0 to ~150 points (cap at 15 sources).
+    //    Range: 0 to ~200 points (cap at 20 sources).
     if (conceptCount && conceptCount > 0) {
-      score += Math.min(150, conceptCount * 12);
+      score += Math.min(200, conceptCount * 15);
     }
 
-    // 2. SOURCE AUTHORITY: 0 to 50 points
+    // 2. SOURCE AUTHORITY: 0 to 70 points
     if (TOP_SOURCES.some(s => (article.source || '').includes(s))) {
-      score += 50;
+      score += 70;
     }
 
-    // 3. RECENCY: 0 to 30 points (much smaller weight than before)
-    //    Fresh news still matters, but concept importance dominates.
-    if (article.pubDate) {
-      const d = new Date(article.pubDate);
-      const t = d.getTime();
-      if (!isNaN(t)) {
-        const age = Date.now() - t;
-        const hours = age / 3600000;
-        // Decay curve: full 30 points if < 1h, 25 if < 6h, 20 if < 24h, 15 if < 3d, 10 if < 7d, 5 if < 10d
-        if (hours < 1) score += 30;
-        else if (hours < 6) score += 25;
-        else if (hours < 24) score += 20;
-        else if (hours < 72) score += 15;
-        else if (hours < 168) score += 10;
-        else if (hours < 240) score += 5;
-      }
-    }
-
-    // 4. CONTENT QUALITY: 0 to 20 points
+    // 3. CONTENT QUALITY: 0 to 30 points
     if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) {
-      score += 8;
+      score += 12;
     }
     const summaryLen = (article.summary || '').length;
-    score += Math.min(8, summaryLen / 40);
-    if (article.author) score += 4;
+    // Richer summaries indicate more substantive articles
+    score += Math.min(12, summaryLen / 25);
+    if (article.author) score += 6;
+
+    // NOTE: Recency is intentionally NOT scored. In top mode the 10-day
+    // window is the time scope; the ranking is purely on content signals
+    // (how many sources cover this concept, source authority, content depth).
+    // This way, an important 8-day-old story outranks a fresh trivial one.
 
     return Math.round(score);
   }
