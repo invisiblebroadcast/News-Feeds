@@ -98,7 +98,7 @@ img { max-width: 100%; height: auto; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .app-logo {
@@ -328,10 +328,14 @@ img { max-width: 100%; height: auto; }
   background: transparent;
   border-bottom: none;
 }
-.bottom-bar .top-tab-bar { display: flex; align-items: center; justify-content: space-between; }
+.bottom-bar .top-tab-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bottom-bar .top-tab-bar .mode-toggle {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.bottom-bar .top-tab-bar .filter-icon-btn {
   flex-shrink: 0;
 }
 .bottom-bar .tab-bar .tab-item { font-size: 0.78rem; padding: 5px 12px; }
@@ -341,12 +345,16 @@ img { max-width: 100%; height: auto; }
 .bottom-view-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  justify-content: stretch;
+  gap: 8px;
   padding: 6px 12px 8px;
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
 }
 .bottom-view-row #search-input {
-  min-width: 140px;
+  min-width: 0;
+  width: 100%;
 }
 .bottom-view-row #search-input:focus { border-color: var(--accent); }
 /* Remove unused bottom-mode-row */
@@ -372,6 +380,11 @@ img { max-width: 100%; height: auto; }
   gap: 8px;
   padding: 4px 0 8px;
   flex-wrap: wrap;
+  width: 100%;
+  flex-basis: 100%;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 4px;
+  padding-top: 8px;
 }
 .header-app-inner {
   flex-wrap: wrap;
@@ -1722,7 +1735,7 @@ body.cards-view {
 @media (max-width: 768px) {
   .app-header-inner {
     padding: 12px 16px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   .app-logo {
     font-size: 1.1rem;
@@ -1811,6 +1824,7 @@ body.cards-view {
   .app-header-inner {
     padding: 8px 10px;
     gap: 6px;
+    flex-wrap: wrap;
   }
   .app-logo {
     font-size: 1rem;
