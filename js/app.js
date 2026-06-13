@@ -231,11 +231,17 @@
     articles = applySearch(articles);
     articles = applyFilters(articles);
     if (currentMode === 'top') {
-      // Cap articles considered for scoring to keep mobile fast
-      // (we only need the top N anyway, no point scoring thousands)
-      const scoreLimit = 200;
+      // Build concept counts BEFORE scoring so the score reflects how
+      // many sources cover the same story (importance of the concept).
+      const conceptCounts = buildConceptCounts(articles);
+      // Cap at 1500 articles to keep scoring fast on mobile.
+      // Beyond that, the trailing items get score 0 and sink to the bottom.
+      const scoreLimit = 1500;
       const toScore = articles.length > scoreLimit ? articles.slice(0, scoreLimit) : articles;
-      for (const a of toScore) a._score = scoreArticle(a);
+      for (const a of toScore) {
+        const key = normalizeTitle(a.title);
+        a._score = scoreArticle(a, conceptCounts.get(key) || 0);
+      }
       for (let i = scoreLimit; i < articles.length; i++) articles[i]._score = 0;
     }
     const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
@@ -325,6 +331,11 @@
       const settings = Settings.load();
       const perPage = settings.articlesPerPage || 10;
 
+      // In top mode, show more articles (up to 3x perPage by default) so the
+      // concept-importance ranking is actually visible.
+      const topShowMultiplier = 3;
+      const displayLimit = currentMode === 'top' ? perPage * topShowMultiplier : perPage;
+
       let display;
       let totalShown;
       if (currentMode === 'live') {
@@ -332,12 +343,17 @@
         display = articles.slice(0, Math.min(loadedCount, articles.length));
         totalShown = display.length;
       } else {
-        display = articles.slice(0, perPage);
+        if (currentMode === 'top') {
+          if (!loadedCount || loadedCount < displayLimit) loadedCount = displayLimit;
+          display = articles.slice(0, Math.min(loadedCount, articles.length));
+        } else {
+          display = articles.slice(0, perPage);
+        }
         display.forEach((a, i) => a._rank = i + 1);
         totalShown = display.length;
       }
 
-      const hasMoreInScope = (currentMode === 'live' && totalShown < articles.length);
+      const hasMoreInScope = totalShown < articles.length;
 
       updateStickyHeader(totalShown + ' of ' + articles.length);
 
@@ -347,9 +363,6 @@
         '</div>' +
         (hasMoreInScope
           ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
-          : '') +
-        (currentMode === 'top' && articles.length >= perPage
-          ? '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem;">Showing top ' + perPage + ' of ' + articles.length + ' articles</div>'
           : '');
 
       const loadMore = $('#load-more-btn');
@@ -1183,12 +1196,10 @@
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
-    // Cap the number of articles sent to the renderer to prevent mobile crashes
-    // (translation pipeline + DOM render both scale with article count).
-    const settings = Settings.load();
-    const perPage = settings.articlesPerPage || 10;
-    const maxRender = currentMode === 'live' ? perPage * 3 : perPage;
-    if (articles.length > maxRender) articles = articles.slice(0, maxRender);
+    // For ranking / display, keep all articles in `currentArticles` so the user
+    // can see all the available results. The renderer itself paginates to
+    // perPage (or 3× perPage in top mode) and offers a Load More button.
+    // We do NOT cap here so the user gets the full ranking.
 
     try {
       await renderTranslated(articles);
@@ -1258,30 +1269,88 @@
     );
   }
 
-  const TOP_SOURCES = ['BBC', 'CNN', 'Reuters', 'The Hindu', 'NYT', 'Guardian', 'Times of India', 'NDTV', 'Al Jazeera', 'Washington Post', 'NPR', 'DW'];
+  const TOP_SOURCES = ['BBC', 'CNN', 'Reuters', 'The Hindu', 'NYT', 'New York Times', 'Guardian', 'Times of India', 'NDTV', 'Al Jazeera', 'Washington Post', 'NPR', 'DW', 'Bloomberg', 'Forbes', 'ESPN', 'AP', 'Associated Press', 'Indian Express', 'Hindustan Times', 'The Print', 'The Wire', 'Scroll', 'Firstpost'];
 
-  function scoreArticle(article) {
+  // Normalize a title for concept clustering: lowercase, strip punctuation,
+  // remove common stopwords, take first 6 meaningful words. Articles with
+  // similar normalized titles are considered the same "concept" (same story).
+  function normalizeTitle(title) {
+    if (!title) return '';
+    return (title || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(w => w.length > 2 && !STOPWORDS.has(w))
+      .slice(0, 6)
+      .join(' ');
+  }
+
+  const STOPWORDS = new Set([
+    'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was',
+    'one', 'our', 'had', 'has', 'have', 'this', 'that', 'with', 'from', 'they',
+    'she', 'will', 'would', 'could', 'should', 'about', 'after', 'before',
+    'over', 'into', 'than', 'then', 'when', 'where', 'what', 'who', 'why', 'how',
+    'his', 'her', 'their', 'its', 'our', 'your', 'says', 'said', 'told', 'tells',
+    'just', 'only', 'also', 'more', 'most', 'some', 'any', 'all', 'most', 'much',
+    'new', 'old', 'first', 'last', 'next', 'amid', 'amidst', 'among', 'says',
+    'first', 'reports', 'report', 'live', 'updates', 'update', 'here', 'there'
+  ]);
+
+  // Build a map of concept -> count, by clustering similar titles.
+  function buildConceptCounts(articles) {
+    const counts = new Map();
+    for (const a of articles) {
+      const key = normalizeTitle(a.title);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }
+
+  function scoreArticle(article, conceptCount) {
     let score = 0;
+
+    // 1. CONCEPT IMPORTANCE (the biggest factor):
+    //    How many sources cover this same story? More sources = more important concept.
+    //    Range: 0 to ~150 points (cap at 15 sources).
+    if (conceptCount && conceptCount > 0) {
+      score += Math.min(150, conceptCount * 12);
+    }
+
+    // 2. SOURCE AUTHORITY: 0 to 50 points
+    if (TOP_SOURCES.some(s => (article.source || '').includes(s))) {
+      score += 50;
+    }
+
+    // 3. RECENCY: 0 to 30 points (much smaller weight than before)
+    //    Fresh news still matters, but concept importance dominates.
     if (article.pubDate) {
       const d = new Date(article.pubDate);
       const t = d.getTime();
       if (!isNaN(t)) {
         const age = Date.now() - t;
         const hours = age / 3600000;
-        // In top mode, articles older than 10 days get 0 points from age
-        const maxAgeHours = 10 * 24;
-        if (hours > maxAgeHours) {
-          return 0;
-        }
-        score += Math.max(0, 100 - hours);
+        // Decay curve: full 30 points if < 1h, 25 if < 6h, 20 if < 24h, 15 if < 3d, 10 if < 7d, 5 if < 10d
+        if (hours < 1) score += 30;
+        else if (hours < 6) score += 25;
+        else if (hours < 24) score += 20;
+        else if (hours < 72) score += 15;
+        else if (hours < 168) score += 10;
+        else if (hours < 240) score += 5;
       }
     }
-    if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) score += 20;
+
+    // 4. CONTENT QUALITY: 0 to 20 points
+    if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) {
+      score += 8;
+    }
     const summaryLen = (article.summary || '').length;
-    score += Math.min(15, summaryLen / 20);
-    if (TOP_SOURCES.some(s => (article.source || '').includes(s))) score += 20;
-    if (article.author) score += 10;
-    return Math.round(score) || 0;
+    score += Math.min(8, summaryLen / 40);
+    if (article.author) score += 4;
+
+    return Math.round(score);
   }
 
   let currentSourceFilter = '';
