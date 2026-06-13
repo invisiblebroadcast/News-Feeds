@@ -327,7 +327,6 @@ img { max-width: 100%; height: auto; }
   padding: 4px 8px;
 }
 .bottom-bar.collapsed .top-tab-bar,
-.bottom-bar.collapsed .sub-tab-bar,
 .bottom-bar.collapsed .bottom-view-row,
 .bottom-bar.collapsed .bottom-tools-row {
   display: none !important;
