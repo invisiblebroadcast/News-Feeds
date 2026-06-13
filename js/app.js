@@ -318,41 +318,46 @@
   }
 
   function renderArticles(articles) {
-    if (!articles.length) { showEmpty(); return; }
+    try {
+      if (!articles.length) { showEmpty(); return; }
 
-    currentArticles = articles;
-    const settings = Settings.load();
-    const perPage = settings.articlesPerPage || 10;
+      currentArticles = articles;
+      const settings = Settings.load();
+      const perPage = settings.articlesPerPage || 10;
 
-    let display;
-    let totalShown;
-    if (currentMode === 'live') {
-      if (!loadedCount) loadedCount = perPage;
-      display = articles.slice(0, Math.min(loadedCount, articles.length));
-      totalShown = display.length;
-    } else {
-      display = articles.slice(0, perPage);
-      display.forEach((a, i) => a._rank = i + 1);
-      totalShown = display.length;
+      let display;
+      let totalShown;
+      if (currentMode === 'live') {
+        if (!loadedCount) loadedCount = perPage;
+        display = articles.slice(0, Math.min(loadedCount, articles.length));
+        totalShown = display.length;
+      } else {
+        display = articles.slice(0, perPage);
+        display.forEach((a, i) => a._rank = i + 1);
+        totalShown = display.length;
+      }
+
+      const hasMoreInScope = (currentMode === 'live' && totalShown < articles.length);
+
+      updateStickyHeader(totalShown + ' of ' + articles.length);
+
+      el.main.innerHTML =
+        '<div class="article-grid">' +
+          display.map((a, i) => renderCard(a, i)).join('') +
+        '</div>' +
+        (hasMoreInScope
+          ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
+          : '') +
+        (currentMode === 'top' && articles.length >= perPage
+          ? '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem;">Showing top ' + perPage + ' of ' + articles.length + ' articles</div>'
+          : '');
+
+      const loadMore = $('#load-more-btn');
+      if (loadMore) loadMore.addEventListener('click', () => { loadedCount += perPage; renderArticles(currentArticles); });
+    } catch (e) {
+      console.error('renderArticles failed:', e);
+      showError('Failed to render list view. Try refreshing.');
     }
-
-    const hasMoreInScope = (currentMode === 'live' && totalShown < articles.length);
-
-    updateStickyHeader(totalShown + ' of ' + articles.length);
-
-    el.main.innerHTML =
-      '<div class="article-grid">' +
-        display.map((a, i) => renderCard(a, i)).join('') +
-      '</div>' +
-      (hasMoreInScope
-        ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
-        : '') +
-      (currentMode === 'top' && articles.length >= perPage
-        ? '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem;">Showing top ' + perPage + ' of ' + articles.length + ' articles</div>'
-        : '');
-
-    const loadMore = $('#load-more-btn');
-    if (loadMore) loadMore.addEventListener('click', () => { loadedCount += perPage; renderArticles(currentArticles); });
   }
 
   function renderCard(article, index) {
@@ -436,16 +441,21 @@
   }
 
   function renderReels(articles) {
-    if (!articles.length) { showEmpty(); return; }
-    const settings = Settings.load();
-    const perPage = settings.articlesPerPage || 10;
-    if (currentMode === 'top') {
-      articles = articles.slice(0, perPage);
-      articles.forEach((a, i) => a._rank = i + 1);
+    try {
+      if (!articles.length) { showEmpty(); return; }
+      const settings = Settings.load();
+      const perPage = settings.articlesPerPage || 10;
+      if (currentMode === 'top') {
+        articles = articles.slice(0, perPage);
+        articles.forEach((a, i) => a._rank = i + 1);
+      }
+      currentArticles = articles;
+      currentReelIndex = 0;
+      showReel();
+    } catch (e) {
+      console.error('renderReels failed:', e);
+      showError('Failed to render cards view. Try refreshing.');
     }
-    currentArticles = articles;
-    currentReelIndex = 0;
-    showReel();
   }
 
   function cardOverlayHtml(includeToolbar) {
