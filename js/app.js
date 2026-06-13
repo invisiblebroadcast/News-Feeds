@@ -123,6 +123,20 @@
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatDateIST(d) {
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return d;
+    const datePart = date.toLocaleDateString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+    const timePart = date.toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: 'Asia/Kolkata'
+    });
+    return datePart + ', ' + timePart + ' IST';
+  }
+
   function formatDateShort(d) {
     const date = new Date(d);
     if (isNaN(date.getTime())) return d;
@@ -144,7 +158,7 @@
   }
 
   function cleanSummary(text) {
-    return text
+    let t = text
       .replace(/\s*\[\.\.\.\]\s*$/, '')
       .replace(/\s*\[\.\.\]\s*$/, '')
       .replace(/\s*\[\.\s*\.\s*\.\s*\]\s*$/, '')
@@ -158,6 +172,60 @@
       .replace(/\s*&hellip;\s*$/i, '')
       .replace(/\s*&#8230;\s*$/i, '')
       .trim();
+    t = stripNewsPrefix(t);
+    return t;
+  }
+
+  function stripNewsPrefix(text) {
+    if (!text) return text;
+    // Google News often prefixes the description with the article title (possibly
+    // truncated with "...") followed by a dash/separator and the source name.
+    // Examples we want to strip:
+    //   "Article title - Source Name - Actual description..."
+    //   "Article title: ... Source Name:  Actual description..."
+    //   "Article title — Source Name. Actual description..."
+    const t = text.trim();
+    // Try common separators in order of how often they appear
+    const seps = [
+      /^\s*[\u2014\u2013\-:]\s*/, // em-dash, en-dash, hyphen, colon
+      /^\s*[|]\s*/,              // pipe
+      /^\s*[.]\s+/               // period followed by space (last resort)
+    ];
+    // The pattern is: up to 2 leading "segments" separated by these separators,
+    // then a "body" that's the actual description.
+    let work = t;
+    let stripped = 0;
+    for (let i = 0; i < 2; i++) {
+      // Find the first separator
+      let firstMatch = null;
+      let firstIdx = -1;
+      for (const sep of seps) {
+        const m = work.match(sep);
+        if (m && (firstIdx === -1 || m.index < firstIdx)) {
+          firstIdx = m.index;
+          firstMatch = sep;
+        }
+      }
+      if (firstIdx === -1 || firstIdx > 80) break; // safety: don't strip huge prefix
+      // Make sure what comes before looks like a title (not a long sentence)
+      const before = work.slice(0, firstIdx).trim();
+      if (before.length < 5) break;
+      // Heuristic: the leading "segment" should not contain a period that
+      // ends a sentence (i.e., it's a title, not a sentence). Check if there's
+      // a ". " in the first 40 chars.
+      if (/\.\s/.test(before.slice(0, 60))) break;
+      // If we've stripped already once and the previous separator ended with
+      // a period+space, stop.
+      if (stripped >= 1 && /\.\s*$/.test(before)) break;
+      work = work.slice(firstIdx).replace(firstMatch, '').trim();
+      stripped++;
+    }
+    // Only return the stripped version if we actually removed something AND
+    // the remaining text is still substantial
+    if (stripped > 0 && work.length >= 30 && work.length < t.length) {
+      return work;
+    }
+    return t;
   }
 
   function getDomain(url) {
@@ -2144,9 +2212,9 @@
         ctx.textAlign = 'left';
         ctx.fillText(article.source.toUpperCase(), PAD, cursorY + sourceFontSize);
 
-        // Published date & time on the right side of the same row
+        // Published date & time on the right side of the same row (in IST)
         if (article.pubDate) {
-          const pubDateText = formatDate(article.pubDate);
+          const pubDateText = formatDateIST(article.pubDate);
           ctx.fillStyle = 'rgba(230, 237, 243, 0.65)';
           ctx.font = '500 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
           ctx.textAlign = 'right';
