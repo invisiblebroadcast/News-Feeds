@@ -1339,11 +1339,20 @@
     // Options button toggles the extras row (date, refresh, hard refresh, activity)
     const optionsBtn = $('#options-btn');
     const headerExtras = $('#header-extras');
+    let optionsTimeout = null;
     if (optionsBtn && headerExtras) {
       optionsBtn.addEventListener('click', () => {
         const hidden = headerExtras.style.display === 'none' || !headerExtras.style.display;
         headerExtras.style.display = hidden ? 'flex' : 'none';
         optionsBtn.classList.toggle('active', hidden);
+        // Auto-hide after 5 seconds
+        clearTimeout(optionsTimeout);
+        if (hidden) {
+          optionsTimeout = setTimeout(() => {
+            headerExtras.style.display = 'none';
+            optionsBtn.classList.remove('active');
+          }, 5000);
+        }
       });
     }
     // Category toggle button shows/hides the sub-tab-bar
@@ -1354,6 +1363,15 @@
         const hidden = subTabBar.style.display === 'none' || !subTabBar.style.display;
         subTabBar.style.display = hidden ? 'block' : 'none';
         catToggleBtn.classList.toggle('active', hidden);
+      });
+    }
+    // Filter toggle — enable/disable the filter panel
+    const filterToggleBtn = $('#filter-toggle');
+    const filtersPanel = $('#filters-panel');
+    if (filterToggleBtn && filtersPanel) {
+      filterToggleBtn.addEventListener('click', () => {
+        const open = filtersPanel.classList.toggle('open');
+        filterToggleBtn.classList.toggle('active', open);
       });
     }
   }
@@ -2761,9 +2779,11 @@
   let commentsContextArticle = null; // article being viewed
   let commentsReplyToId = null; // comment id being replied to
   let commentsPendingDeleteId = null; // comment id pending deletion
+  let commentsPreviousWasArticleModal = false; // was article modal open before comments?
 
   function openCommentsPage(article) {
     if (!article) return;
+    commentsPreviousWasArticleModal = el.articleModal.classList.contains('open');
     commentsContextArticle = article;
     commentsReplyToId = null;
     // Comments page uses position:fixed with high z-index, so it works in fullscreen too
@@ -2780,6 +2800,11 @@
     commentsContextArticle = null;
     commentsReplyToId = null;
     hideReplyPreview();
+    // Restore the article modal if it was open before comments
+    if (commentsPreviousWasArticleModal) {
+      commentsPreviousWasArticleModal = false;
+      setTimeout(() => el.articleModal.classList.add('open'), 100);
+    }
   }
 
   function showReplyPreview(commentText) {

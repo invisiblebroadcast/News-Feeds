@@ -80,6 +80,7 @@ img { max-width: 100%; height: auto; }
   border-bottom: 1px solid var(--border-primary);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  padding-bottom: 6px;
 }
 
 .app-header-inner {
@@ -112,6 +113,12 @@ img { max-width: 100%; height: auto; }
   justify-content: center;
   font-size: 1.1rem;
   flex-shrink: 0;
+}
+.app-logo .logo-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .header-controls {
@@ -318,6 +325,8 @@ img { max-width: 100%; height: auto; }
 }
 .bottom-bar .mode-toggle {
   flex-shrink: 0;
+  display: flex;
+  justify-content: center;
 }
 .bottom-bar .filters-panel {
   max-width: var(--max-width);
@@ -1400,6 +1409,10 @@ img { max-width: 100%; height: auto; }
   flex-direction: column;
   padding: 0;
   border-bottom: 1px solid var(--border-primary);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-secondary);
 }
 .modal-header .modal-close {
   align-self: flex-end;
