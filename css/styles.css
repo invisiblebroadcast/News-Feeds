@@ -295,30 +295,26 @@ img { max-width: 100%; height: auto; }
   border-bottom: none;
 }
 .bottom-bar .top-tab-bar { display: flex; align-items: center; justify-content: space-between; }
-.bottom-bar .tab-bar .tab-item { font-size: 0.78rem; padding: 5px 12px; }
-.bottom-bar .mode-toggle.view-toggle { margin: 0; padding-right: 4px; }
-.bottom-bar .mode-toggle.view-toggle .mode-btn { font-size: 0.72rem; padding: 4px 10px; }
-.bottom-bar-inner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-}
-.bottom-bar-inner .mode-toggle {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-/* Top/Live standalone centered row */
-.bottom-mode-row {
-  display: flex;
-  justify-content: center;
-  padding: 4px 16px 6px;
-}
-.bottom-mode-row .mode-toggle {
+.bottom-bar .top-tab-bar .mode-toggle {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
+.bottom-bar .tab-bar .tab-item { font-size: 0.78rem; padding: 5px 12px; }
+.bottom-bar .mode-toggle.view-toggle { margin: 0; padding: 0; }
+.bottom-bar .mode-toggle.view-toggle .mode-btn { font-size: 0.72rem; padding: 4px 10px; }
+
+.bottom-view-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 16px 8px;
+}
+/* Remove unused bottom-mode-row */
+.bottom-mode-row { display: none; }
+/* Top/Live standalone centered row */
+.bottom-mode-row { display: none; }
 /* Filter tools row — toggleable */
 .bottom-tools-row {
   display: flex;

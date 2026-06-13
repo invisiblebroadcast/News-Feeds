@@ -115,14 +115,17 @@
         <li class="tab-item active" data-scope="global">Global</li>
         <li class="tab-item" data-scope="nation" data-nation="india">India</li>
       </ul>
-      <div class="mode-toggle view-toggle" id="view-toggle"></div>
-    </nav>
-    <!-- Top/Live — standalone centered row -->
-    <div class="bottom-mode-row">
       <div class="mode-toggle" id="mode-toggle">
         <button class="mode-btn" data-mode="top">Top</button>
         <button class="mode-btn active" data-mode="live">Live</button>
       </div>
+    </nav>
+    <!-- View toggle + tools row — centered -->
+    <div class="bottom-view-row">
+      <div class="mode-toggle view-toggle" id="view-toggle"></div>
+      <button class="btn btn-ghost btn-icon" id="tools-toggle-btn" title="Toggle Tools">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 12l5-5 3 3 5-5"/><path d="M13 3v4h-4"/></svg>
+      </button>
     </div>
     <!-- Filter tools row — toggleable -->
     <div class="bottom-tools-row" id="bottom-tools-row">
