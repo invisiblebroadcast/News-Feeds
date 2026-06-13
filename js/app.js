@@ -2109,12 +2109,24 @@
         cursorY += imgBlockH + gap;
       }
 
-      // Source label (no date, no ranking) — uppercase, red
+      // Source label (uppercase, red) on the left, published date/time on the right
       if (article.source) {
         ctx.fillStyle = '#ff2929';
         ctx.font = '700 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
         ctx.textBaseline = 'alphabetic';
+        ctx.textAlign = 'left';
         ctx.fillText(article.source.toUpperCase(), PAD, cursorY + sourceFontSize);
+
+        // Published date & time on the right side of the same row
+        if (article.pubDate) {
+          const pubDateText = formatDate(article.pubDate);
+          ctx.fillStyle = 'rgba(230, 237, 243, 0.65)';
+          ctx.font = '500 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(pubDateText, W - PAD, cursorY + sourceFontSize);
+          ctx.textAlign = 'left';
+        }
+
         cursorY += sourceFontSize + medGap;
       }
 
