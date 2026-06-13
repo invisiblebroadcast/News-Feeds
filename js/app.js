@@ -231,7 +231,12 @@
     articles = applySearch(articles);
     articles = applyFilters(articles);
     if (currentMode === 'top') {
-      for (const a of articles) a._score = scoreArticle(a);
+      // Cap articles considered for scoring to keep mobile fast
+      // (we only need the top N anyway, no point scoring thousands)
+      const scoreLimit = 200;
+      const toScore = articles.length > scoreLimit ? articles.slice(0, scoreLimit) : articles;
+      for (const a of toScore) a._score = scoreArticle(a);
+      for (let i = scoreLimit; i < articles.length; i++) articles[i]._score = 0;
     }
     const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
     articles = applySort(articles, sortMode);
@@ -1118,9 +1123,13 @@
 
         const remaining = feeds.length - (i + batchSize);
         if (remaining > 0) {
-          const articles = getFilteredArticles(currentSubcat, scopeCache[key]);
+          let articles = getFilteredArticles(currentSubcat, scopeCache[key]);
           updateFilterSourceOptions(articles);
           if (articles.length) {
+            // Cap during progressive loading too
+            const perPage = (Settings.load().articlesPerPage) || 10;
+            const maxRender = currentMode === 'live' ? perPage * 3 : perPage;
+            if (articles.length > maxRender) articles = articles.slice(0, maxRender);
             hasRendered = true;
             el.main.innerHTML = '';
             if (currentView === 'reels') renderReels(articles);
@@ -1153,7 +1162,14 @@
 
     updateStickyHeader();
 
-    let articles = getFilteredArticles(currentSubcat, cached);
+    let articles;
+    try {
+      articles = getFilteredArticles(currentSubcat, cached);
+    } catch (e) {
+      console.error('Error filtering articles:', e);
+      showError('Failed to filter articles. Try refreshing.');
+      return;
+    }
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
@@ -1164,7 +1180,12 @@
     const maxRender = currentMode === 'live' ? perPage * 3 : perPage;
     if (articles.length > maxRender) articles = articles.slice(0, maxRender);
 
-    await renderTranslated(articles);
+    try {
+      await renderTranslated(articles);
+    } catch (e) {
+      console.error('Error rendering articles:', e);
+      showError('Failed to render articles. Try refreshing.');
+    }
   }
 
   function bindFilterSort() {
@@ -1232,22 +1253,25 @@
   function scoreArticle(article) {
     let score = 0;
     if (article.pubDate) {
-      const age = Date.now() - new Date(article.pubDate).getTime();
-      const hours = age / 3600000;
-      // In top mode, articles older than 10 days get 0 points from age
-      const maxAgeHours = 10 * 24;
-      if (hours > maxAgeHours) {
-        // Still return 0 so they sink to the bottom of top mode
-        return 0;
+      const d = new Date(article.pubDate);
+      const t = d.getTime();
+      if (!isNaN(t)) {
+        const age = Date.now() - t;
+        const hours = age / 3600000;
+        // In top mode, articles older than 10 days get 0 points from age
+        const maxAgeHours = 10 * 24;
+        if (hours > maxAgeHours) {
+          return 0;
+        }
+        score += Math.max(0, 100 - hours);
       }
-      score += Math.max(0, 100 - hours);
     }
-    if (article.imageUrl && article.imageUrl.startsWith('http')) score += 20;
+    if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) score += 20;
     const summaryLen = (article.summary || '').length;
     score += Math.min(15, summaryLen / 20);
     if (TOP_SOURCES.some(s => (article.source || '').includes(s))) score += 20;
     if (article.author) score += 10;
-    return Math.round(score);
+    return Math.round(score) || 0;
   }
 
   let currentSourceFilter = '';
