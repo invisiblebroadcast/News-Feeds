@@ -551,7 +551,7 @@
       const headerH = header ? header.getBoundingClientRect().height : 0;
       const bottomH = bottomBar ? bottomBar.getBoundingClientRect().height : 0;
       const available = window.innerHeight - headerH - bottomH;
-      container.style.height = Math.max(300, available - 8) + 'px';
+      container.style.maxHeight = Math.max(200, available - 4) + 'px';
     });
   }
 
