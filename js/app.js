@@ -687,76 +687,73 @@
         }
       });
       updateNavArrows(container);
-      let swipeStartX = 0, swipeDy = 0, isSwiping = false, swipeDir = 0; // 1 = down, -1 = up
-      let swipeStartY = 0;
+      let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 = right, 1 = left
       container.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         swipeStartX = e.touches[0].clientX;
-        swipeStartY = e.touches[0].clientY;
-        swipeDy = 0;
+        swipeDx = 0;
         isSwiping = false;
         swipeDir = 0;
       }, { passive: true });
       container.addEventListener('touchmove', e => {
-        if (!swipeStartY) return;
+        if (!swipeStartX) return;
         const card = stack.querySelector('.reels-card');
         if (!card) return;
-        const cy = e.touches[0].clientY;
-        const cx = e.touches[0].clientX;
-        const dy = cy - swipeStartY;
-        const dx = cx - swipeStartX;
+        const dx = e.touches[0].clientX - swipeStartX;
+        const dy = e.touches[0].clientY - (e.touches[0].clientY - (swipeStartX ? 0 : 0)); // not needed
 
-        // Determine direction: vertical swipe if |dy| > |dx| and > threshold
-        if (!isSwiping && Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx)) {
+        // Determine direction: horizontal swipe if |dx| > |dy| and > threshold
+        if (!isSwiping && Math.abs(dx) > 15 && Math.abs(dx) > Math.abs(dy)) {
           isSwiping = true;
-          swipeDir = dy > 0 ? 1 : -1; // 1 = down, -1 = up
+          swipeDir = dx > 0 ? 1 : -1; // 1 = right, -1 = left
         }
         if (!isSwiping) return;
 
-        // Card follows finger with spring-like resistance
-        const resistance = 0.4;
-        const translateY = Math.max(-120, Math.min(120, dy * resistance));
-        const scale = 1 - Math.min(Math.abs(dy) / 1500, 0.05);
-        const opacity = 1 - Math.min(Math.abs(dy) / 700, 0.3);
+        swipeDx = dx;
+        const resistance = 0.6;
+        const translateX = Math.max(-180, Math.min(180, dx * resistance));
+        const scale = 1 - Math.min(Math.abs(dx) / 2000, 0.04);
+        const opacity = 1 - Math.min(Math.abs(dx) / 600, 0.25);
         card.style.transition = 'none';
-        card.style.transform = `translateY(${translateY}px) scale(${scale})`;
+        card.style.transform = `translateX(${translateX}px) scale(${scale})`;
         card.style.opacity = opacity;
       }, { passive: false });
       container.addEventListener('touchend', e => {
-        if (!swipeStartY) return;
+        if (!swipeStartX) return;
         const card = stack.querySelector('.reels-card');
-        const dy = e.changedTouches[0].clientY - swipeStartY;
+        const dx = e.changedTouches[0].clientX - swipeStartX;
+        const wasSwiping = isSwiping;
         const wasDir = swipeDir;
-        swipeStartY = 0;
         swipeStartX = 0;
+        swipeDx = 0;
         isSwiping = false;
         swipeDir = 0;
         if (!card) return;
-        const threshold = 80;
-        if (wasDir === -1 && dy < -threshold) {
-          // Swipe up — next article (card slides up and fades out)
+        const threshold = 70;
+        if (wasSwiping && wasDir === -1 && dx < -threshold) {
+          // Swipe left — next article
           card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-          card.style.transform = 'translateY(-110%) scale(0.95)';
+          card.style.transform = 'translateX(-110%) scale(0.95)';
           card.style.opacity = '0';
           setTimeout(() => {
             nextReel();
             if (card) {
               card.style.transition = 'none';
-              card.style.transform = 'translateX(0)';
+              card.style.transform = 'translateX(0) scale(1)';
               card.style.opacity = '1';
               requestAnimationFrame(() => { if (card) card.style.transition = ''; });
             }
           }, 200);
-        } else if (wasDir === 1 && dy > threshold) {
-          // Swipe down — previous article (card slides down and fades out)
+        } else if (wasSwiping && wasDir === 1 && dx > threshold) {
+          // Swipe right — previous article
           card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-          card.style.transform = 'translateY(110%) scale(0.95)';
+          card.style.transform = 'translateX(110%) scale(0.95)';
           card.style.opacity = '0';
           setTimeout(() => {
             prevReel();
             if (card) {
               card.style.transition = 'none';
-              card.style.transform = 'translateX(0)';
+              card.style.transform = 'translateX(0) scale(1)';
               card.style.opacity = '1';
               requestAnimationFrame(() => { if (card) card.style.transition = ''; });
             }
