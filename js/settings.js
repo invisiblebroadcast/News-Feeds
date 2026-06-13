@@ -3,7 +3,8 @@ const Settings = (() => {
   const DEFAULTS = {
     articlesPerPage: 10,
     language: 'en',
-    dateRange: '7'
+    dateRange: '7',
+    showDescription: false
   };
 
   let cache = null;

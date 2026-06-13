@@ -180,90 +180,82 @@
     if (!text) return text;
     let t = text.trim();
 
-    // ---- Approach 1: Google News HTML pattern ----
-    // Many Google News RSS items have description like:
-    //   <a href="...">Source Name</a>&nbsp;<font color="#6f6f6f">Title text...</font><br>Actual description...
-    // After HTML stripping it becomes:
-    //   "Source Name Title text... Actual description..."
-    // We detect a leading "Source-like + Title-like" pair by looking for the
-    // pattern where the FIRST chunk is short and looks like a source name
-    // (no sentence-ending period, often a single word/short phrase), and the
-    // SECOND chunk is a title (may end with "...") and the rest is the body.
+    // ---- Approach 1: Google News chained clusters ----
+    // Real-world Google News often concatenates multiple "Title Source" pairs:
+    //   "Title1 Source1 Title2? Source2 Title3... Source3 Title4... Actual body"
+    // After HTML stripping these all run together with single/double spaces.
+    // The actual body is whatever is left after the last "Title... Source" pair.
     //
-    // We use a regex to split on a likely title-terminator: the first "..." or
-    // sequence of 3+ dots that appears AFTER a short source-like prefix.
+    // Strategy: keep peeling off "SourceName + Title..." prefixes from the
+    // start. A "Source" is a short, no-period word/phrase (1-3 words, <= 40
+    // chars). A "Title" is a longer string that ends with "..." or "?" or
+    // contains typical title punctuation.
+    //
+    // We do this iteratively until we either:
+    //   - hit actual content (a sentence with a real period), or
+    //   - run out of pattern matches, or
+    //   - go past a safety limit (5 iterations / 600 chars peeled).
 
-    // Pattern: "SourceName  Title..."  where title ends with "..."
-    const titleWithEllipsis = /^(\S[^.\n]{0,60}?)\s+([^\n]{4,160}?\.\.\.|\u2026)\s*([\s\S]+)$/;
-    const m1 = t.match(titleWithEllipsis);
-    if (m1) {
-      const source = m1[1].trim();
-      const title = m1[2].trim();
-      const body = m1[3].trim();
-      // Source must be short, no sentence-ending period
-      if (source.length <= 40 && !/\.\s/.test(source) && body.length >= 30) {
-        // Make sure the title looks like a title (not a sentence) - i.e., it
-        // does not end in punctuation other than ellipsis, and is reasonably
-        // short.
-        if (title.length <= 200 && /(\.\.\.|\u2026)\s*$/.test(title)) {
-          t = body;
+    const clusterSep = /[\s\u00a0]+/;
+    let safety = 0;
+    while (safety++ < 6) {
+      const before = t;
+
+      // Try: "Source(1-3 words)  Title...  " — peel both
+      // The title may end with "...", "?", "!", or just be a long phrase.
+      let m = t.match(/^(\s*[^\s.][\s\S]{0,40}?)\s{2,}([\s\S]{4,200}?(\.{2,}|\u2026|\?|\!))\s{1,}/);
+      if (m) {
+        const source = m[1].trim();
+        const title = m[2].trim();
+        // Source must be a short, no-period phrase
+        if (source.length <= 40 && !/\.\s/.test(source) && /[\.\?\!\u2026]$/.test(title)) {
+          t = t.slice(m[0].length).trim();
+          continue;
         }
+      }
+
+      // Try: "...Title...Source..." pattern (title + source adjacent, no clear sep)
+      // e.g., "...Title...vocal.mediaTitle..." or "Title?SourceTitle..."
+      m = t.match(/^([\s\S]{4,200}?(\.{2,}|\u2026|\?|\!))([A-Z][A-Za-z0-9.\-]{0,30})\s{1,}/);
+      if (m) {
+        const title = m[1].trim();
+        const source = m[3].trim();
+        if (source.length <= 30 && /[\.\?\!\u2026]$/.test(title) && title.length <= 200) {
+          t = t.slice(m[0].length).trim();
+          continue;
+        }
+      }
+
+      // Try: "Title - Source - " pattern with em-dash, en-dash, hyphen, colon
+      m = t.match(/^([\s\S]{4,200}?)\s*[\u2014\u2013\-:]\s*([A-Z][A-Za-z0-9 &.\-]{0,30}?)\s*[\u2014\u2013\-:]\s*/);
+      if (m) {
+        const title = m[1].trim();
+        const source = m[2].trim();
+        if (title.length <= 200 && source.length <= 30 && !/\.\s/.test(source)) {
+          t = t.slice(m[0].length).trim();
+          continue;
+        }
+      }
+
+      // No more matches — stop
+      if (t === before) break;
+    }
+
+    // If the result is just a title+source cluster (no real content), return empty
+    // Detect: if t still ends with a title-like pattern without a real sentence,
+    // strip down further.
+    if (t && !/\.\s+[A-Z]/.test(t.slice(0, 200))) {
+      // Try one more aggressive peel: if the whole remaining text is <200 chars
+      // and contains no real sentence (no ". X" pattern), it's likely just
+      // more title/source noise.
+      const looksLikeRealContent = /\b(is|are|was|were|has|have|had|will|would|can|could|may|might|the|a|an|this|that|these|those|in|on|at|for|to|of|with|by|from|as|it|its|he|she|they|we|his|her|their|our|its|and|or|but|if|then|than|so|not|also|more|some|any|all|no|after|before|during|over|under|while|when|where|why|how|what|who|whom|which)\b/i.test(t);
+      if (!looksLikeRealContent && t.length < 200) {
+        // No real content words — likely a leftover cluster
+        t = '';
       }
     }
 
-    // ---- Approach 2: "Title - Source - Body" or "Title: Source: Body" ----
-    if (t === text.trim()) {
-      // Try common separator patterns
-      const seps = [
-        /^\s*[\u2014\u2013\-:]\s*/, // em-dash, en-dash, hyphen, colon
-        /^\s*[|]\s*/,              // pipe
-        /^\s*[.]\s+/               // period followed by space
-      ];
-      let work = t;
-      let stripped = 0;
-      for (let i = 0; i < 2; i++) {
-        let firstMatch = null;
-        let firstIdx = -1;
-        for (const sep of seps) {
-          const m = work.match(sep);
-          if (m && (firstIdx === -1 || m.index < firstIdx)) {
-            firstIdx = m.index;
-            firstMatch = sep;
-          }
-        }
-        if (firstIdx === -1 || firstIdx > 100) break;
-        const before = work.slice(0, firstIdx).trim();
-        if (before.length < 3) break;
-        // First segment (title) must be title-like, not a full sentence
-        if (i === 0 && /[.!?]\s+[A-Z]/.test(before.slice(0, 200))) break;
-        if (i === 1) {
-          // Second segment is the source — should be short, no sentence period
-          if (before.length > 50) break;
-          if (/[.!?]\s+[A-Z]/.test(before)) break;
-        }
-        work = work.slice(firstIdx).replace(firstMatch, '').trim();
-        stripped++;
-      }
-      if (stripped > 0 && work.length >= 30 && work.length < t.length) {
-        t = work;
-      }
-    }
-
-    // ---- Approach 3: catch any leading "Word... Word... Body" pattern ----
-    // Sometimes Google News has "SourceName  ... Title... Actual body" where
-    // the source is followed by an ellipsis and then the title.
-    if (t === text.trim()) {
-      const m2 = t.match(/^(\S[^.\n]{0,40}?)\s+(\.{2,}|\u2026)\s*([\s\S]+)$/);
-      if (m2 && m2[1].length <= 40 && m2[3].length >= 30) {
-        // Check if the body itself still has a similar prefix to strip
-        const m3 = m2[3].match(/^([^\n]{4,160}?\.\.\.|\u2026)\s*([\s\S]+)$/);
-        if (m3 && m3[2].length >= 30) {
-          t = m3[2];
-        }
-      }
-    }
-
-    return t;
+    return t || text.trim();
   }
 
   function getDomain(url) {
@@ -536,6 +528,7 @@
   function cardOverlayHtml(includeToolbar) {
     var html = '';
     if (includeToolbar !== false) {
+      const showDesc = Settings.get('showDescription');
       // Standalone toolbar row — sits above image/text, no overlap.
       html += '<div class="reels-toolbar-row">' +
         '<div class="reels-toolbar-group reels-toolbar-left">' +
@@ -543,6 +536,13 @@
           '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
         '</div>' +
         '<div class="reels-toolbar-group reels-toolbar-right">' +
+          '<button class="reels-tool-btn reels-toggle-desc' + (showDesc ? ' active' : '') + '" title="Show / Hide Description" data-show-desc="' + (showDesc ? '1' : '0') + '">' +
+            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+              (showDesc
+                ? '<path d="M2 4h12M2 8h12M2 12h8"/>'
+                : '<path d="M2 4h12M2 8h8M2 12h10"/><line x1="2" y1="14" x2="14" y2="2" stroke="var(--accent)"/>') +
+            '</svg>' +
+          '</button>' +
           '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
         '</div>' +
       '</div>';
@@ -647,8 +647,13 @@
     if (date) date.textContent = formatDateShort(article.pubDate);
     const summaryText = cleanSummary(stripHtml(article.summary));
     const summary = cardEl.querySelector('.reels-summary');
+    const summaryWrap = cardEl.querySelector('.reels-summary-wrap');
+    const showDesc = Settings.get('showDescription');
     if (summary) {
-      summary.textContent = summaryText;
+      summary.textContent = showDesc ? summaryText : '';
+    }
+    if (summaryWrap) {
+      summaryWrap.style.display = showDesc ? '' : 'none';
     }
     const ad = getArticleData(article.link);
     const flagEl = cardEl.querySelector('.reels-flag');
@@ -731,6 +736,15 @@
         if (home) { e.stopPropagation(); forceExitToHome(); return; }
         const refresh = e.target.closest('.reels-refresh-btn');
         if (refresh) { e.stopPropagation(); refreshAll(); return; }
+        const toggleDesc = e.target.closest('.reels-toggle-desc');
+        if (toggleDesc) {
+          e.stopPropagation();
+          const current = Settings.get('showDescription');
+          Settings.set('showDescription', !current);
+          // Re-render the current card to apply the setting
+          showReel();
+          return;
+        }
         if (e.target.closest('.reels-reader-close')) {
           e.stopPropagation();
           closeReelsReader();
@@ -2062,7 +2076,7 @@
     btn && btn.classList.add('btn-busy');
     try {
       const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
-      const fullSummary = cleanSummary(stripHtml(article.summary));
+      const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
       const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
 
       let img = null;
