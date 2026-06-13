@@ -454,9 +454,9 @@
           '<span class="reels-source"></span>' +
           '<span class="reels-date"></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
-          '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
         '</div>' +
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
+        '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
       '</div>';
     return html;
   }
