@@ -1829,10 +1829,10 @@
   }
 
   function loadImage(src) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = reject;
+      img.onerror = () => resolve(null);
       img.crossOrigin = 'anonymous';
       img.src = src;
     });
@@ -1873,33 +1873,29 @@
   }
 
   async function loadImageWithFallback(url) {
-    try {
-      const resp = await fetch(url, { mode: 'cors' });
-      if (resp.ok) {
+    const proxies = [
+      u => u,
+      u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+    ];
+    for (const makeUrl of proxies) {
+      try {
+        const target = makeUrl(url);
+        const resp = await fetch(target);
+        if (!resp.ok) continue;
         const blob = await resp.blob();
         const dataUrl = await new Promise(r => {
           const fr = new FileReader();
           fr.onload = () => r(fr.result);
+          fr.onerror = () => r(null);
           fr.readAsDataURL(blob);
         });
+        if (!dataUrl) continue;
         const img = await loadImage(dataUrl);
         if (img) return img;
-      }
-    } catch {}
-    try {
-      const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
-      const resp = await fetch(proxyUrl);
-      if (resp.ok) {
-        const blob = await resp.blob();
-        const dataUrl = await new Promise(r => {
-          const fr = new FileReader();
-          fr.onload = () => r(fr.result);
-          fr.readAsDataURL(blob);
-        });
-        const img = await loadImage(dataUrl);
-        if (img) return img;
-      }
-    } catch {}
+      } catch {}
+    }
     return null;
   }
 
