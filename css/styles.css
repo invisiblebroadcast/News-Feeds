@@ -270,8 +270,8 @@ img { max-width: 100%; height: auto; }
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 0 16px;
-  border-left: 1px solid var(--border-primary);
-  border-right: 1px solid var(--border-primary);
+  border-left: 1.5px solid var(--border-primary);
+  border-right: 1.5px solid var(--border-primary);
 }
 .bottom-bar .section-header {
   display: flex;

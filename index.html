@@ -53,8 +53,22 @@
               <div class="auth-dropdown-divider"></div>
               <button class="auth-dropdown-item auth-dropdown-item-danger" id="auth-signout-btn">
                 <span>&#x23FB;</span> Sign Out
-              </button>
-            </div>
+          </button>
+          <div class="select-wrapper lang-select" style="flex-shrink:0;">
+            <select id="lang-select" style="font-size:0.75rem;padding:4px 8px;">
+              <option value="en">EN</option>
+              <option value="hi">HI</option><option value="kn">KN</option>
+              <option value="ta">TA</option><option value="te">TE</option>
+              <option value="ml">ML</option><option value="bn">BN</option>
+              <option value="mr">MR</option><option value="gu">GU</option>
+              <option value="pa">PA</option><option value="ur">UR</option>
+              <option value="es">ES</option><option value="fr">FR</option>
+              <option value="ar">AR</option><option value="zh">ZH</option>
+              <option value="ja">JA</option><option value="de">DE</option>
+              <option value="ru">RU</option><option value="pt">PT</option>
+            </select>
+          </div>
+        </div>
           </div>
           <button class="btn" id="settings-btn">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -115,20 +129,6 @@
     <div class="section-header" id="section-header">
       <div class="section-header-top">
         <h2 id="section-title"></h2>
-        <div class="select-wrapper lang-select" style="flex-shrink:0;">
-          <select id="lang-select">
-            <option value="en">EN</option>
-            <option value="hi">HI</option><option value="kn">KN</option>
-            <option value="ta">TA</option><option value="te">TE</option>
-            <option value="ml">ML</option><option value="bn">BN</option>
-            <option value="mr">MR</option><option value="gu">GU</option>
-            <option value="pa">PA</option><option value="ur">UR</option>
-            <option value="es">ES</option><option value="fr">FR</option>
-            <option value="ar">AR</option><option value="zh">ZH</option>
-            <option value="ja">JA</option><option value="de">DE</option>
-            <option value="ru">RU</option><option value="pt">PT</option>
-          </select>
-        </div>
         <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
         </button>
