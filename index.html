@@ -17,6 +17,17 @@
           <span class="logo-icon">IB</span>
         </div>
         <div class="header-controls">
+          <button class="btn" id="settings-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/>
+            </svg>
+            Settings
+          </button>
+          <button class="btn btn-ghost btn-icon" id="options-btn" title="Options">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/>
+            </svg>
+          </button>
           <button class="btn" id="auth-btn">Sign In</button>
           <div class="auth-user" id="auth-user" style="display:none">
             <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
@@ -104,6 +115,20 @@
     <div class="section-header" id="section-header">
       <div class="section-header-top">
         <h2 id="section-title"></h2>
+        <div class="select-wrapper lang-select" style="flex-shrink:0;">
+          <select id="lang-select">
+            <option value="en">EN</option>
+            <option value="hi">HI</option><option value="kn">KN</option>
+            <option value="ta">TA</option><option value="te">TE</option>
+            <option value="ml">ML</option><option value="bn">BN</option>
+            <option value="mr">MR</option><option value="gu">GU</option>
+            <option value="pa">PA</option><option value="ur">UR</option>
+            <option value="es">ES</option><option value="fr">FR</option>
+            <option value="ar">AR</option><option value="zh">ZH</option>
+            <option value="ja">JA</option><option value="de">DE</option>
+            <option value="ru">RU</option><option value="pt">PT</option>
+          </select>
+        </div>
         <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
         </button>
@@ -149,20 +174,6 @@
             <option value="date-desc">Date ↓</option>
             <option value="date-asc">Date ↑</option>
             <option value="source">Source A–Z</option>
-          </select>
-        </div>
-        <div class="select-wrapper lang-select">
-          <select id="lang-select">
-            <option value="en">EN</option>
-            <option value="hi">HI</option><option value="kn">KN</option>
-            <option value="ta">TA</option><option value="te">TE</option>
-            <option value="ml">ML</option><option value="bn">BN</option>
-            <option value="mr">MR</option><option value="gu">GU</option>
-            <option value="pa">PA</option><option value="ur">UR</option>
-            <option value="es">ES</option><option value="fr">FR</option>
-            <option value="ar">AR</option><option value="zh">ZH</option>
-            <option value="ja">JA</option><option value="de">DE</option>
-            <option value="ru">RU</option><option value="pt">PT</option>
           </select>
         </div>
       </div>
