@@ -25,7 +25,8 @@
     dateFrom: $('#date-from'),
     dateTo: $('#date-to'),
     dateToggle: $('#date-toggle-btn'),
-    dateRange: $('#date-range'),
+    dateRange: $('#date-range-row'),
+    dateClear: $('#date-clear-btn'),
     articleModal: $('#article-modal'),
     articleModalClose: $('#article-modal-close'),
     articleModalTitle: $('#article-modal-title'),
@@ -1323,6 +1324,13 @@
     });
     el.dateFrom.addEventListener('change', refreshAll);
     el.dateTo.addEventListener('change', refreshAll);
+    if (el.dateClear) {
+      el.dateClear.addEventListener('click', () => {
+        el.dateFrom.value = '';
+        el.dateTo.value = '';
+        refreshAll();
+      });
+    }
   }
 
   /* ── Settings Modal ── */

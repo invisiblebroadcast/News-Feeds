@@ -138,39 +138,35 @@ img { max-width: 100%; height: auto; }
     flex-wrap: wrap;
     gap: 6px;
   }
-  .date-range {
-    flex-basis: 100%;
-    order: 99;
-    margin-top: 8px;
-    justify-content: flex-start;
-  }
-  .date-range input[type="date"] {
-    flex: 1;
-    min-width: 0;
-  }
 }
 
-.date-range {
+/* ── Date range row — sits below the header ── */
+.date-range-row {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 8px 16px;
+}
+.date-range-fields {
+  max-width: var(--max-width);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  flex-basis: 100%;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 0 4px;
-  border-top: 1px solid var(--border-primary);
-  margin-top: 4px;
 }
-.date-range label {
+.date-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+.date-field-label {
   font-size: 0.78rem;
   color: var(--text-secondary);
+  font-weight: 500;
 }
-.date-range input[type="date"] {
-  background: var(--bg-primary);
+.date-range-fields input[type="date"] {
+  background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
@@ -181,13 +177,18 @@ img { max-width: 100%; height: auto; }
   outline: none;
   transition: border-color var(--transition);
   min-width: 130px;
+  color-scheme: dark;
 }
-.date-range input[type="date"]:focus {
+.date-range-fields input[type="date"]:focus {
   border-color: var(--accent);
 }
-.date-range input[type="date"]::-webkit-calendar-picker-indicator {
+.date-range-fields input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
+}
+.date-sep {
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -1851,16 +1852,18 @@ body.cards-view {
   .header-controls .btn-label {
     display: none;
   }
-  .date-range {
-    flex: 1;
-    min-width: 0;
+  .date-range-row {
+    padding: 6px 8px;
   }
-  .date-range input[type="date"] {
+  .date-range-fields input[type="date"] {
     min-width: 0;
     width: auto;
     flex: 1;
     padding: 6px 8px;
     font-size: 0.75rem;
+  }
+  .date-field-label {
+    font-size: 0.72rem;
   }
 
   .tab-bar {
@@ -1984,7 +1987,7 @@ body.cards-view {
   .radio-group {
     flex-direction: column;
   }
-  .date-range label {
+  .date-field-label {
     display: none;
   }
 }
