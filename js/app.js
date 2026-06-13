@@ -236,8 +236,8 @@
       FeedManager.subcatIcon(s) + ' ' + FeedManager.subcatLabel(s, currentScope) +
       (cached ? '<span class="tab-count">' + getFilteredArticles(s, cached).length + '</span>' : '') +
       '</li>'
-    ).join('');
-    el.subBar.style.display = 'block';
+      ).join('');
+    // sub-tab-bar stays hidden — user clicks ☰ to show it
   }
 
   function bindSubTabs() {
