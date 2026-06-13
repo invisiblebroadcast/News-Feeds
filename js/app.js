@@ -436,14 +436,6 @@
           '<span class="reels-action-label">Comment</span>' +
         '</button>' +
       '</div>';
-      // Comment input area — hidden by default
-      html += '<div class="reels-comment-box" id="reels-comment-box" style="display:none">' +
-        '<textarea class="reels-comment-input" placeholder="Write a comment..." rows="2"></textarea>' +
-        '<div class="reels-comment-actions">' +
-          '<button class="btn btn-ghost reels-comment-cancel">Cancel</button>' +
-          '<button class="btn btn-primary reels-comment-submit">Post</button>' +
-        '</div>' +
-      '</div>';
     }
     html += '<div class="reels-overlay">' +
         '<span class="reels-count"></span>' +
@@ -552,21 +544,17 @@
   function showReel() {
     const articles = currentArticles;
     const idx = currentReelIndex;
+    const article = articles[idx];
     const total = articles.length;
 
     const existing = el.main.querySelector('.reels-container');
 
     if (!existing) {
-      // Build a vertical feed of cards (all articles)
-      let cardsHtml = '';
-      for (let i = 0; i < articles.length; i++) {
-        cardsHtml += '<div class="reels-card" data-article-idx="' + i + '">' + cardOverlayHtml() + '</div>';
-      }
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<div class="reels-stack" id="reels-stack">' +
-            cardsHtml +
+            '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
             readerHtml() +
           '</div>' +
         '</div>';
@@ -576,10 +564,7 @@
 
       // Event delegation on stack for card button actions (using closest)
       stack.addEventListener('click', e => {
-        // Find which card was clicked
-        const clickedCard = e.target.closest('.reels-card');
-        const cardIdx = clickedCard ? parseInt(clickedCard.dataset.articleIdx, 10) : 0;
-        const cardArticle = currentArticles[cardIdx];
+        const currentArticle = currentArticles[currentReelIndex];
 
         const readBtn = e.target.closest('.reels-read-btn');
         if (readBtn) {
@@ -597,7 +582,7 @@
         const si = e.target.closest('.reels-share-image');
         if (si) {
           e.stopPropagation();
-          handleShareImage(cardArticle, si);
+          handleShareImage(currentArticle, si);
           return;
         }
         const home = e.target.closest('.reels-home-btn');
@@ -652,170 +637,138 @@
         const likeBtn = e.target.closest('.reels-like-btn');
         if (likeBtn) {
           if (!requireAuth()) return;
-          if (!cardArticle) return;
-          const ad = getArticleData(cardArticle.link);
+          if (!currentArticle) return;
+          const ad = getArticleData(currentArticle.link);
           if (ad.like) { ad.like = false; } else { ad.like = true; ad.dislike = false; }
-          saveArticleData(cardArticle.link, ad);
-          // Update only this card's buttons
-          const card = likeBtn.closest('.reels-card');
-          if (card) {
-            const lBtn = card.querySelector('.reels-like-btn');
-            const dBtn = card.querySelector('.reels-dislike-btn');
-            if (lBtn) lBtn.classList.toggle('active', !!ad.like);
-            if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
-          }
+          saveArticleData(currentArticle.link, ad);
+          const lBtn = stack.querySelector('.reels-like-btn');
+          const dBtn = stack.querySelector('.reels-dislike-btn');
+          if (lBtn) lBtn.classList.toggle('active', !!ad.like);
+          if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
           return;
         }
         const dislikeBtn = e.target.closest('.reels-dislike-btn');
         if (dislikeBtn) {
           if (!requireAuth()) return;
-          if (!cardArticle) return;
-          const ad = getArticleData(cardArticle.link);
+          if (!currentArticle) return;
+          const ad = getArticleData(currentArticle.link);
           if (ad.dislike) { ad.dislike = false; } else { ad.dislike = true; ad.like = false; }
-          saveArticleData(cardArticle.link, ad);
-          const card = dislikeBtn.closest('.reels-card');
-          if (card) {
-            const lBtn = card.querySelector('.reels-like-btn');
-            const dBtn = card.querySelector('.reels-dislike-btn');
-            if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
-            if (lBtn) lBtn.classList.toggle('active', !!ad.like);
-          }
+          saveArticleData(currentArticle.link, ad);
+          const lBtn = stack.querySelector('.reels-like-btn');
+          const dBtn = stack.querySelector('.reels-dislike-btn');
+          if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
+          if (lBtn) lBtn.classList.toggle('active', !!ad.like);
           return;
         }
         const commentBtn = e.target.closest('.reels-comment-btn');
         if (commentBtn) {
           if (!requireAuth()) return;
-          if (cardArticle) openCommentsPage(cardArticle);
+          if (currentArticle) openCommentsPage(currentArticle);
           return;
         }
-        const commentSubmit = e.target.closest('.reels-comment-submit');
-        if (commentSubmit) {
+        // Card background click → toggle action bar visibility (soft fade)
+        if (e.target.closest('.reels-card') && !e.target.closest('button, a, input, textarea, .reels-comment-box, .reels-overlay button, .reels-home-btn, .reels-toolbar')) {
           e.stopPropagation();
-          const card = stack.querySelector('.reels-card');
-          const box = card?.querySelector('.reels-comment-box');
-          const input = box?.querySelector('.reels-comment-input');
-          const text = input?.value?.trim() || '';
-          if (!text) return;
-          const a = currentArticles[currentReelIndex];
-          if (!a) return;
-          const ad = getArticleData(a.link);
-          ad.note = text;
-          saveArticleData(a.link, ad);
-          // Close the comment box
-          if (box) box.style.display = 'none';
-          // Show brief feedback on the comment button
-          const btn = card.querySelector('.reels-comment-btn');
-          if (btn) {
-            const label = btn.querySelector('.reels-action-label');
-            if (label) { const orig = label.textContent; label.textContent = 'Posted!'; setTimeout(() => { label.textContent = orig; }, 1200); }
+          const actions = stack.querySelector('.reels-actions');
+          if (actions) {
+            const isVisible = actions.style.opacity !== '0' && actions.style.display !== 'none';
+            if (isVisible) {
+              actions.style.transition = 'opacity 0.25s ease';
+              actions.style.opacity = '0';
+              setTimeout(() => { actions.style.display = 'none'; }, 250);
+            } else {
+              actions.style.display = 'flex';
+              actions.style.transition = 'opacity 0.25s ease';
+              actions.style.opacity = '0';
+              requestAnimationFrame(() => { actions.style.opacity = '1'; });
+            }
           }
           return;
         }
-        const commentCancel = e.target.closest('.reels-comment-cancel');
-        if (commentCancel) {
-          e.stopPropagation();
-          const card = stack.querySelector('.reels-card');
-          const box = card?.querySelector('.reels-comment-box');
-          if (box) box.style.display = 'none';
-          return;
-        }
-        // Card click no longer auto-fullscreens — user must click the fullscreen button
       });
-
-      const prevBtn = container.querySelector('.reels-nav-prev');
-      if (prevBtn) prevBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(-1); });
-      const nextBtn = container.querySelector('.reels-nav-next');
-      if (nextBtn) nextBtn.addEventListener('click', e => { e.stopPropagation(); navThrottle(1); });
       updateNavArrows(container);
-      let lastNavTime = 0;
-      function navThrottle(dir) {
-        const now = Date.now();
-        if (now - lastNavTime < 500) return;
-        lastNavTime = now;
-        if (dir > 0) nextReel(); else prevReel();
-      }
-      let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 left, 1 right
-      let swipeStartY = 0, swipeDy = 0; // for swipe down features
-      let swipeDownTriggered = false;
+      let swipeStartX = 0, swipeDy = 0, isSwiping = false, swipeDir = 0; // 1 = down, -1 = up
+      let swipeStartY = 0;
       container.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         swipeStartX = e.touches[0].clientX;
         swipeStartY = e.touches[0].clientY;
-        swipeDx = 0;
         swipeDy = 0;
-        swipeDownTriggered = false;
         isSwiping = false;
         swipeDir = 0;
       }, { passive: true });
       container.addEventListener('touchmove', e => {
-        if (!swipeStartX && !swipeStartY) return;
-        const cards = stack.querySelectorAll('.reels-card');
-        if (cards.length === 0) return;
+        if (!swipeStartY) return;
+        const card = stack.querySelector('.reels-card');
+        if (!card) return;
         const cy = e.touches[0].clientY;
         const cx = e.touches[0].clientX;
-        swipeDy = cy - swipeStartY;
-        swipeDx = cx - swipeStartX;
+        const dy = cy - swipeStartY;
+        const dx = cx - swipeStartX;
 
-        // Only detect downward swipe
-        if (!isSwiping && swipeDy > 30 && swipeDy > Math.abs(swipeDx)) {
+        // Determine direction: vertical swipe if |dy| > |dx| and > threshold
+        if (!isSwiping && Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx)) {
           isSwiping = true;
-          swipeDir = 1; // vertical down
+          swipeDir = dy > 0 ? 1 : -1; // 1 = down, -1 = up
         }
         if (!isSwiping) return;
 
-        if (swipeDir === 1 && swipeDy > 0) {
-          // Apply swipe-down animation to all cards
-          const translateY = Math.min(swipeDy * 0.4, 80);
-          const scale = 1 - Math.min(swipeDy / 1200, 0.04);
-          const opacity = 1 - Math.min(swipeDy / 800, 0.25);
-          cards.forEach(card => {
-            card.style.transition = 'none';
-            card.style.transform = `translateY(${translateY}px) scale(${scale})`;
-            card.style.opacity = opacity;
-          });
-        }
+        // Card follows finger with spring-like resistance
+        const resistance = 0.4;
+        const translateY = Math.max(-120, Math.min(120, dy * resistance));
+        const scale = 1 - Math.min(Math.abs(dy) / 1500, 0.05);
+        const opacity = 1 - Math.min(Math.abs(dy) / 700, 0.3);
+        card.style.transition = 'none';
+        card.style.transform = `translateY(${translateY}px) scale(${scale})`;
+        card.style.opacity = opacity;
       }, { passive: false });
       container.addEventListener('touchend', e => {
-        if (!swipeStartX && !swipeStartY) return;
-        const cards = stack.querySelectorAll('.reels-card');
+        if (!swipeStartY) return;
+        const card = stack.querySelector('.reels-card');
         const dy = e.changedTouches[0].clientY - swipeStartY;
         const wasDir = swipeDir;
-        const triggered = swipeDownTriggered;
-        swipeStartX = 0;
         swipeStartY = 0;
-        swipeDownTriggered = false;
+        swipeStartX = 0;
         isSwiping = false;
         swipeDir = 0;
-        if (wasDir === 1 && dy > 120) {
-          // Swipe down enough — exit to list view
-          cards.forEach(card => {
-            card.style.transition = 'transform 0.25s ease-out, opacity 0.25s ease-out';
-            card.style.transform = 'translateY(100%) scale(0.9)';
-            card.style.opacity = '0';
-          });
+        if (!card) return;
+        const threshold = 80;
+        if (wasDir === -1 && dy < -threshold) {
+          // Swipe up — next article (card slides up and fades out)
+          card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+          card.style.transform = 'translateY(-110%) scale(0.95)';
+          card.style.opacity = '0';
           setTimeout(() => {
-            exitReels();
-            // Reset card positions
-            setTimeout(() => {
-              cards.forEach(card => {
-                card.style.transition = 'none';
-                card.style.transform = '';
-                card.style.opacity = '';
-                setTimeout(() => { card.style.transition = ''; }, 20);
-              });
-            }, 50);
-          }, 250);
+            nextReel();
+            if (card) {
+              card.style.transition = 'none';
+              card.style.transform = 'translateX(0)';
+              card.style.opacity = '1';
+              requestAnimationFrame(() => { if (card) card.style.transition = ''; });
+            }
+          }, 200);
+        } else if (wasDir === 1 && dy > threshold) {
+          // Swipe down — previous article (card slides down and fades out)
+          card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+          card.style.transform = 'translateY(110%) scale(0.95)';
+          card.style.opacity = '0';
+          setTimeout(() => {
+            prevReel();
+            if (card) {
+              card.style.transition = 'none';
+              card.style.transform = 'translateX(0)';
+              card.style.opacity = '1';
+              requestAnimationFrame(() => { if (card) card.style.transition = ''; });
+            }
+          }, 200);
         } else {
           // Snap back
-          cards.forEach(card => {
-            card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-            card.style.transform = '';
-            card.style.opacity = '';
-            setTimeout(() => { card.style.transition = ''; }, 200);
-          });
+          card.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+          card.style.transform = '';
+          card.style.opacity = '';
+          setTimeout(() => { if (card) card.style.transition = ''; }, 200);
         }
       }, { passive: true });
-      container.addEventListener('touchcancel', () => { swipeStartX = 0; swipeStartY = 0; isSwiping = false; swipeDir = 0; }, { passive: true });
     }
 
     // In-place DOM updates
@@ -827,13 +780,13 @@
     const dots = container.querySelector('.reels-progress');
     if (dots) dots.innerHTML = articles.map((a, i) => '<span class="reels-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
 
-    // Populate all cards in the feed
-    const cards = stack.querySelectorAll('.reels-card');
-    cards.forEach((card, i) => {
-      if (articles[i]) {
-        updateCard(card, articles[i], i, total);
-      }
-    });
+    const fg = stack.querySelector('.reels-card');
+    if (fg) {
+      updateCard(fg, article, idx, total);
+      fg.style.transition = 'none';
+      fg.style.transform = 'translateX(0)';
+      requestAnimationFrame(() => { fg.style.transition = ''; });
+    }
   }
 
   function prevReel() {

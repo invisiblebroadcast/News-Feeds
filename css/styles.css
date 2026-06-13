@@ -483,29 +483,20 @@ img { max-width: 100%; height: auto; }
   background: transparent;
 }
 
-/* ─── Reels View (scrollable card feed) ─── */
+/* ─── Reels View (static single card, no scrollbar) ─── */
 .reels-container {
   position: relative;
+  height: calc(100vh - 200px);
+  min-height: 450px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-primary) transparent;
+  overflow: hidden;
 }
-.reels-container::-webkit-scrollbar { width: 6px; }
-.reels-container::-webkit-scrollbar-track { background: transparent; }
-.reels-container::-webkit-scrollbar-thumb {
-  background: var(--border-primary);
-  border-radius: 3px;
-}
-.reels-container::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 .reels-stack {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
@@ -523,9 +514,8 @@ img { max-width: 100%; height: auto; }
   border-radius: var(--radius-lg);
 }
 .reels-stack .reels-card {
-  position: relative;
-  width: 100%;
-  min-height: 400px;
+  position: absolute;
+  inset: 0;
   z-index: 2;
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -1895,43 +1885,6 @@ img { max-width: 100%; height: auto; }
   font-weight: 500;
 }
 
-/* Comment box — appears below the action bar */
-.reels-comment-box {
-  position: absolute;
-  right: 60px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 280px;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius);
-  padding: 10px;
-  z-index: 4;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-}
-.reels-comment-input {
-  width: 100%;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  padding: 8px;
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  font-family: var(--font);
-  outline: none;
-  resize: vertical;
-  min-height: 50px;
-}
-.reels-comment-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
-}
-.reels-comment-actions .btn {
-  padding: 5px 12px;
-  font-size: 0.75rem;
-}
 .reels-tool-btn {
   width: 34px;
   height: 34px;
