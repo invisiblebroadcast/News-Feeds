@@ -207,6 +207,12 @@ img { max-width: 100%; height: auto; }
   background: var(--bg-card-hover);
   border-color: var(--text-tertiary);
 }
+.btn:active,
+.btn.active {
+  background: rgba(77, 171, 247, 0.18);
+  border-color: #4dabf7;
+  color: #4dabf7;
+}
 .btn-primary {
   background: var(--accent-dim);
   border-color: var(--accent);

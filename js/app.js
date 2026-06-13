@@ -2022,8 +2022,7 @@
         + smallGap
         + smallFontSize;
 
-      // Image dimensions — always scale to fill the canvas width (constrained by maxH).
-      // This ensures the image is prominent in the share regardless of source resolution.
+      // Image dimensions — edge-to-edge (full canvas width, no left/right padding).
       // High-res sources are downscaled with high-quality smoothing; low-res sources are
       // upscaled to fill the width (accepting some softness for very small thumbnails).
       let imgDrawW = 0, imgDrawH = 0;
@@ -2031,12 +2030,12 @@
       // Header area above the image for the IB block (only when image is present)
       const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
       if (hasImg) {
-        const maxW = W - PAD * 2;
-        const maxH = imgMaxAreaH - imgPad - ibHeaderH;
+        const maxW = W;
+        const maxH = imgMaxAreaH - ibHeaderH;
         const scale = Math.min(maxW / imgW, maxH / imgH);
         imgDrawW = Math.round(imgW * scale);
         imgDrawH = Math.round(imgH * scale);
-        imgBlockH = ibHeaderH + imgDrawH + imgPad;
+        imgBlockH = ibHeaderH + imgDrawH;
       }
 
       // Total content height
@@ -2055,13 +2054,13 @@
 
       let cursorY = topOffset;
 
-      // Image (if any) — top/bottom/left/right gradient fade to black, like card view
+      // Image (if any) — edge-to-edge (full width, no left/right padding)
       let imageTopY = 0;
       if (hasImg) {
         const drawX = Math.round((W - imgDrawW) / 2);
         const drawY = cursorY + ibHeaderH;
         imageTopY = drawY;
-        const imgRadius = Math.round(W * 0.025);
+        const imgRadius = 0;
 
         // Clip to rounded rect so the image has soft corners
         ctx.save();
