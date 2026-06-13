@@ -2583,14 +2583,23 @@
     cloudSyncTimer = setTimeout(async () => {
       try {
         const client = SupabaseStore.getClient();
-        await client.auth.updateUser({
+        const subs = FeedManager.getSubscribedFeeds();
+        const appSettings = Settings.load();
+        const { data, error } = await client.auth.updateUser({
           data: {
-            subscriptions: FeedManager.getSubscribedFeeds(),
-            app_settings: Settings.load()
+            subscriptions: subs,
+            app_settings: appSettings
           }
         });
+        if (error) {
+          console.warn('Cloud sync failed:', error.message);
+          return;
+        }
+        // Refresh currentUser so subsequent pulls see the new metadata
+        if (data?.user) currentUser = data.user;
+        console.log('[CloudSync] Pushed', subs.length, 'subscriptions + settings to Supabase');
       } catch (e) {
-        console.warn('Cloud sync failed:', e.message);
+        console.warn('Cloud sync failed:', e?.message || e);
       }
     }, 600);
   }
