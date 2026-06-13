@@ -1278,11 +1278,12 @@
 
   // Alarming / emergency words — strong signal that something important is happening.
   // Matched in title or summary, case-insensitive, whole-word.
+  // IMPORTANT: every pattern must have matching open/close parens.
   const ALARMING_PATTERNS = [
     /\b(breaking|just\s*in|developing)\b/i,
     /\b(urgent|emergency|crisis|disaster)\b/i,
-    /\b(attack(ed|s)?|shoot(ing|out)?|killed|killed|dead|death|deadly)\b/i,
-    /\b(bomb(ing|ed)?|blast|explosion|terror(ism|ist|ist)\b/i,
+    /\b(attack(ed|s)?|shoot(ing|out)?|killed|dead|death|deadly)\b/i,
+    /\b(bomb(ing|ed)?|blast|explosion|terror(ism|ist)?)\b/i,
     /\b(war|invasion|military|missile|strike|raid)\b/i,
     /\b(earthquake|flood|cyclone|tsunami|wildfire|volcano)\b/i,
     /\b(pandemic|outbreak|epidemic|virus|covid)\b/i,
@@ -1294,7 +1295,7 @@
   // Buzz / trending words — stories that are getting attention.
   const BUZZ_PATTERNS = [
     /\b(exclusive|breaking|scoop|first\s+report)\b/i,
-    /\b(viral|trending|widely\s+shared|everyone'?s\s+talking)\b/i,
+    /\b(viral|trending|widely\s+shared)\b/i,
     /\b(launch(es|ed|ing)?|unveil(s|ed|ing)?|announce(s|d|ment)?|reveal(s|ed)?)\b/i,
     /\b(maiden|first-ever|historic|unprecedented|record-breaking)\b/i,
     /\b(wins|won|victory|triumph|champion)\b/i,
