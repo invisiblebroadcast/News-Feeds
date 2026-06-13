@@ -79,11 +79,6 @@
               <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
             </svg>
           </button>
-          <div class="date-range" id="date-range" style="display:none">
-            <input type="date" id="date-from">
-            <span style="color:var(--text-tertiary)">to</span>
-            <input type="date" id="date-to">
-          </div>
           <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
             &#x21BB;
           </button>
@@ -96,6 +91,14 @@
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/>
             </svg>
+          </button>
+        </div>
+        <div class="date-range" id="date-range" style="display:none">
+          <label>From <input type="date" id="date-from"></label>
+          <span style="color:var(--text-tertiary)">to</span>
+          <label>To <input type="date" id="date-to"></label>
+          <button class="btn btn-ghost btn-icon" id="date-clear-btn" title="Clear date filter">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M4 4v10M12 4v10M5 4V2h6v2M6 7v4M10 7v4"/></svg>
           </button>
         </div>
       </div>

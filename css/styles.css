@@ -153,7 +153,21 @@ img { max-width: 100%; height: auto; }
 .date-range {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 4px;
+}
+.date-range label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
 }
 .date-range input[type="date"] {
   background: var(--bg-primary);
@@ -166,6 +180,7 @@ img { max-width: 100%; height: auto; }
   cursor: pointer;
   outline: none;
   transition: border-color var(--transition);
+  min-width: 130px;
 }
 .date-range input[type="date"]:focus {
   border-color: var(--accent);
