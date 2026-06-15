@@ -371,8 +371,6 @@
         totalShown = display.length;
       }
 
-      const hasMoreInScope = totalShown < articles.length;
-
       // Build the "Load All" button (live mode only) — placed at the TOP of
       // the content area so the user can opt in to seeing everything.
       let loadAllHtml = '';
@@ -392,10 +390,7 @@
         loadAllHtml +
         '<div class="article-grid">' +
           display.map((a, i) => renderCard(a, i)).join('') +
-        '</div>' +
-        (hasMoreInScope
-          ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
-          : '');
+        '</div>';
 
       const loadAllBtn = $('#load-all-btn');
       if (loadAllBtn) {
@@ -404,9 +399,6 @@
           renderArticles(currentArticles);
         });
       }
-
-      const loadMore = $('#load-more-btn');
-      if (loadMore) loadMore.addEventListener('click', () => { loadedCount += perPage; renderArticles(currentArticles); });
     } catch (e) {
       console.error('renderArticles failed:', e);
       showError('Failed to render list view. Try refreshing.');
@@ -1631,8 +1623,8 @@
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
-    const ibBtn = $('#ib-refresh-btn');
-    if (ibBtn) ibBtn.addEventListener('click', refreshAll);
+    const headerRefreshBtn = $('#header-refresh-btn');
+    if (headerRefreshBtn) headerRefreshBtn.addEventListener('click', refreshAll);
     const collapseBtn = $('#collapse-btn');
     const bottomBar = $('#bottom-bar');
     if (collapseBtn && bottomBar) {

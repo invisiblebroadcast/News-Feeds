@@ -111,6 +111,34 @@ img { max-width: 100%; height: auto; }
   color: var(--text-primary);
   white-space: nowrap;
 }
+.ib-row-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ib-refresh-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.ib-refresh-btn:hover {
+  color: #4dabf7;
+  border-color: #4dabf7;
+  background: rgba(77, 171, 247, 0.08);
+}
+.ib-refresh-btn:active,
+.ib-refresh-btn.active {
+  color: #4dabf7;
+  border-color: #4dabf7;
+  background: rgba(77, 171, 247, 0.18);
+}
 .app-logo .logo-icon {
   width: 32px; height: 32px;
   background: var(--accent);
