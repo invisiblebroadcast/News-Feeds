@@ -739,6 +739,13 @@ body.cards-view .app-footer {
   overflow: hidden;
   touch-action: pan-y;
   padding: 8px;
+  width: 100%;
+}
+body.cards-view .reels-container {
+  /* Belt-and-suspenders: cap the container height even if JS hasn't set
+     the inline style yet, so the cards never expand off-screen. */
+  max-height: 100vh;
+  overflow: hidden;
 }
 body.cards-view {
   overflow: hidden;
@@ -771,15 +778,24 @@ body.cards-view {
   justify-content: flex-start;
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   opacity: 1;
+  /* Card should be exactly as tall as the container so the inner
+     image + overlay fill it without overflow. The image takes its
+     natural aspect, the overlay takes the rest, and the summary
+     inside the overlay scrolls if needed. */
+  width: 100%;
   max-height: 100%;
+  flex: 0 1 auto;
   min-height: 0;
-  flex: 0 0 auto;
+  overflow: hidden;
 }
 .reels-img-wrap {
   width: 100%;
   flex-shrink: 0;
+  flex-grow: 0;
   position: relative;
   line-height: 0;
+  max-height: 50%;
+  overflow: hidden;
 }
 .reels-img-wrap .reels-img {
   display: block;
@@ -829,8 +845,9 @@ body.cards-view {
   justify-content: center;
   padding: 16px 8px 20px;
   z-index: 2;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 .reels-card.has-image .reels-overlay {
   margin-top: 0;
@@ -910,12 +927,16 @@ body.cards-view {
   flex-shrink: 0;
 }
 .reels-summary-wrap {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   margin-bottom: 8px;
+  padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 .reels-summary-wrap::-webkit-scrollbar {
   width: 6px;

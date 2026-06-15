@@ -178,6 +178,36 @@
       .trim();
   }
 
+  // Truncate a long description at the nearest sentence end so the summary
+  // never cuts off mid-sentence ("...the President said today is"). If no
+  // sentence end is found before `maxLen`, falls back to a hard cut at the
+  // last word boundary to avoid splitting in the middle of a word.
+  function smartTruncate(text, maxLen) {
+    if (!text || text.length <= maxLen) return text;
+    // Look for sentence-ending punctuation followed by a space
+    const slice = text.slice(0, maxLen);
+    // Find the last sentence boundary (. ! ?) within the slice
+    const sentenceEnd = Math.max(
+      slice.lastIndexOf('. '),
+      slice.lastIndexOf('! '),
+      slice.lastIndexOf('? '),
+      slice.lastIndexOf('.\n'),
+      slice.lastIndexOf('!\n'),
+      slice.lastIndexOf('?\n')
+    );
+    if (sentenceEnd > 40) {
+      // Keep the punctuation, drop trailing space
+      return slice.slice(0, sentenceEnd + 1);
+    }
+    // No sentence end found — fall back to last word boundary
+    const lastSpace = slice.lastIndexOf(' ');
+    if (lastSpace > 40) {
+      return slice.slice(0, lastSpace) + '…';
+    }
+    // Even worse: no space, hard cut
+    return slice + '…';
+  }
+
   function getDomain(url) {
     try { return new URL(url).hostname.replace('www.', ''); }
     catch { return ''; }
@@ -447,7 +477,7 @@
         thumbHtml +
         '<div class="article-body">' +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
-          '<p class="article-summary">' + cleanSummary(stripHtml(article.summary)).slice(0, 250) + '</p>' +
+          '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
             '<span class="source">' + escHtml(article.source) + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
@@ -677,7 +707,12 @@
       const headerH = header ? header.getBoundingClientRect().height : 0;
       const bottomH = bottomBar ? bottomBar.getBoundingClientRect().height : 0;
       const available = window.innerHeight - headerH - bottomH;
-      container.style.maxHeight = Math.max(200, available - 4) + 'px';
+      const maxH = Math.max(240, available - 4);
+      // Set BOTH height and max-height so the inner card can properly
+      // constrain its flex children. (max-height alone doesn't propagate
+      // a definite height down to nested flex items.)
+      container.style.height = maxH + 'px';
+      container.style.maxHeight = maxH + 'px';
     });
   }
 

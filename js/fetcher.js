@@ -22,6 +22,26 @@ const FeedFetcher = (() => {
     return match ? match[1] : '';
   }
 
+  // Truncate a long description at the nearest sentence end so the summary
+  // never cuts off mid-sentence ("...the President said today is"). Falls
+  // back to a word boundary if no sentence end is found.
+  function smartTruncate(text, maxLen) {
+    if (!text || text.length <= maxLen) return text;
+    const slice = text.slice(0, maxLen);
+    const sentenceEnd = Math.max(
+      slice.lastIndexOf('. '),
+      slice.lastIndexOf('! '),
+      slice.lastIndexOf('? '),
+      slice.lastIndexOf('.\n'),
+      slice.lastIndexOf('!\n'),
+      slice.lastIndexOf('?\n')
+    );
+    if (sentenceEnd > 40) return slice.slice(0, sentenceEnd + 1);
+    const lastSpace = slice.lastIndexOf(' ');
+    if (lastSpace > 40) return slice.slice(0, lastSpace) + '…';
+    return slice + '…';
+  }
+
   function parseRssXml(xmlText, feed) {
     const parser = new DOMParser();
     const xml = parser.parseFromString(xmlText, 'text/xml');
@@ -54,7 +74,7 @@ const FeedFetcher = (() => {
       }
 
       const strippedDesc = desc.replace(/<[^>]*>/g, '').trim();
-      const summary = strippedDesc.length > 300 ? strippedDesc.slice(0, 300) + '\u2026' : strippedDesc;
+      const summary = smartTruncate(strippedDesc, 300);
 
       articles.push({
         title: title.trim(),
@@ -174,9 +194,10 @@ const FeedFetcher = (() => {
           return {
             title: (item.title || '').trim(),
             link: (item.link || '').trim(),
-            summary: (item.description || '')
-              .replace(/<[^>]*>/g, '').trim()
-              .slice(0, 300),
+            summary: smartTruncate(
+              (item.description || '').replace(/<[^>]*>/g, '').trim(),
+              300
+            ),
             pubDate: item.pubDate || '',
             author: item.author || '',
             imageUrl,
