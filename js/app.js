@@ -2484,8 +2484,12 @@
   function loadImage(src) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
+      let done = false;
+      // Timeout safety: if the image takes too long (CORS preflight hang, etc.)
+      // resolve as null so the caller can move on to the next proxy.
+      const timer = setTimeout(() => { if (!done) { done = true; resolve(null); } }, 8000);
+      img.onload = () => { if (!done) { done = true; clearTimeout(timer); resolve(img); } };
+      img.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
       img.crossOrigin = 'anonymous';
       img.src = src;
     });
@@ -2564,18 +2568,43 @@
       let img = null;
       let imgW = 0, imgH = 0;
       // Only attempt to load the source image when the caller asked for it
-      // AND the article actually has an image. If loading fails, we silently
-      // fall back to text-only rather than failing the whole share.
+      // AND the article actually has an image. We try multiple image sources in
+      // order of reliability:
+      //   1. The RSS-provided article.imageUrl (most reliable — we know it exists
+      //      because the "with image" button is only shown when hasThumb is true)
+      //   2. The OG image fetched from the article's HTML (sometimes a higher-res
+      //      version or a different image entirely)
+      // Each candidate is fed to loadImageWithFallback which tries multiple
+      // CORS proxies. If the first one fails, we move to the next.
       if (includeImage && hasThumb) {
+        // Build a list of candidate image URLs to try, in priority order.
+        const candidates = [];
+        // 1. Enhanced version of the RSS image (full-size)
+        const enhanced = enhanceImageUrl(article.imageUrl);
+        candidates.push(enhanced || article.imageUrl);
+        // 2. Raw RSS image (fallback if enhanced URL fails)
+        if (enhanced) candidates.push(article.imageUrl);
+        // 3. OG image from the article's HTML (sometimes a different image)
         try {
-          let finalUrl = await fetchOGImage(article.link);
-          if (!finalUrl) {
-            const enhanced = enhanceImageUrl(article.imageUrl);
-            finalUrl = enhanced || article.imageUrl;
+          const og = await fetchOGImage(article.link);
+          if (og && !candidates.includes(og)) candidates.push(og);
+        } catch {}
+
+        console.log('[Share] Image candidates:', candidates.length, 'hasThumb:', hasThumb);
+        for (const candidate of candidates) {
+          console.log('[Share] Trying:', candidate);
+          const loaded = await loadImageWithFallback(candidate);
+          if (loaded) {
+            img = loaded;
+            imgW = img.naturalWidth;
+            imgH = img.naturalHeight;
+            console.log('[Share] Image loaded:', imgW, 'x', imgH, 'from', candidate);
+            break;
           }
-          const loaded = await loadImageWithFallback(finalUrl);
-          if (loaded) { img = loaded; imgW = img.naturalWidth; imgH = img.naturalHeight; }
-        } catch { img = null; }
+        }
+        if (!img) {
+          console.warn('[Share] All image candidates failed. Falling back to text-only.');
+        }
       }
 
       const hasImg = img && imgW > 0;
