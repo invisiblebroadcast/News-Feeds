@@ -2485,9 +2485,8 @@
     return new Promise((resolve) => {
       const img = new Image();
       let done = false;
-      // Timeout safety: if the image takes too long (CORS preflight hang, etc.)
-      // resolve as null so the caller can move on to the next proxy.
-      const timer = setTimeout(() => { if (!done) { done = true; resolve(null); } }, 8000);
+      // 30s timeout: large image bytes can take a while over slow networks.
+      const timer = setTimeout(() => { if (!done) { done = true; resolve(null); } }, 30000);
       img.onload = () => { if (!done) { done = true; clearTimeout(timer); resolve(img); } };
       img.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
       img.crossOrigin = 'anonymous';
@@ -2530,18 +2529,37 @@
   }
 
   async function loadImageWithFallback(url) {
+    // Try several CORS proxies in order. Each one fetches the image bytes
+    // server-side and returns them with proper CORS headers, which we convert
+    // to a data URL so the Image element can load it without crossOrigin
+    // restrictions (and the canvas won't be tainted).
     const proxies = [
-      u => u,
+      // images.weserv.nl / wsrv.nl are purpose-built image proxies with
+      // proper CORS + image transformation. These are the most reliable.
+      u => 'https://wsrv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
+      u => 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
+      // Fallbacks: generic CORS proxies (may rate-limit or go down)
       u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
-      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
       u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
     ];
+    // Timeout helper: use AbortSignal.timeout when available, else wrap
+    // fetch in a manual timeout via Promise.race.
+    async function fetchWithTimeout(target, ms) {
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+        return fetch(target, { signal: AbortSignal.timeout(ms) });
+      }
+      return Promise.race([
+        fetch(target),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+      ]);
+    }
     for (const makeUrl of proxies) {
       try {
         const target = makeUrl(url);
-        const resp = await fetch(target);
+        const resp = await fetchWithTimeout(target, 15000);
         if (!resp.ok) continue;
         const blob = await resp.blob();
+        if (!blob || blob.size === 0) continue;
         const dataUrl = await new Promise(r => {
           const fr = new FileReader();
           fr.onload = () => r(fr.result);
@@ -2550,8 +2568,15 @@
         });
         if (!dataUrl) continue;
         const img = await loadImage(dataUrl);
-        if (img) return img;
-      } catch {}
+        if (img) {
+          const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
+          console.log('[Share] Image loaded via proxy:', proxyHost);
+          return img;
+        }
+      } catch (e) {
+        const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
+        console.warn('[Share] Proxy failed:', proxyHost, e && e.message);
+      }
     }
     return null;
   }
