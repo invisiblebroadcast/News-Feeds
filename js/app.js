@@ -117,43 +117,12 @@
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
     deleteCommentCancel: $('#delete-comment-cancel'),
-    aiChatBtn: $('#ai-chat-btn'),
-    aiChatPage: $('#ai-chat-page'),
-    aiChatBackBtn: $('#ai-chat-back-btn'),
-    aiChatClearBtn: $('#ai-chat-clear-btn'),
-    aiChatMessages: $('#ai-chat-messages'),
-    aiChatInput: $('#ai-chat-input'),
-    aiChatSendBtn: $('#ai-chat-send-btn'),
-    aiChatStopBtn: $('#ai-chat-stop-btn'),
-    aiChatStatus: $('#ai-chat-status'),
-    aiChatSuggestions: $('#ai-chat-suggestions'),
-    aiChatDragHandle: $('#ai-chat-drag-handle'),
-    settingsAiProvider: $('#settings-ai-provider'),
-    settingsOllamaAddress: $('#settings-ollama-address'),
-    settingsOllamaModel: $('#settings-ollama-model'),
-    settingsAiContextCount: $('#settings-ai-context-count'),
+    settingsAiKey: $('#settings-ai-key'),
+    settingsAiEndpoint: $('#settings-ai-endpoint'),
+    settingsAiModel: $('#settings-ai-model'),
     settingsAiTopList: $('#settings-ai-top-list'),
-    settingsOllamaTestBtn: $('#settings-ollama-test-btn'),
     settingsAiMsg: $('#settings-ai-msg'),
-    settingsAiOllamaBlock: $('#settings-ai-ollama-block'),
-    settingsAiWebllmBlock: $('#settings-ai-webllm-block'),
-    settingsAiCloudBlock: $('#settings-ai-cloud-block'),
-    settingsAiCloudKey: $('#settings-ai-cloud-key'),
-    settingsAiCloudEndpoint: $('#settings-ai-cloud-endpoint'),
-    settingsAiCloudModel: $('#settings-ai-cloud-model'),
-    settingsCheckDeviceBtn: $('#settings-check-device-btn'),
-    settingsWebllmModel: $('#settings-webllm-model'),
-    settingsWebllmDownloadBtn: $('#settings-webllm-download-btn'),
-    aiDeviceCard: $('#ai-device-card'),
-    aiDeviceWebgpu: $('#ai-device-webgpu'),
-    aiDeviceGpu: $('#ai-device-gpu'),
-    aiDeviceRam: $('#ai-device-ram'),
-    aiDeviceCores: $('#ai-device-cores'),
-    aiDeviceRecommendation: $('#ai-device-recommendation'),
-    aiModelStatus: $('#ai-model-status'),
-    aiProgressWrap: $('#ai-progress-wrap'),
-    aiProgressFill: $('#ai-progress-fill'),
-    aiProgressText: $('#ai-progress-text')
+    topDate: $('#top-date')
   };
 
   if (!el.modal) return;
@@ -316,23 +285,7 @@
     }
     articles = applySearch(articles);
     articles = applyFilters(articles);
-    if (currentMode === 'top') {
-      // Build concept counts BEFORE scoring so the score reflects how
-      // many sources cover the same story (importance of the concept).
-      const conceptCounts = buildConceptCounts(articles);
-      // Cap at 1500 articles to keep scoring fast on mobile.
-      const scoreLimit = 1500;
-      const toScore = articles.length > scoreLimit ? articles.slice(0, scoreLimit) : articles;
-      for (const a of toScore) {
-        const key = normalizeTitle(a.title);
-        a._score = scoreArticle(a, conceptCounts.get(key) || 0, articles);
-      }
-      for (let i = scoreLimit; i < articles.length; i++) articles[i]._score = 0;
-      // Boost the OLDEST article in each concept cluster — the "primary
-      // source" that broke the story gets +50 points.
-      applyOldestSourceBonus(toScore);
-    }
-    const sortMode = currentSort || (currentMode === 'top' ? 'score' : 'date-desc');
+    const sortMode = currentSort || (currentMode === 'top' ? 'date-desc' : 'date-desc');
     articles = applySort(articles, sortMode);
     return articles;
   }
@@ -1250,6 +1203,9 @@
       hasFreshBackground = false;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      if (el.topDate) {
+        el.topDate.style.display = currentMode === 'top' ? 'inline-block' : 'none';
+      }
       updateSortOptions();
       updateStickyHeader();
       displayCurrentSubcat();
@@ -1373,22 +1329,42 @@
     // perPage (or 3× perPage in top mode) and offers a Load More button.
     // We do NOT cap here so the user gets the full ranking.
 
-    // AI Top List: re-rank using the AI model when enabled and in top mode
+    // AI Top List: load or generate AI ranking when enabled and in top mode
     if (currentMode === 'top') {
       const settings = Settings.load();
-      if (settings.aiTopList) {
-        const p = AI.getProviderConfig().provider;
-        if (p === 'webllm') {
-          // On-device models are too heavy for batch ranking — silently fall back to keywords
-          setTopListStatus('');
-        } else {
+      if (settings.aiTopList && settings.aiKey) {
+        const today = AI.todayStr();
+        const scope = currentScope;
+        const subcat = currentSubcat;
+        // Use the date from the top-date picker when loading; always store under today
+        const viewDate = (el.topDate && el.topDate.value) || today;
+        if (viewDate === today && await AI.needsRanking(today, scope, subcat)) {
           setTopListStatus('AI ranking…');
           try {
-            articles = await AI.rankArticles(articles);
+            const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+            let rankInput;
+            if (subcat === 'all') {
+              rankInput = [];
+              for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
+            } else {
+              rankInput = cached.groups[subcat] || [];
+            }
+            rankInput = FeedFetcher.deduplicate(rankInput);
+            rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
+            rankInput = FeedFetcher.sortByDate(rankInput);
+            const ranked = await AI.rankArticles(rankInput, scope, subcat);
+            if (ranked) articles = ranked;
           } catch (e) {
-            console.warn('AI ranking failed, using keyword ranking:', e);
+            console.warn('AI ranking failed:', e);
           } finally {
             clearTopListStatus();
+          }
+        } else {
+          const ranked = await AI.loadTopList(viewDate, scope, subcat);
+          if (ranked) { articles = ranked; clearTopListStatus(); }
+          else {
+            clearTopListStatus();
+            if (viewDate !== today) setTopListStatus('No ranking for ' + viewDate);
           }
         }
       }
@@ -1460,146 +1436,6 @@
       (a.summary || '').toLowerCase().includes(currentSearch) ||
       (a.pubDate || '').toLowerCase().includes(currentSearch)
     );
-  }
-
-  const TOP_SOURCES = ['BBC', 'CNN', 'Reuters', 'The Hindu', 'NYT', 'New York Times', 'Guardian', 'Times of India', 'NDTV', 'Al Jazeera', 'Washington Post', 'NPR', 'DW', 'Bloomberg', 'Forbes', 'ESPN', 'AP', 'Associated Press', 'Indian Express', 'Hindustan Times', 'The Print', 'The Wire', 'Scroll', 'Firstpost'];
-
-  // Alarming / emergency words — strong signal that something important is happening.
-  // Matched in title or summary, case-insensitive, whole-word.
-  // IMPORTANT: every pattern must have matching open/close parens.
-  const ALARMING_PATTERNS = [
-    /\b(breaking|just\s*in|developing)\b/i,
-    /\b(urgent|emergency|crisis|disaster)\b/i,
-    /\b(attack(ed|s)?|shoot(ing|out)?|killed|dead|death|deadly)\b/i,
-    /\b(bomb(ing|ed)?|blast|explosion|terror(ism|ist)?)\b/i,
-    /\b(war|invasion|military|missile|strike|raid)\b/i,
-    /\b(earthquake|flood|cyclone|tsunami|wildfire|volcano)\b/i,
-    /\b(pandemic|outbreak|epidemic|virus|covid)\b/i,
-    /\b(collapse(d)?|crash(es|ed|ing)?|default|bankruptcy)\b/i,
-    /\b(resign(ed|ation|s)?|ousted|impeach(ed|ment)?|coup)\b/i,
-    /\b(protest(s|ed|ing)?|riot(s|ing)?|strike|clash(es)?)\b/i
-  ];
-
-  // Buzz / trending words — stories that are getting attention.
-  const BUZZ_PATTERNS = [
-    /\b(exclusive|breaking|scoop|first\s+report)\b/i,
-    /\b(viral|trending|widely\s+shared)\b/i,
-    /\b(launch(es|ed|ing)?|unveil(s|ed|ing)?|announce(s|d|ment)?|reveal(s|ed)?)\b/i,
-    /\b(maiden|first-ever|historic|unprecedented|record-breaking)\b/i,
-    /\b(wins|won|victory|triumph|champion)\b/i,
-    /\b(scandal|controversy|outrage|backlash|condemn(s|ed)?)\b/i,
-    /\b(major|big|significant|massive|huge|enormous)\b/i,
-    /\b(alert|warning|notice|caution)\b/i
-  ];
-
-  // Combined "this is important" detector.
-  function getAlarmingScore(text) {
-    if (!text) return 0;
-    let score = 0;
-    for (const re of ALARMING_PATTERNS) {
-      if (re.test(text)) score += 60; // each alarming match = +60
-    }
-    for (const re of BUZZ_PATTERNS) {
-      if (re.test(text)) score += 25; // each buzz match = +25
-    }
-    return score;
-  }
-
-  // Normalize a title for concept clustering: lowercase, strip punctuation,
-  // remove common stopwords, take first 6 meaningful words. Articles with
-  // similar normalized titles are considered the same "concept" (same story).
-  function normalizeTitle(title) {
-    if (!title) return '';
-    return (title || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split(' ')
-      .filter(w => w.length > 2 && !STOPWORDS.has(w))
-      .slice(0, 6)
-      .join(' ');
-  }
-
-  const STOPWORDS = new Set([
-    'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was',
-    'one', 'our', 'had', 'has', 'have', 'this', 'that', 'with', 'from', 'they',
-    'she', 'will', 'would', 'could', 'should', 'about', 'after', 'before',
-    'over', 'into', 'than', 'then', 'when', 'where', 'what', 'who', 'why', 'how',
-    'his', 'her', 'their', 'its', 'our', 'your', 'says', 'said', 'told', 'tells',
-    'just', 'only', 'also', 'more', 'most', 'some', 'any', 'all', 'most', 'much',
-    'new', 'old', 'first', 'last', 'next', 'amid', 'amidst', 'among', 'says',
-    'first', 'reports', 'report', 'live', 'updates', 'update', 'here', 'there'
-  ]);
-
-  // Build a map of concept -> count, by clustering similar titles.
-  function buildConceptCounts(articles) {
-    const counts = new Map();
-    for (const a of articles) {
-      const key = normalizeTitle(a.title);
-      if (!key) continue;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    return counts;
-  }
-
-  function scoreArticle(article, conceptCount, allArticles) {
-    let score = 0;
-
-    // 1. CONCEPT IMPORTANCE (the biggest factor):
-    //    How many sources cover this same story? More sources = more important concept.
-    //    Range: 0 to ~250 points (capped at 20 sources).
-    if (conceptCount && conceptCount > 0) {
-      score += Math.min(250, conceptCount * 15);
-    }
-
-    // 2. ALARMING / BUZZ WORD DETECTION (titles + summaries):
-    //    Words like "breaking", "emergency", "attack", "earthquake", "viral"
-    //    signal an important event is unfolding. These stories get a
-    //    significant boost regardless of how many other sources cover them.
-    const text = (article.title || '') + ' ' + (article.summary || '');
-    score += getAlarmingScore(text);
-
-    // 3. SOURCE AUTHORITY: 0 to 70 points
-    if (TOP_SOURCES.some(s => (article.source || '').includes(s))) {
-      score += 70;
-    }
-
-    // 4. CONTENT QUALITY: 0 to 30 points
-    if (article.imageUrl && typeof article.imageUrl === 'string' && article.imageUrl.startsWith('http')) {
-      score += 12;
-    }
-    const summaryLen = (article.summary || '').length;
-    score += Math.min(12, summaryLen / 25);
-    if (article.author) score += 6;
-
-    // NOTE: Recency is intentionally NOT scored. In top mode the 10-day
-    // window is the time scope; the ranking is purely on content signals.
-
-    return Math.round(score);
-  }
-
-  // For each concept (cluster of articles with similar titles), find the
-  // OLDEST one. Apply a "primary source" bonus to it: the first source to
-  // break a story is generally the most authoritative. This way an 8-day-old
-  // story that 12 outlets are still covering outranks a 1-hour-old trivial post.
-  function applyOldestSourceBonus(articles) {
-    if (!articles.length) return;
-    const conceptFirst = new Map(); // conceptKey -> oldest article
-    for (const a of articles) {
-      const key = normalizeTitle(a.title);
-      if (!key) continue;
-      const existing = conceptFirst.get(key);
-      const aTime = a.pubDate ? new Date(a.pubDate).getTime() : Infinity;
-      const eTime = existing?.pubDate ? new Date(existing.pubDate).getTime() : Infinity;
-      if (!existing || aTime < eTime) {
-        conceptFirst.set(key, a);
-      }
-    }
-    for (const primary of conceptFirst.values()) {
-      // Primary source bonus: +50 points for the article that broke the story
-      primary._score = (primary._score || 0) + 50;
-    }
   }
 
   let currentSourceFilter = '';
@@ -1752,6 +1588,14 @@
     if (el.dateFilterApply) el.dateFilterApply.addEventListener('click', onApplyDateFilter);
     if (el.dateFilterClear) el.dateFilterClear.addEventListener('click', clearDateFilter);
     if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
+  }
+
+  function bindTopDate() {
+    if (!el.topDate) return;
+    el.topDate.addEventListener('change', () => {
+      Settings.save({ topDate: el.topDate.value });
+      if (currentMode === 'top') displayCurrentSubcat();
+    });
   }
 
   // IB row: clicking the logo triggers a background refresh (no view re-render,
@@ -1917,6 +1761,75 @@
     }
   }
 
+  /* ── Daily AI Rank Scheduler ── */
+
+  let rankSchedulerTimer = null;
+
+  function getISTHour() {
+    const d = new Date();
+    const ist = d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
+    return parseInt(ist, 10);
+  }
+
+  async function rankAllCombos() {
+    const scopes = ['global', 'nation'];
+    const subs = FeedManager.subcategories();
+    const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    for (const scope of scopes) {
+      const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
+      const feeds = FeedManager.getFeeds(scope, nation);
+      if (!feeds.length) continue;
+
+      const groups = {};
+      const results = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, 0)));
+      for (const result of results) {
+        if (result.status !== 'fulfilled') continue;
+        for (const a of result.value) {
+          a.subcat = a.feedHint || 'politics';
+          const cat = a.subcat;
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(a);
+        }
+      }
+
+      for (const subcat of subs) {
+        let articles;
+        if (subcat === 'all') {
+          articles = [];
+          for (const cat of Object.keys(groups)) articles.push(...groups[cat]);
+        } else {
+          articles = groups[subcat] || [];
+        }
+        if (!articles.length) continue;
+        articles = FeedFetcher.deduplicate(articles);
+        articles = FeedFetcher.filterByDate(articles, cutoffStr, null);
+        articles = FeedFetcher.sortByDate(articles);
+        if (articles.length < 5) continue;
+        const date = AI.todayStr();
+        if (await AI.needsRanking(date, scope, subcat)) {
+          await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
+          try {
+            await AI.rankArticles(articles, scope, subcat);
+          } catch (e) {
+            console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
+          }
+        }
+      }
+    }
+  }
+
+  function startRankScheduler() {
+    if (rankSchedulerTimer) return;
+    rankSchedulerTimer = setInterval(() => {
+      const hour = getISTHour();
+      if (hour === 20) {
+        rankAllCombos().catch(e => console.warn('Scheduled ranking failed:', e));
+      }
+    }, 60000);
+  }
+
   /* ── Settings Modal ── */
   function openSettings() {
     const settings = Settings.load();
@@ -1924,18 +1837,11 @@
     if (pp) pp.checked = true;
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
-    if (el.settingsAiProvider) el.settingsAiProvider.value = settings.aiProvider || 'ollama';
-    if (el.settingsOllamaAddress) el.settingsOllamaAddress.value = settings.ollamaAddress || '';
-    if (el.settingsOllamaModel) el.settingsOllamaModel.value = settings.ollamaModel || 'qwen2.5:1.5b';
-    if (el.settingsWebllmModel) el.settingsWebllmModel.value = settings.webllmModel || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
-    if (el.settingsAiCloudKey) el.settingsAiCloudKey.value = settings.aiCloudKey || '';
-    if (el.settingsAiCloudEndpoint) el.settingsAiCloudEndpoint.value = settings.aiCloudEndpoint || 'https://api.openai.com/v1';
-    if (el.settingsAiCloudModel) el.settingsAiCloudModel.value = settings.aiCloudModel || 'gpt-4o-mini';
-    if (el.settingsAiContextCount) el.settingsAiContextCount.value = settings.aiNewsContextCount ?? 20;
+    if (el.settingsAiKey) el.settingsAiKey.value = settings.aiKey || '';
+    if (el.settingsAiEndpoint) el.settingsAiEndpoint.value = settings.aiEndpoint || 'https://api.x.ai/v1';
+    if (el.settingsAiModel) el.settingsAiModel.value = settings.aiModel || 'grok-2-latest';
     if (el.settingsAiTopList) el.settingsAiTopList.checked = !!settings.aiTopList;
     setSettingsAIStatus('', null);
-    updateAIProviderUI();
-    refreshWebLLMModelStatus();
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -1950,27 +1856,17 @@
   function saveSettings() {
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
-    const aiProvider = el.settingsAiProvider?.value || 'ollama';
-    const ollamaAddress = (el.settingsOllamaAddress?.value || '').trim();
-    const ollamaModel = (el.settingsOllamaModel?.value || '').trim() || 'qwen2.5:1.5b';
-    const webllmModel = el.settingsWebllmModel?.value || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
-    const aiCloudKey = (el.settingsAiCloudKey?.value || '').trim();
-    const aiCloudEndpoint = (el.settingsAiCloudEndpoint?.value || '').trim() || 'https://api.openai.com/v1';
-    const aiCloudModel = (el.settingsAiCloudModel?.value || '').trim() || 'gpt-4o-mini';
+    const aiKey = (el.settingsAiKey?.value || '').trim();
+    const aiEndpoint = (el.settingsAiEndpoint?.value || '').trim() || 'https://api.x.ai/v1';
+    const aiModel = (el.settingsAiModel?.value || '').trim() || 'grok-2-latest';
     const aiTopList = !!el.settingsAiTopList?.checked;
-    const aiContext = parseInt(el.settingsAiContextCount?.value || '20', 10);
     Settings.save({
       articlesPerPage: perPage,
       language: lang,
-      aiProvider,
-      ollamaAddress,
-      ollamaModel,
-      webllmModel,
-      aiCloudKey,
-      aiCloudEndpoint,
-      aiCloudModel,
-      aiTopList,
-      aiNewsContextCount: isNaN(aiContext) ? 20 : aiContext
+      aiKey,
+      aiEndpoint,
+      aiModel,
+      aiTopList
     });
     syncSettingsToCloud();
     closeSettings();
@@ -3112,40 +3008,6 @@
     });
   }
 
-  /* ── AI Chat ── */
-  let aiChatBusy = false;
-  let aiChatAbortController = null;
-  const aiSuggestions = [
-    'Summarize the top stories right now',
-    'What\'s happening in technology?',
-    'Give me 3 headlines from India today',
-    'Any major science news recently?'
-  ];
-
-  function getAvailableArticlesForAI() {
-    const out = [];
-    for (const key of Object.keys(scopeCache)) {
-      const cached = scopeCache[key];
-      if (!cached || !cached.articles) continue;
-      for (const a of cached.articles) out.push(a);
-    }
-    return out;
-  }
-
-  function openAIChat() {
-    if (!el.aiChatPage) return;
-    el.aiChatPage.style.display = 'flex';
-    el.aiChatPage.style.height = '70vh';
-    renderAIChatHistory();
-    updateAIChatStatus();
-    setTimeout(() => el.aiChatInput?.focus(), 50);
-  }
-
-  function closeAIChat() {
-    if (aiChatBusy) AI.abort();
-    if (el.aiChatPage) el.aiChatPage.style.display = 'none';
-  }
-
   function setTopListStatus(text) {
     const el2 = $('#ai-top-status');
     if (el2) { el2.textContent = text; el2.style.display = 'inline'; }
@@ -3155,549 +3017,12 @@
     if (el2) { el2.textContent = ''; el2.style.display = 'none'; }
   }
 
-  function updateAIChatStatus() {
-    if (!el.aiChatStatus) return;
-    if (aiChatBusy) {
-      el.aiChatStatus.textContent = 'thinking…';
-      el.aiChatStatus.className = 'ai-chat-status ai-chat-status-busy';
-      return;
-    }
-    const cfg = AI.getProviderConfig();
-    if (cfg.provider === 'webllm') {
-      const status = AI.getWebLLMStatus();
-      const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
-      if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
-        el.aiChatStatus.textContent = modelLabel;
-        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-ready';
-      } else if (status.state === 'loading') {
-        el.aiChatStatus.textContent = 'loading ' + modelLabel + '…';
-        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-busy';
-      } else if (status.state === 'error') {
-        el.aiChatStatus.textContent = 'load failed';
-        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-warn';
-      } else {
-        el.aiChatStatus.textContent = modelLabel + ' (not loaded)';
-        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-warn';
-      }
-      return;
-    }
-    if (cfg.provider === 'cloud') {
-      el.aiChatStatus.textContent = cfg.cloudModel || '';
-      el.aiChatStatus.className = cfg.cloudKey
-        ? 'ai-chat-status ai-chat-status-ready'
-        : 'ai-chat-status ai-chat-status-warn';
-      return;
-    }
-    el.aiChatStatus.textContent = cfg.model || '';
-    el.aiChatStatus.className = cfg.address
-      ? 'ai-chat-status ai-chat-status-ready'
-      : 'ai-chat-status ai-chat-status-warn';
-  }
-
-  function renderAIChatHistory() {
-    if (!el.aiChatMessages) return;
-    const history = AI.loadHistory();
-    el.aiChatMessages.innerHTML = '';
-    if (!history.length) {
-      el.aiChatMessages.appendChild(buildEmptyState());
-      attachEmptyStateHandlers();
-      return;
-    }
-    for (const m of history) {
-      el.aiChatMessages.appendChild(buildAIMessageEl(m));
-    }
-    scrollAIChatToBottom();
-  }
-
-  function buildEmptyState() {
-    const empty = document.createElement('div');
-    empty.className = 'ai-chat-empty';
-    const cfg = AI.getProviderConfig();
-    if (cfg.provider === 'webllm') {
-      const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
-      const size = AI.webllmModels[cfg.webllmModel]?.size || '';
-      const status = AI.getWebLLMStatus();
-      let actionHtml = '';
-      if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
-        actionHtml = '<p class="ai-chat-empty-meta">✓ ' + modelLabel + ' ready</p>' +
-          '<div class="ai-chat-suggestions" id="ai-chat-suggestions"></div>';
-      } else if (status.state === 'loading') {
-        actionHtml = '<div class="ai-chat-empty-progress">' +
-          '<div class="ai-progress-bar"><div class="ai-progress-fill" id="ai-chat-progress-fill"></div></div>' +
-          '<div class="ai-progress-text" id="ai-chat-progress-text">Loading…</div></div>';
-      } else if (status.state === 'error') {
-        actionHtml = '<p class="ai-chat-empty-meta ai-chat-empty-meta-bad">Failed to load: ' +
-          escHtml(status.error || 'unknown error') + '</p>' +
-          '<button class="btn btn-primary" id="ai-chat-download-btn">Try download again</button>';
-      } else {
-        actionHtml = '<p class="ai-chat-empty-meta">Model not downloaded yet (' + size + '). Download happens on first message — make sure you\'re on Wi-Fi.</p>' +
-          '<button class="btn btn-primary" id="ai-chat-download-btn">Download & start</button>';
-      }
-      empty.innerHTML = '<div class="ai-chat-empty-icon">&#x1F4AC;</div>' +
-        '<p>On-device AI. Ask anything — recent news is shared as context.</p>' + actionHtml;
-    } else {
-      empty.innerHTML = '<div class="ai-chat-empty-icon">&#x1F4AC;</div>' +
-        '<p>Ask anything. Recent news articles are shared with the model as context.</p>' +
-        (cfg.address ? '<div class="ai-chat-suggestions" id="ai-chat-suggestions"></div>' : '<p class="ai-chat-empty-meta ai-chat-empty-meta-bad">No Ollama address set. Open Settings → AI Chat.</p>');
-    }
-    return empty;
-  }
-
-  function attachEmptyStateHandlers() {
-    const dlBtn = el.aiChatMessages?.querySelector('#ai-chat-download-btn');
-    if (dlBtn) {
-      dlBtn.addEventListener('click', async () => {
-        const cfg = AI.getProviderConfig();
-        dlBtn.disabled = true;
-        try {
-          await AI.downloadWebLLMModel(cfg.webllmModel, (report) => {
-            const fill = el.aiChatMessages.querySelector('#ai-chat-progress-fill');
-            const text = el.aiChatMessages.querySelector('#ai-chat-progress-text');
-            if (fill) {
-              const p = typeof report.progress === 'number' ? Math.max(0, Math.min(1, report.progress)) : null;
-              fill.style.width = p != null ? (p * 100).toFixed(0) + '%' : '20%';
-            }
-            if (text) text.textContent = report.text || 'Loading…';
-          });
-          renderAIChatHistory();
-          updateAIChatStatus();
-        } catch (e) {
-          renderAIChatHistory();
-        }
-      });
-    }
-    renderAISuggestions();
-  }
-
-  function renderAISuggestions() {
-    const wrap = el.aiChatMessages?.querySelector('.ai-chat-suggestions');
-    if (!wrap) return;
-    wrap.innerHTML = aiSuggestions.map(s =>
-      '<button class="ai-chat-suggestion-btn">' + escHtml(s) + '</button>'
-    ).join('');
-    wrap.querySelectorAll('.ai-chat-suggestion-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (aiChatBusy) return;
-        el.aiChatInput.value = btn.textContent;
-        sendAIMessage();
-      });
-    });
-  }
-
-  function buildAIMessageEl(m) {
-    const div = document.createElement('div');
-    div.className = 'ai-chat-msg ai-chat-msg-' + m.role;
-    const bubble = document.createElement('div');
-    bubble.className = 'ai-chat-bubble';
-    bubble.textContent = m.content || '';
-    div.appendChild(bubble);
-    return div;
-  }
-
-  function appendAIMessage(role, content) {
-    if (!el.aiChatMessages) return null;
-    const empty = el.aiChatMessages.querySelector('.ai-chat-empty');
-    if (empty) empty.remove();
-    const div = document.createElement('div');
-    div.className = 'ai-chat-msg ai-chat-msg-' + role;
-    const bubble = document.createElement('div');
-    bubble.className = 'ai-chat-bubble';
-    if (role === 'assistant') {
-      if (content) {
-        bubble.classList.add('ai-chat-bubble-streaming');
-        bubble.textContent = content;
-      } else {
-        bubble.classList.add('ai-chat-bubble-thinking');
-        bubble.innerHTML = '<span>Thinking</span><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span>';
-      }
-    } else {
-      bubble.textContent = content || '';
-    }
-    div.appendChild(bubble);
-    el.aiChatMessages.appendChild(div);
-    scrollAIChatToBottom();
-    return bubble;
-  }
-
-  function scrollAIChatToBottom() {
-    if (!el.aiChatMessages) return;
-    requestAnimationFrame(() => {
-      el.aiChatMessages.scrollTop = el.aiChatMessages.scrollHeight;
-    });
-  }
-
-  function setAIChatBusy(busy) {
-    aiChatBusy = busy;
-    if (el.aiChatSendBtn) el.aiChatSendBtn.style.display = busy ? 'none' : 'flex';
-    if (el.aiChatStopBtn) el.aiChatStopBtn.style.display = busy ? 'flex' : 'none';
-    if (el.aiChatInput) el.aiChatInput.disabled = busy;
-    updateAIChatStatus();
-  }
-
-  function showAIError(err) {
-    if (!el.aiChatMessages) return;
-    const div = document.createElement('div');
-    div.className = 'ai-chat-error';
-    const isAbort = AI.isAbortedError(err);
-    div.textContent = isAbort
-      ? 'Stopped.'
-      : ('Error: ' + (err?.message || 'unknown error'));
-    el.aiChatMessages.appendChild(div);
-    scrollAIChatToBottom();
-  }
-
-  async function sendAIMessage() {
-    if (aiChatBusy) return;
-    const text = (el.aiChatInput?.value || '').trim();
-    if (!text) return;
-    const cfg = AI.getProviderConfig();
-    if (cfg.provider === 'ollama' && !cfg.address) {
-      openSettings();
-      return;
-    }
-    if (cfg.provider === 'webllm') {
-      const status = AI.getWebLLMStatus();
-      if (status.state === 'error') {
-        showAIError(new Error('Model failed to load: ' + (status.error || 'unknown')));
-        return;
-      }
-    }
-    if (cfg.provider === 'cloud' && !cfg.cloudKey) {
-      openSettings();
-      return;
-    }
-    el.aiChatInput.value = '';
-    autoResizeAIInput();
-
-    const history = AI.loadHistory();
-    history.push({ role: 'user', content: text });
-    appendAIMessage('user', text);
-
-    const assistantBubble = appendAIMessage('assistant', '');
-    setAIChatBusy(true);
-    const messages = history.slice(-30);
-    const articles = getAvailableArticlesForAI();
-    let assembled = '';
-    let loadBanner = null;
-    const startTime = Date.now();
-    let elapsedTimer = null;
-
-    const startElapsedTimer = () => {
-      if (elapsedTimer) return;
-      elapsedTimer = setInterval(() => {
-        if (!el.aiChatStatus) return;
-        const secs = Math.floor((Date.now() - startTime) / 1000);
-        const elapsedText = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
-        el.aiChatStatus.innerHTML = 'thinking… <span class="ai-chat-elapsed">' + elapsedText + '</span>';
-      }, 1000);
-    };
-    const stopElapsedTimer = () => {
-      if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
-    };
-    startElapsedTimer();
-
-    const showLoadBanner = (text2) => {
-      loadBanner = assistantBubble;
-      if (assistantBubble) {
-        assistantBubble.classList.remove('ai-chat-bubble-thinking');
-        assistantBubble.classList.add('ai-chat-bubble-streaming');
-        assistantBubble.textContent = text2;
-      }
-    };
-
-    const clearThinkingPlaceholder = () => {
-      if (assistantBubble && assistantBubble.classList.contains('ai-chat-bubble-thinking')) {
-        assistantBubble.classList.remove('ai-chat-bubble-thinking');
-        assistantBubble.classList.add('ai-chat-bubble-streaming');
-        assistantBubble.textContent = '';
-      }
-    };
-
-    const persistAssistant = () => {
-      const finalText = (assembled || (assistantBubble && assistantBubble !== loadBanner ? assistantBubble.textContent : '') || '').trim();
-      if (!finalText || finalText === '[stopped]') {
-        const idx = history.findIndex(m => m.role === 'user' && m.content === text);
-        if (idx >= 0) history.splice(idx, 1);
-        AI.saveHistory(history);
-        return;
-      }
-      history.push({ role: 'assistant', content: finalText });
-      AI.saveHistory(history);
-    };
-
-    try {
-      await AI.chat({
-        messages,
-        newsArticles: articles,
-        onLoadProgress: (report) => {
-          showLoadBanner('⏳ ' + (report.text || 'Loading model…'));
-        },
-        onChunk: (piece, full) => {
-          clearThinkingPlaceholder();
-          if (loadBanner) loadBanner = null;
-          assembled = full;
-          if (assistantBubble) assistantBubble.textContent = full;
-          scrollAIChatToBottom();
-        },
-        onDone: (full) => {
-          assembled = full || assembled;
-          persistAssistant();
-        },
-        onError: (err) => {
-          if (AI.isAbortedError(err)) {
-            if (assistantBubble && !assembled) {
-              assistantBubble.classList.remove('ai-chat-bubble-thinking');
-              assistantBubble.textContent = '[stopped]';
-            }
-          } else {
-            showAIError(err);
-          }
-          persistAssistant();
-        }
-      });
-    } catch (err) {
-      // AI.chat re-throws after calling onError. Nothing to do here.
-    } finally {
-      stopElapsedTimer();
-      if (assistantBubble) {
-        assistantBubble.classList.remove('ai-chat-bubble-streaming');
-        assistantBubble.classList.remove('ai-chat-bubble-thinking');
-      }
-      setAIChatBusy(false);
-      if (cfg.provider === 'webllm') updateAIChatStatus();
-    }
-  }
-
-  function stopAIMessage() {
-    if (aiChatBusy) AI.abort();
-  }
-
-  function clearAIChat() {
-    if (aiChatBusy) AI.abort();
-    AI.clearHistory();
-    renderAIChatHistory();
-  }
-
-  function autoResizeAIInput() {
-    if (!el.aiChatInput) return;
-    el.aiChatInput.style.height = 'auto';
-    el.aiChatInput.style.height = Math.min(el.aiChatInput.scrollHeight, 120) + 'px';
-  }
-
-  function bindAIChat() {
-    if (el.aiChatBtn) el.aiChatBtn.addEventListener('click', openAIChat);
-    if (el.aiChatBackBtn) el.aiChatBackBtn.addEventListener('click', closeAIChat);
-    if (el.aiChatClearBtn) el.aiChatClearBtn.addEventListener('click', clearAIChat);
-    if (el.aiChatSendBtn) el.aiChatSendBtn.addEventListener('click', sendAIMessage);
-    if (el.aiChatStopBtn) el.aiChatStopBtn.addEventListener('click', stopAIMessage);
-    if (el.aiChatInput) {
-      el.aiChatInput.addEventListener('input', autoResizeAIInput);
-      el.aiChatInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendAIMessage();
-        }
-      });
-    }
-    // Draggable resize
-    const dragHandle = el.aiChatDragHandle;
-    if (dragHandle && el.aiChatPage) {
-      let dragStartY = 0, dragStartH = 0, dragging = false;
-      const onDragStart = (clientY) => {
-        dragging = true;
-        dragStartY = clientY;
-        dragStartH = el.aiChatPage.offsetHeight;
-        el.aiChatPage.style.transition = 'none';
-      };
-      const onDragMove = (clientY) => {
-        if (!dragging) return;
-        const dy = dragStartY - clientY;
-        const newH = Math.min(window.innerHeight * 0.95, Math.max(280, dragStartH + dy));
-        el.aiChatPage.style.height = newH + 'px';
-      };
-      const onDragEnd = () => { dragging = false; };
-      dragHandle.addEventListener('mousedown', e => { e.preventDefault(); onDragStart(e.clientY); });
-      dragHandle.addEventListener('touchstart', e => { onDragStart(e.touches[0].clientY); }, { passive: true });
-      document.addEventListener('mousemove', e => onDragMove(e.clientY));
-      document.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY), { passive: true });
-      document.addEventListener('mouseup', onDragEnd);
-      document.addEventListener('touchend', onDragEnd);
-    }
-  }
-
   function setSettingsAIStatus(msg, type) {
     if (!el.settingsAiMsg) return;
     el.settingsAiMsg.textContent = msg || '';
     el.settingsAiMsg.classList.remove('success', 'error');
     if (type === 'ok') el.settingsAiMsg.classList.add('success');
     if (type === 'err') el.settingsAiMsg.classList.add('error');
-  }
-
-  function updateAIProviderUI() {
-    const provider = el.settingsAiProvider?.value || 'ollama';
-    if (el.settingsAiOllamaBlock) el.settingsAiOllamaBlock.style.display = provider === 'ollama' ? 'block' : 'none';
-    if (el.settingsAiWebllmBlock) el.settingsAiWebllmBlock.style.display = provider === 'webllm' ? 'block' : 'none';
-    if (el.settingsAiCloudBlock) el.settingsAiCloudBlock.style.display = provider === 'cloud' ? 'block' : 'none';
-  }
-
-  function setRecommendationEl(rec) {
-    if (!el.aiDeviceRecommendation) return;
-    el.aiDeviceRecommendation.classList.remove('rec-yes', 'rec-cautious', 'rec-no');
-    if (!rec) { el.aiDeviceRecommendation.textContent = ''; return; }
-    if (rec.supported) {
-      const recClass = rec.recommendation === 'yes' ? 'rec-yes' : 'rec-cautious';
-      el.aiDeviceRecommendation.classList.add(recClass);
-      const sym = rec.recommendation === 'yes' ? '✓' : '⚠';
-      el.aiDeviceRecommendation.textContent = sym + ' ' + (rec.recommendation === 'yes'
-        ? 'Your device can run on-device AI.'
-        : 'Your device may run on-device AI, but slowly.');
-    } else {
-      el.aiDeviceRecommendation.classList.add('rec-no');
-      el.aiDeviceRecommendation.textContent = '✗ ' + (rec.reason || 'Not supported');
-    }
-  }
-
-  function renderDeviceCheckResult(rec) {
-    if (!rec) return;
-    if (el.aiDeviceWebgpu) {
-      el.aiDeviceWebgpu.textContent = rec.webgpu ? '✓ supported' : '✗ not supported';
-      el.aiDeviceWebgpu.className = 'ai-device-value ' + (rec.webgpu ? 'val-ok' : 'val-bad');
-    }
-    if (el.aiDeviceGpu) {
-      const g = rec.gpu;
-      const txt = g ? [g.vendor, g.architecture, g.device].filter(s => s && s !== 'unknown').join(' / ') || 'unknown' : '—';
-      el.aiDeviceGpu.textContent = txt;
-    }
-    if (el.aiDeviceRam) {
-      el.aiDeviceRam.textContent = rec.memory != null ? rec.memory + ' GB' : 'unknown';
-    }
-    if (el.aiDeviceCores) {
-      el.aiDeviceCores.textContent = rec.cores != null ? String(rec.cores) : 'unknown';
-    }
-    setRecommendationEl(rec);
-  }
-
-  async function runDeviceCheck() {
-    if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.disabled = true;
-    setSettingsAIStatus('Checking device…', null);
-    try {
-      const rec = await AI.checkWebGPUSupport();
-      renderDeviceCheckResult(rec);
-      if (rec.supported) {
-        setSettingsAIStatus(rec.recommendation === 'yes'
-          ? 'Device ready for on-device AI.'
-          : 'Device may work but could be slow.', 'ok');
-      } else {
-        setSettingsAIStatus(rec.reason || 'Not supported on this device.', 'err');
-      }
-    } catch (e) {
-      setSettingsAIStatus(e?.message || 'Check failed', 'err');
-    } finally {
-      if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.disabled = false;
-    }
-  }
-
-  function setWebLLMDownloadProgress(report) {
-    if (el.aiProgressWrap) el.aiProgressWrap.style.display = 'block';
-    if (el.aiProgressFill) {
-      const p = typeof report.progress === 'number' ? Math.max(0, Math.min(1, report.progress)) : null;
-      el.aiProgressFill.style.width = p != null ? (p * 100).toFixed(0) + '%' : '20%';
-    }
-    if (el.aiProgressText) {
-      const text = (report.text || '').trim();
-      el.aiProgressText.textContent = text || 'Working…';
-    }
-  }
-
-  function setWebLLMModelStatus(text, cls) {
-    if (!el.aiModelStatus) return;
-    el.aiModelStatus.textContent = text || '';
-    el.aiModelStatus.className = 'ai-model-status' + (cls ? ' ' + cls : '');
-  }
-
-  function refreshWebLLMModelStatus() {
-    const cfg = AI.getProviderConfig();
-    if (cfg.provider !== 'webllm') return;
-    const status = AI.getWebLLMStatus();
-    const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
-    if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
-      setWebLLMModelStatus('✓ ' + modelLabel + ' ready', 'status-ok');
-      if (el.aiProgressWrap) el.aiProgressWrap.style.display = 'none';
-    } else if (status.state === 'loading') {
-      setWebLLMModelStatus('Loading…', 'status-loading');
-    } else if (status.state === 'error') {
-      setWebLLMModelStatus('✗ ' + (status.error || 'load failed'), 'status-bad');
-    } else {
-      setWebLLMModelStatus('Not downloaded', 'status-neutral');
-    }
-  }
-
-  async function downloadModel() {
-    const provider = el.settingsAiProvider?.value || 'ollama';
-    if (provider !== 'webllm') {
-      setSettingsAIStatus('Switch provider to On-device first.', 'err');
-      return;
-    }
-    const cfg = AI.getProviderConfig();
-    const modelId = el.settingsWebllmModel?.value || cfg.webllmModel;
-    if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.disabled = true;
-    setSettingsAIStatus('Loading model… this may take a few minutes on first run.', null);
-    try {
-      await AI.downloadWebLLMModel(modelId, setWebLLMDownloadProgress);
-      setSettingsAIStatus('Model ready. You can now chat on-device.', 'ok');
-      refreshWebLLMModelStatus();
-    } catch (e) {
-      if (AI.isAbortedError(e)) {
-        setSettingsAIStatus('Download cancelled.', null);
-      } else {
-        setSettingsAIStatus('Download failed: ' + (e?.message || e), 'err');
-      }
-    } finally {
-      if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.disabled = false;
-      refreshWebLLMModelStatus();
-    }
-  }
-
-  function bindAISettings() {
-    if (el.settingsOllamaTestBtn) {
-      const testBtn = el.settingsOllamaTestBtn;
-      const originalLabel = testBtn.textContent;
-      testBtn.addEventListener('click', async () => {
-        // Read directly from the input so users can test before saving
-        const rawAddress = (el.settingsOllamaAddress?.value || '').trim();
-        const rawModel = (el.settingsOllamaModel?.value || '').trim();
-        if (!rawAddress) {
-          setSettingsAIStatus('Enter an Ollama address first.', 'err');
-          return;
-        }
-        testBtn.classList.add('btn-testing');
-        testBtn.innerHTML = 'Testing<span class="btn-label-suffix"></span>';
-        testBtn.disabled = true;
-        setSettingsAIStatus('Testing connection to ' + rawAddress + '…', null);
-        try {
-          const result = await AI.testOllamaConnectionAt(rawAddress, rawModel || 'qwen2.5:1.5b');
-          const modelNote = result.modelAvailable
-            ? ' Model "' + result.currentModel + '" is available.'
-            : ' ⚠ Model "' + result.currentModel + '" not found on server. Pull it with: ollama pull ' + result.currentModel;
-          const msg = 'Connected. ' + (result.models?.length || 0) + ' model(s) found.' + modelNote;
-          setSettingsAIStatus(result.warning ? (msg + ' ' + result.warning) : msg, result.warning ? 'err' : 'ok');
-        } catch (e) {
-          setSettingsAIStatus(e.message || 'Test failed', 'err');
-        } finally {
-          testBtn.classList.remove('btn-testing');
-          testBtn.textContent = originalLabel;
-          testBtn.disabled = false;
-        }
-      });
-    }
-    if (el.settingsAiProvider) el.settingsAiProvider.addEventListener('change', () => {
-      updateAIProviderUI();
-      setSettingsAIStatus('', null);
-      refreshWebLLMModelStatus();
-    });
-    if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.addEventListener('click', runDeviceCheck);
-    if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.addEventListener('click', downloadModel);
-    if (el.settingsWebllmModel) el.settingsWebllmModel.addEventListener('change', refreshWebLLMModelStatus);
   }
 
   /* ── Auth ── */
@@ -4607,9 +3932,8 @@
     bindArticleClicks();
     bindFeedControls();
     bindDateToggle();
+    bindTopDate();
     bindSourcesConfig();
-    bindAIChat();
-    bindAISettings();
     await renderContent();
 
     // Start periodic auto-refresh — fetches silently in the background
@@ -4617,6 +3941,25 @@
     // the "show recent" icon to apply the fresh data.
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
+
+    // Init top-date picker
+    const settings2 = Settings.load();
+    if (el.topDate) {
+      el.topDate.value = settings2.topDate || AI.todayStr();
+      el.topDate.style.display = currentMode === 'top' ? 'inline-block' : 'none';
+    }
+
+    // Start AI rank scheduler (checks IST time every 60s)
+    startRankScheduler();
+
+    // Seed: rank all scope/subcat combos once on first load if none exist
+    const settings = Settings.load();
+    if (settings.aiTopList && settings.aiKey) {
+      // Wait a moment for feeds to populate scopeCache, then rank
+      setTimeout(() => {
+        rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
+      }, 5000);
+    }
   }
 
   init();

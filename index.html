@@ -68,14 +68,7 @@
               <option value="pt">PT</option>
             </select>
           </div>
-          <button class="btn" id="ai-chat-btn" title="AI Chat">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 1.5a4.5 4.5 0 00-4.5 4.5v2A1.5 1.5 0 012 9.5V6.5a6 6 0 0112 0v3a1.5 1.5 0 01-1.5 1.5h-1A1.5 1.5 0 0110 9.5V6A2 2 0 008 4"/>
-              <circle cx="8" cy="11" r="3"/>
-              <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
-            </svg>
-            <span class="btn-label">AI Chat</span>
-          </button>
+
           <button class="btn" id="settings-btn">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/>
@@ -111,6 +104,7 @@
             </div>
           </div>
         </div>
+        <input type="date" id="top-date" style="display:none;width:130px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:4px 6px;color:var(--text-primary);font-size:0.78rem;font-family:var(--font);outline:none;">
         <div class="header-controls-extras" id="header-extras" style="display:none">
           <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Date filter">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -285,89 +279,16 @@
           <div id="feed-custom-list"></div>
         </div>
         <div class="setting-group">
-          <label class="setting-label">AI Chat</label>
-          <p class="setting-desc">Ask questions about the news or chat with a local AI model. The news context is automatically included so the model can answer questions about current articles.</p>
-          <div class="feed-input-row">
-            <div class="select-wrapper" style="flex:1">
-              <select id="settings-ai-provider">
-                <option value="ollama">Ollama (local network)</option>
-                <option value="webllm">On-device (WebLLM)</option>
-                <option value="cloud">Cloud API (OpenAI-compatible)</option>
-              </select>
-            </div>
+          <label class="setting-label">AI Top List</label>
+          <p class="setting-desc">Configure xAI/Grok API to rank the top 100 articles each day. The API key is stored in your settings (never committed).</p>
+          <div class="feed-input-row" style="margin-top:8px;">
+            <input type="password" id="settings-ai-key" placeholder="xAI API key (xai-...)" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
           </div>
-
-          <div id="settings-ai-ollama-block">
-            <div class="feed-input-row" style="margin-top:8px;">
-              <input type="text" id="settings-ollama-address" placeholder="http://192.168.1.10:11434" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-              <button class="btn btn-ghost" id="settings-ollama-test-btn">Test</button>
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;">
-              <input type="text" id="settings-ollama-model" placeholder="qwen2.5:1.5b" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-            </div>
+          <div class="feed-input-row" style="margin-top:8px;">
+            <input type="text" id="settings-ai-endpoint" placeholder="https://api.x.ai/v1" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
           </div>
-
-          <div id="settings-ai-cloud-block" style="display:none">
-            <div class="feed-input-row" style="margin-top:8px;">
-              <input type="password" id="settings-ai-cloud-key" placeholder="API key (sk-...)" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;">
-              <input type="text" id="settings-ai-cloud-endpoint" placeholder="https://api.openai.com/v1" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;">
-              <input type="text" id="settings-ai-cloud-model" placeholder="gpt-4o-mini" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-            </div>
-          </div>
-
-          <div id="settings-ai-webllm-block" style="display:none">
-            <div class="ai-device-card" id="ai-device-card">
-              <div class="ai-device-row">
-                <span class="ai-device-label">WebGPU</span>
-                <span class="ai-device-value" id="ai-device-webgpu">—</span>
-              </div>
-              <div class="ai-device-row">
-                <span class="ai-device-label">GPU</span>
-                <span class="ai-device-value" id="ai-device-gpu">—</span>
-              </div>
-              <div class="ai-device-row">
-                <span class="ai-device-label">RAM</span>
-                <span class="ai-device-value" id="ai-device-ram">—</span>
-              </div>
-              <div class="ai-device-row">
-                <span class="ai-device-label">CPU cores</span>
-                <span class="ai-device-value" id="ai-device-cores">—</span>
-              </div>
-              <div class="ai-device-recommendation" id="ai-device-recommendation"></div>
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;">
-              <button class="btn btn-ghost" id="settings-check-device-btn">Check device</button>
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;align-items:center;">
-              <label style="font-size:0.82rem;color:var(--text-secondary);flex:1;">Model</label>
-              <div class="select-wrapper" style="flex:2">
-                <select id="settings-webllm-model">
-                  <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen 2.5 1.5B (recommended, ~1.1 GB)</option>
-                  <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B (smaller, ~0.8 GB)</option>
-                  <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen 2.5 3B (better quality, ~1.9 GB)</option>
-                  <option value="Phi-3.5-mini-instruct-q4f16_1-MLC">Phi-3.5 Mini (Microsoft, ~2.3 GB)</option>
-                </select>
-              </div>
-            </div>
-            <div class="feed-input-row" style="margin-top:8px;align-items:center;gap:8px;">
-              <button class="btn" id="settings-webllm-download-btn">Download model</button>
-              <span class="ai-model-status" id="ai-model-status"></span>
-            </div>
-            <div class="ai-progress-wrap" id="ai-progress-wrap" style="display:none">
-              <div class="ai-progress-bar"><div class="ai-progress-fill" id="ai-progress-fill"></div></div>
-              <div class="ai-progress-text" id="ai-progress-text"></div>
-            </div>
-          </div>
-
-          <div class="feed-input-row" style="margin-top:8px;align-items:center;">
-            <label style="font-size:0.82rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;flex:1;">
-              News context articles:
-              <input type="number" id="settings-ai-context-count" min="0" max="200" step="10" style="width:70px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 8px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;">
-            </label>
+          <div class="feed-input-row" style="margin-top:8px;">
+            <input type="text" id="settings-ai-model" placeholder="grok-2-latest" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
           </div>
           <div class="feed-input-row" style="margin-top:8px;align-items:center;gap:8px;">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--text-secondary);">
@@ -507,41 +428,7 @@
     </div>
   </div>
 
-  <!-- AI Chat Page -->
-  <div class="ai-chat-page" id="ai-chat-page" style="display:none">
-    <div class="comments-drag-area" id="ai-chat-drag-handle">
-      <div class="comments-drag-handle" id="ai-chat-drag-handle-inner"></div>
-    </div>
-    <div class="comments-page-header">
-      <button class="comments-back-btn" id="ai-chat-back-btn" title="Back">&#x2190;</button>
-      <h2>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;">
-          <path d="M8 1.5a4.5 4.5 0 00-4.5 4.5v2A1.5 1.5 0 012 9.5V6.5a6 6 0 0112 0v3a1.5 1.5 0 01-1.5 1.5h-1A1.5 1.5 0 0110 9.5V6A2 2 0 008 4"/>
-          <circle cx="8" cy="11" r="3"/>
-        </svg>
-        AI Chat
-        <span class="ai-chat-status" id="ai-chat-status"></span>
-      </h2>
-      <div style="display:flex;gap:4px;align-items:center;">
-        <button class="comments-back-btn" id="ai-chat-clear-btn" title="Clear chat" style="font-size:0.85rem;">&#x1F5D1;</button>
-        <div style="width:32px;"></div>
-      </div>
-    </div>
-    <div class="ai-chat-messages" id="ai-chat-messages">
-      <div class="ai-chat-empty">
-        <div class="ai-chat-empty-icon">&#x1F4AC;</div>
-        <p>Ask anything. Recent news articles are shared with the model as context.</p>
-        <div class="ai-chat-suggestions" id="ai-chat-suggestions"></div>
-      </div>
-    </div>
-    <div class="ai-chat-input-area">
-      <div class="ai-chat-input-row">
-        <textarea class="comments-input" id="ai-chat-input" placeholder="Ask anything…" rows="1"></textarea>
-        <button class="comments-post-btn" id="ai-chat-send-btn" title="Send">&#x27A4;</button>
-        <button class="comments-post-btn ai-chat-stop-btn" id="ai-chat-stop-btn" title="Stop" style="display:none;background:var(--accent);">&#x25A0;</button>
-      </div>
-    </div>
-  </div>
+
 
   <!-- Delete Comment Confirmation Modal -->
   <div class="modal-overlay" id="delete-comment-modal">
