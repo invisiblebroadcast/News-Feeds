@@ -205,6 +205,7 @@
       currentNation = nation;
       FeedManager.setSelectedNation(nation);
       loadedCount = 0;
+      hasFreshBackground = false;
       liveAllLoaded = false;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -285,6 +286,7 @@
       const sub = tab.dataset.subcat;
       if (sub === currentSubcat) return;
       currentSubcat = sub;
+      hasFreshBackground = false;
       loadedCount = 0;
       liveAllLoaded = false;
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
@@ -1107,6 +1109,7 @@
       currentMode = btn.dataset.mode;
       loadedCount = 0;
       liveAllLoaded = false;
+      hasFreshBackground = false;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updateSortOptions();
@@ -1592,6 +1595,121 @@
     if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
   }
 
+  // IB row: clicking the logo triggers a background refresh (no view re-render,
+  // no blinking). While loading, a small spinning icon appears next to the
+  // logo. When done, the spinner is replaced with a "show recent" clock icon
+  // (pulsing blue) — clicking it switches to live mode and re-renders the
+  // articles sorted by most recent.
+  let isBackgroundRefreshing = false;
+  let hasFreshBackground = false; // true when new data is sitting in cache waiting to be shown
+
+  function showRefreshSpinner() {
+    const status = $('#ib-refresh-status');
+    const sp = $('#ib-refresh-spinner');
+    const rb = $('#ib-recent-btn');
+    if (status) status.style.display = 'flex';
+    if (sp) sp.style.display = 'inline-flex';
+    if (rb) rb.style.display = 'none';
+  }
+  function showRecentButton() {
+    const status = $('#ib-refresh-status');
+    const sp = $('#ib-refresh-spinner');
+    const rb = $('#ib-recent-btn');
+    if (status) status.style.display = 'flex';
+    if (sp) sp.style.display = 'none';
+    if (rb) rb.style.display = 'inline-flex';
+  }
+  function hideRefreshStatus() {
+    const status = $('#ib-refresh-status');
+    if (status) status.style.display = 'none';
+  }
+  function clearRecentFlag() {
+    hasFreshBackground = false;
+    hideRefreshStatus();
+  }
+
+  // Fetch all sources in the background, update the cache silently. The
+  // current view is NOT re-rendered. When done, show the "show recent" button
+  // so the user can opt to view the new data.
+  async function backgroundRefresh() {
+    if (isBackgroundRefreshing) return;
+    isBackgroundRefreshing = true;
+    showRefreshSpinner();
+
+    try {
+      const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+      if (!feeds.length) {
+        isBackgroundRefreshing = false;
+        hideRefreshStatus();
+        return;
+      }
+
+      const subs = FeedManager.subcategoriesForScope(currentScope);
+      if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
+
+      const perSourceCap = currentMode === 'live' ? 100 : 0;
+      const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
+
+      const groups = {};
+      for (let j = 0; j < allResults.length; j++) {
+        const result = allResults[j];
+        if (result.status === 'fulfilled') {
+          for (const a of result.value) {
+            a.subcat = a.feedHint || 'politics';
+            const cat = a.subcat;
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(a);
+          }
+        } else {
+          console.warn('Feed failed: ' + feeds[j]?.name, result.reason?.message);
+        }
+      }
+
+      let allArticles = [];
+      for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+
+      const key = scopeKey();
+      scopeCache[key] = { articles: allArticles, groups };
+      // Reset "Load All" since this is a fresh dataset
+      liveAllLoaded = false;
+      loadedCount = 0;
+      hasFreshBackground = true;
+      isBackgroundRefreshing = false;
+      showRecentButton();
+    } catch (err) {
+      console.error('Background refresh failed:', err);
+      isBackgroundRefreshing = false;
+      hideRefreshStatus();
+    }
+  }
+
+  // Called when user clicks the "show recent" button. Switches to live mode
+  // and re-renders the visible content with the freshly-fetched articles,
+  // sorted by most recent first.
+  function applyRecentAndShowLive() {
+    // Switch to live mode
+    currentMode = 'live';
+    $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+    loadedCount = 0;
+    liveAllLoaded = false;
+    hasFreshBackground = false;
+    hideRefreshStatus();
+    // Re-render
+    displayCurrentSubcat();
+  }
+
+  function bindIBRow() {
+    const ibBtn = $('#ib-refresh-btn');
+    if (ibBtn) {
+      ibBtn.addEventListener('click', () => {
+        if (isBackgroundRefreshing) return;
+        backgroundRefresh();
+      });
+    }
+    const recentBtn = $('#ib-recent-btn');
+    if (recentBtn) recentBtn.addEventListener('click', applyRecentAndShowLive);
+  }
+
   function bindSourcesConfig() {
     if (el.sourcesConfigModalClose) el.sourcesConfigModalClose.addEventListener('click', closeSourcesConfigModal);
     if (el.sourcesConfigDone) el.sourcesConfigDone.addEventListener('click', closeSourcesConfigModal);
@@ -1639,8 +1757,7 @@
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
-    const headerRefreshBtn = $('#header-refresh-btn');
-    if (headerRefreshBtn) headerRefreshBtn.addEventListener('click', refreshAll);
+    bindIBRow();
     const collapseBtn = $('#collapse-btn');
     const bottomBar = $('#bottom-bar');
     if (collapseBtn && bottomBar) {

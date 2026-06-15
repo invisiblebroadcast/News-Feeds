@@ -117,27 +117,55 @@ img { max-width: 100%; height: auto; }
   gap: 6px;
   flex-shrink: 0;
 }
-.ib-refresh-btn {
-  width: 32px;
-  height: 32px;
+.ib-refresh-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ib-refresh-spinner,
+.ib-recent-btn {
+  width: 26px;
+  height: 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  transition: all var(--transition);
+  border-radius: 50%;
 }
-.ib-refresh-btn:hover {
+.ib-refresh-spinner {
+  color: #4dabf7;
+  border-color: rgba(77, 171, 247, 0.4);
+  animation: ib-spin 1.4s linear infinite;
+  background: rgba(77, 171, 247, 0.06);
+}
+.ib-recent-btn {
   color: #4dabf7;
   border-color: #4dabf7;
-  background: rgba(77, 171, 247, 0.08);
+  background: rgba(77, 171, 247, 0.15);
+  animation: ib-pulse 1.6s ease-in-out infinite;
+  position: relative;
 }
-.ib-refresh-btn:active,
-.ib-refresh-btn.active {
-  color: #4dabf7;
-  border-color: #4dabf7;
-  background: rgba(77, 171, 247, 0.18);
+.ib-recent-btn:hover {
+  background: rgba(77, 171, 247, 0.28);
+  color: #74c0fc;
+}
+.ib-recent-btn::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ea4335;
+  box-shadow: 0 0 0 2px var(--bg-primary);
+}
+@keyframes ib-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes ib-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(77, 171, 247, 0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(77, 171, 247, 0); }
 }
 .app-logo .logo-icon {
   width: 32px; height: 32px;
