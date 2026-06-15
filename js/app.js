@@ -395,8 +395,7 @@
       if (currentMode === 'live' && !liveAllLoaded && articles.length > display.length) {
         loadAllHtml = '<div class="load-all-row">' +
           '<div class="load-all-info">' +
-            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles (1 per source)</strong>' +
-            '<span class="load-all-hint">Click below to load all ' + articles.length + ' articles (one-time, sticky)</span>' +
+            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles</strong>' +
           '</div>' +
           '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
         '</div>';
