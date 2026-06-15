@@ -42,6 +42,41 @@ const FeedFetcher = (() => {
     return slice + '…';
   }
 
+  // Detect the publisher's local timezone from the feed URL / name.
+  // Many regional publishers (especially in India) emit times in their LOCAL
+  // timezone but tag them as +0000 (UTC), which pushes the article into the
+  // future. We detect this and apply the correct offset on the fly.
+  // Returns offset in minutes (positive = east of UTC) or 0 for UTC.
+  function detectFeedTimezoneOffset(feed) {
+    if (!feed) return 0;
+    const url = (feed.url || '').toLowerCase();
+    const name = (feed.name || '').toLowerCase();
+    const region = (feed.region || '').toLowerCase();
+    // India: +5:30 (330 min)
+    if (/\.in\b/.test(url) || name.includes('india') || region.includes('india')) return 330;
+    // UK: +0:00 in winter, +1:00 in summer — skip for now, use 0
+    // US East: -5:00 (-300 min)
+    if (region.includes('us east') || region.includes('usa')) return -300;
+    return 0;
+  }
+
+  // If the pubDate ends with +0000 (a common pattern when publishers tag their
+  // LOCAL time as UTC), rewrite the offset to the detected timezone so the
+  // parsed date reflects the actual local time of publication.
+  function correctPubDateTimezone(pubDateStr, feed) {
+    if (!pubDateStr) return pubDateStr;
+    const offsetMinutes = detectFeedTimezoneOffset(feed);
+    if (offsetMinutes === 0) return pubDateStr;
+    // Only rewrite if it actually has +0000 (or -0000)
+    if (!/[+\-]0000\s*$/.test(pubDateStr)) return pubDateStr;
+    // Convert offset minutes to +HHMM
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    const abs = Math.abs(offsetMinutes);
+    const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+    const mm = String(abs % 60).padStart(2, '0');
+    return pubDateStr.replace(/[+\-]0000\s*$/, sign + hh + mm);
+  }
+
   function parseRssXml(xmlText, feed) {
     const parser = new DOMParser();
     const xml = parser.parseFromString(xmlText, 'text/xml');
@@ -52,7 +87,13 @@ const FeedFetcher = (() => {
       const title = item.querySelector('title')?.textContent || '';
       const link = item.querySelector('link')?.textContent || '';
       const desc = item.querySelector('description')?.textContent || '';
-      const pubDate = item.querySelector('pubDate')?.textContent || '';
+      // Many regional publishers tag their local time as +0000 (UTC), which
+      // pushes the article into the future. Detect the feed's home timezone
+      // and rewrite the offset so the parsed date is correct.
+      const pubDate = correctPubDateTimezone(
+        item.querySelector('pubDate')?.textContent || '',
+        feed
+      );
       const guid = item.querySelector('guid')?.textContent || link;
       const creator = item.querySelector('dc\\:creator')?.textContent || '';
       const sourceEl = item.querySelector('source');
@@ -198,7 +239,7 @@ const FeedFetcher = (() => {
               (item.description || '').replace(/<[^>]*>/g, '').trim(),
               300
             ),
-            pubDate: item.pubDate || '',
+            pubDate: correctPubDateTimezone(item.pubDate || '', feed),
             author: item.author || '',
             imageUrl,
             source: feed.name,
