@@ -145,17 +145,19 @@
     const date = new Date(d);
     if (isNaN(date.getTime())) return d;
     const diff = Date.now() - date.getTime();
-    // Future-dated articles (publisher's clock skew, scheduled posts, bad data)
-    // should never show as "just now" — show the actual future date instead so
-    // the user can see something is off, rather than being misled.
+    // Future-dated articles: this happens when a publisher's CMS clock is
+    // skewed or the article is queued with a future timestamp (e.g. Mongabay
+    // scheduled post dated 15 Jun 2026 16:17 UTC). We must NOT show "just now"
+    // because that lies to the user about the article's recency.
     if (diff < 0) {
-      // If within a day in the future, show "upcoming" / "in Xh"
       const futureMins = Math.floor(-diff / 60000);
+      // Within a day: "in 5m" / "in 2h"
       if (futureMins < 60) return 'in ' + futureMins + 'm';
       const futureHours = Math.floor(futureMins / 60);
       if (futureHours < 24) return 'in ' + futureHours + 'h';
-      // Beyond a day in the future — show the actual date
-      return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      // Beyond a day in the future: the data is suspect (publisher clock
+      // issue). Show the actual date and mark it as scheduled.
+      return '~ ' + date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     }
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return mins + 'm ago';
