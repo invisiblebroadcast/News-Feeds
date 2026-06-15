@@ -708,10 +708,10 @@
       const bottomH = bottomBar ? bottomBar.getBoundingClientRect().height : 0;
       const available = window.innerHeight - headerH - bottomH;
       const maxH = Math.max(240, available - 4);
-      // Set BOTH height and max-height so the inner card can properly
-      // constrain its flex children. (max-height alone doesn't propagate
-      // a definite height down to nested flex items.)
-      container.style.height = maxH + 'px';
+      // Only set MAX-height — don't force a fixed height. The card sizes
+      // naturally to its content (image + text) and only the summary
+      // gets a scrollbar IF the card exceeds max-height. When content is
+      // short, the card is short and there's no scrollbar.
       container.style.maxHeight = maxH + 'px';
     });
   }
