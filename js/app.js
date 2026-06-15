@@ -526,9 +526,9 @@
     if (includeToolbar !== false) {
       const showDesc = Settings.get('showDescription');
       // Standalone toolbar row — sits above image/text, no overlap.
+      // Refresh is done via the IB logo in the header; not duplicated here.
       html += '<div class="reels-toolbar-row">' +
         '<div class="reels-toolbar-group reels-toolbar-left">' +
-          '<button class="reels-tool-btn reels-refresh-btn" title="Refresh">&#x21BB;</button>' +
           '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
         '</div>' +
         '<div class="reels-toolbar-group reels-toolbar-right">' +
@@ -730,8 +730,6 @@
         }
         const home = e.target.closest('.reels-home-btn');
         if (home) { e.stopPropagation(); forceExitToHome(); return; }
-        const refresh = e.target.closest('.reels-refresh-btn');
-        if (refresh) { e.stopPropagation(); refreshAll(); return; }
         const toggleDesc = e.target.closest('.reels-toggle-desc');
         if (toggleDesc) {
           e.stopPropagation();
@@ -1499,7 +1497,7 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:300';
     overlay.innerHTML = '<div class="loading-spinner"></div>';
     document.body.appendChild(overlay);
-    document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.add('btn-spin'));
+    document.querySelectorAll('#refresh-btn').forEach(b => b.classList.add('btn-spin'));
 
     // Reset sticky state so user has to opt into "Load All" again
     liveAllLoaded = false;
@@ -1508,7 +1506,7 @@
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
     if (!feeds.length) {
       overlay.remove();
-      document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
+      document.querySelectorAll('#refresh-btn').forEach(b => b.classList.remove('btn-spin'));
       return;
     }
     const groups = {};
@@ -1533,7 +1531,7 @@
     renderSubTabs();
     updateStickyHeader();
     await displayCurrentSubcat();
-    document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.remove('btn-spin'));
+    document.querySelectorAll('#refresh-btn').forEach(b => b.classList.remove('btn-spin'));
     overlay.remove();
   }
 
