@@ -1,7 +1,7 @@
 const AI = (() => {
   const REQUEST_TIMEOUT_MS = 60000;
   const XAI_ENDPOINT = 'https://api.x.ai/v1';
-  const XAI_MODEL = 'grok-2-latest';
+  const XAI_MODEL = 'grok-3';
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
