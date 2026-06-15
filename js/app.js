@@ -1377,14 +1377,19 @@
     if (currentMode === 'top') {
       const settings = Settings.load();
       if (settings.aiTopList) {
-        setTopListStatus('AI ranking…');
-        try {
-          articles = await AI.rankArticles(articles);
-        } catch (e) {
-          // Fall through with keyword-ranked articles
-          console.warn('AI ranking failed, using keyword ranking:', e);
-        } finally {
-          clearTopListStatus();
+        const p = AI.getProviderConfig().provider;
+        if (p === 'webllm') {
+          // On-device models are too heavy for batch ranking — silently fall back to keywords
+          setTopListStatus('');
+        } else {
+          setTopListStatus('AI ranking…');
+          try {
+            articles = await AI.rankArticles(articles);
+          } catch (e) {
+            console.warn('AI ranking failed, using keyword ranking:', e);
+          } finally {
+            clearTopListStatus();
+          }
         }
       }
     }

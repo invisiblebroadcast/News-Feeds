@@ -793,7 +793,11 @@ const AI = (() => {
   async function rankArticles(articles) {
     if (!articles || !articles.length) return articles;
 
-    const MAX_CANDIDATES = 50;
+    // On-device (WebLLM) models are too slow and memory-heavy for batch ranking — skip
+    const provider = getProviderConfig().provider;
+    if (provider === 'webllm') return articles;
+
+    const MAX_CANDIDATES = 15;
     const candidates = articles.slice(0, MAX_CANDIDATES);
     const batchKey = _rankBatchKey(candidates);
 
@@ -802,11 +806,10 @@ const AI = (() => {
       return _applyAiScores(articles, _aiRankCache.scores);
     }
 
+    // Send only titles — no summaries or sources — to keep the prompt tiny
     const items = candidates.map((a, i) => ({
       idx: i,
-      title: (a.title || '').slice(0, 120),
-      src: (a.source || '').slice(0, 30),
-      summary: stripHtml((a.summary || '')).replace(/\s+/g, ' ').trim().slice(0, 200)
+      title: (a.title || '').replace(/\s+/g, ' ').trim().slice(0, 80)
     }));
 
     const prompt = {
