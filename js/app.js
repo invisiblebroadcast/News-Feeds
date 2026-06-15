@@ -603,7 +603,7 @@
     }
   }
 
-  function cardOverlayHtml(includeToolbar) {
+  function cardOverlayHtml(includeToolbar, hasThumb) {
     var html = '';
     if (includeToolbar !== false) {
       const showDesc = Settings.get('showDescription');
@@ -621,7 +621,8 @@
                 : '<path d="M2 4h12M2 8h8M2 12h10"/><line x1="2" y1="14" x2="14" y2="2" stroke="var(--accent)"/>') +
             '</svg>' +
           '</button>' +
-          '<button class="reels-tool-btn reels-share-image" title="Share as Image">&#x1F5BC;</button>' +
+          '<button class="reels-tool-btn reels-share-text-img" title="Copy as text image">&#x1F4DD;</button>' +
+          (hasThumb ? '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' : '') +
         '</div>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
@@ -780,11 +781,14 @@
     const existing = el.main.querySelector('.reels-container');
 
     if (!existing) {
+      // Build the toolbar with awareness of whether the current article has a
+      // source image (so the "share with image" button is conditionally shown).
+      const hasThumb = article && article.imageUrl && article.imageUrl.startsWith('http');
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
           '<div class="reels-stack" id="reels-stack">' +
-            '<div class="reels-card">' + cardOverlayHtml() + '</div>' +
+            '<div class="reels-card">' + cardOverlayHtml(true, hasThumb) + '</div>' +
             readerHtml() +
           '</div>' +
         '</div>';
@@ -809,10 +813,18 @@
           handleShare(decodeURIComponent(st.dataset.url), st.dataset.title, st.dataset.source);
           return;
         }
+        // Text-only share (always available)
+        const sti = e.target.closest('.reels-share-text-img');
+        if (sti) {
+          e.stopPropagation();
+          handleShareImage(currentArticle, sti, false);
+          return;
+        }
+        // Share with source image (only button exists if has image)
         const si = e.target.closest('.reels-share-image');
         if (si) {
           e.stopPropagation();
-          handleShareImage(currentArticle, si);
+          handleShareImage(currentArticle, si, true);
           return;
         }
         const home = e.target.closest('.reels-home-btn');
@@ -2540,7 +2552,9 @@
     return null;
   }
 
-  async function handleShareImage(article, btn) {
+  // Generate a share image. includeImage=true will fetch and embed the
+  // source image; includeImage=false will produce a text-only card.
+  async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
       const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
@@ -2549,7 +2563,10 @@
 
       let img = null;
       let imgW = 0, imgH = 0;
-      if (hasThumb) {
+      // Only attempt to load the source image when the caller asked for it
+      // AND the article actually has an image. If loading fails, we silently
+      // fall back to text-only rather than failing the whole share.
+      if (includeImage && hasThumb) {
         try {
           let finalUrl = await fetchOGImage(article.link);
           if (!finalUrl) {
