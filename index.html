@@ -278,32 +278,6 @@
           <div id="feed-validate-msg" class="feed-validate-msg"></div>
           <div id="feed-custom-list"></div>
         </div>
-        <div class="setting-group">
-          <label class="setting-label">AI Top List</label>
-          <p class="setting-desc">Configure xAI/Grok API to rank the top 100 articles each day. The API key is stored in your settings (never committed).</p>
-          <div class="feed-input-row" style="margin-top:8px;">
-            <input type="password" id="settings-ai-key" placeholder="xAI API key (xai-...)" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-          </div>
-          <div class="feed-input-row" style="margin-top:8px;">
-            <input type="text" id="settings-ai-endpoint" placeholder="https://api.x.ai/v1" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-          </div>
-          <div class="feed-input-row" style="margin-top:8px;">
-            <input type="text" id="settings-ai-model" placeholder="grok-2-latest" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;">
-          </div>
-          <div class="feed-input-row" style="margin-top:8px;align-items:center;gap:8px;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--text-secondary);">
-              <input type="checkbox" id="settings-ai-top-list" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
-              AI Top List
-            </label>
-            <span style="font-size:0.75rem;color:var(--text-tertiary);flex:1;">Ranks top articles using AI instead of keyword patterns</span>
-          </div>
-          <div id="settings-ai-msg" class="feed-validate-msg"></div>
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Cloud Sync</label>
-          <p class="setting-desc">Your article flags, comments, likes, history, and AI settings (provider, endpoints, API keys) are synced to your Supabase account when signed in.</p>
-          <p style="font-size:0.82rem;color:var(--text-tertiary);">Sign in with Google or Email to enable cloud sync.</p>
-        </div>
       </div>
       <div class="modal-footer">
         <button class="btn" id="modal-cancel">Cancel</button>
@@ -608,12 +582,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=7"></script>
-  <script src="js/supabase-store.js?v=7"></script>
-  <script src="js/feeds.js?v=7"></script>
-  <script src="js/fetcher.js?v=7"></script>
-  <script src="js/translator.js?v=7"></script>
-  <script src="js/ai.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/settings.js?v=8"></script>
+  <script src="js/supabase-store.js?v=8"></script>
+  <script src="js/feeds.js?v=8"></script>
+  <script src="js/fetcher.js?v=8"></script>
+  <script src="js/translator.js?v=8"></script>
+  <script src="js/xai-key.js?v=8"></script>
+  <script src="js/ai.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>

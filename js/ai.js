@@ -1,5 +1,7 @@
 const AI = (() => {
   const REQUEST_TIMEOUT_MS = 60000;
+  const XAI_ENDPOINT = 'https://api.x.ai/v1';
+  const XAI_MODEL = 'grok-2-latest';
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -27,11 +29,10 @@ const AI = (() => {
   /* ── Config ── */
 
   function getConfig() {
-    const s = Settings.load();
     return {
-      key: (s.aiKey || '').trim(),
-      endpoint: (s.aiEndpoint || 'https://api.x.ai/v1').trim().replace(/\/+$/, ''),
-      model: (s.aiModel || 'grok-2-latest').trim()
+      key: XAI_KEY,
+      endpoint: XAI_ENDPOINT.replace(/\/+$/, ''),
+      model: XAI_MODEL
     };
   }
 

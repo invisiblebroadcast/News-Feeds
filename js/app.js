@@ -117,11 +117,6 @@
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
     deleteCommentCancel: $('#delete-comment-cancel'),
-    settingsAiKey: $('#settings-ai-key'),
-    settingsAiEndpoint: $('#settings-ai-endpoint'),
-    settingsAiModel: $('#settings-ai-model'),
-    settingsAiTopList: $('#settings-ai-top-list'),
-    settingsAiMsg: $('#settings-ai-msg'),
     topDate: $('#top-date')
   };
 
@@ -1331,41 +1326,37 @@
 
     // AI Top List: load or generate AI ranking when enabled and in top mode
     if (currentMode === 'top') {
-      const settings = Settings.load();
-      if (settings.aiTopList && settings.aiKey) {
-        const today = AI.todayStr();
-        const scope = currentScope;
-        const subcat = currentSubcat;
-        // Use the date from the top-date picker when loading; always store under today
-        const viewDate = (el.topDate && el.topDate.value) || today;
-        if (viewDate === today && await AI.needsRanking(today, scope, subcat)) {
-          setTopListStatus('AI ranking…');
-          try {
-            const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-            let rankInput;
-            if (subcat === 'all') {
-              rankInput = [];
-              for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
-            } else {
-              rankInput = cached.groups[subcat] || [];
-            }
-            rankInput = FeedFetcher.deduplicate(rankInput);
-            rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
-            rankInput = FeedFetcher.sortByDate(rankInput);
-            const ranked = await AI.rankArticles(rankInput, scope, subcat);
-            if (ranked) articles = ranked;
-          } catch (e) {
-            console.warn('AI ranking failed:', e);
-          } finally {
-            clearTopListStatus();
+      const today = AI.todayStr();
+      const scope = currentScope;
+      const subcat = currentSubcat;
+      const viewDate = (el.topDate && el.topDate.value) || today;
+      if (viewDate === today && await AI.needsRanking(today, scope, subcat)) {
+        setTopListStatus('AI ranking…');
+        try {
+          const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+          let rankInput;
+          if (subcat === 'all') {
+            rankInput = [];
+            for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
+          } else {
+            rankInput = cached.groups[subcat] || [];
           }
-        } else {
-          const ranked = await AI.loadTopList(viewDate, scope, subcat);
-          if (ranked) { articles = ranked; clearTopListStatus(); }
-          else {
-            clearTopListStatus();
-            if (viewDate !== today) setTopListStatus('No ranking for ' + viewDate);
-          }
+          rankInput = FeedFetcher.deduplicate(rankInput);
+          rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
+          rankInput = FeedFetcher.sortByDate(rankInput);
+          const ranked = await AI.rankArticles(rankInput, scope, subcat);
+          if (ranked) articles = ranked;
+        } catch (e) {
+          console.warn('AI ranking failed:', e);
+        } finally {
+          clearTopListStatus();
+        }
+      } else {
+        const ranked = await AI.loadTopList(viewDate, scope, subcat);
+        if (ranked) { articles = ranked; clearTopListStatus(); }
+        else {
+          clearTopListStatus();
+          if (viewDate !== today) setTopListStatus('No ranking for ' + viewDate);
         }
       }
     }
@@ -1837,11 +1828,6 @@
     if (pp) pp.checked = true;
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
-    if (el.settingsAiKey) el.settingsAiKey.value = settings.aiKey || '';
-    if (el.settingsAiEndpoint) el.settingsAiEndpoint.value = settings.aiEndpoint || 'https://api.x.ai/v1';
-    if (el.settingsAiModel) el.settingsAiModel.value = settings.aiModel || 'grok-2-latest';
-    if (el.settingsAiTopList) el.settingsAiTopList.checked = !!settings.aiTopList;
-    setSettingsAIStatus('', null);
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -1856,18 +1842,7 @@
   function saveSettings() {
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
-    const aiKey = (el.settingsAiKey?.value || '').trim();
-    const aiEndpoint = (el.settingsAiEndpoint?.value || '').trim() || 'https://api.x.ai/v1';
-    const aiModel = (el.settingsAiModel?.value || '').trim() || 'grok-2-latest';
-    const aiTopList = !!el.settingsAiTopList?.checked;
-    Settings.save({
-      articlesPerPage: perPage,
-      language: lang,
-      aiKey,
-      aiEndpoint,
-      aiModel,
-      aiTopList
-    });
+    Settings.save({ articlesPerPage: perPage, language: lang });
     syncSettingsToCloud();
     closeSettings();
     displayCurrentSubcat();
@@ -3017,14 +2992,6 @@
     if (el2) { el2.textContent = ''; el2.style.display = 'none'; }
   }
 
-  function setSettingsAIStatus(msg, type) {
-    if (!el.settingsAiMsg) return;
-    el.settingsAiMsg.textContent = msg || '';
-    el.settingsAiMsg.classList.remove('success', 'error');
-    if (type === 'ok') el.settingsAiMsg.classList.add('success');
-    if (type === 'err') el.settingsAiMsg.classList.add('error');
-  }
-
   /* ── Auth ── */
   let currentUser = null;
   let authMode = 'signin'; // 'signin' or 'signup'
@@ -3949,17 +3916,13 @@
       el.topDate.style.display = currentMode === 'top' ? 'inline-block' : 'none';
     }
 
-    // Start AI rank scheduler (checks IST time every 60s)
+    // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)
     startRankScheduler();
 
-    // Seed: rank all scope/subcat combos once on first load if none exist
-    const settings = Settings.load();
-    if (settings.aiTopList && settings.aiKey) {
-      // Wait a moment for feeds to populate scopeCache, then rank
-      setTimeout(() => {
-        rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
-      }, 5000);
-    }
+    // Seed: rank all scope/subcat combos once on first load
+    setTimeout(() => {
+      rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
+    }, 5000);
   }
 
   init();

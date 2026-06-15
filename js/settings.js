@@ -4,11 +4,7 @@ const Settings = (() => {
     articlesPerPage: 10,
     language: 'en',
     showDescription: false,
-    topDate: '',
-    aiKey: '',
-    aiEndpoint: 'https://api.x.ai/v1',
-    aiModel: 'grok-2-latest',
-    aiTopList: false
+    topDate: ''
   };
 
   let cache = null;
