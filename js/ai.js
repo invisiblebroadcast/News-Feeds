@@ -173,7 +173,7 @@ const AI = (() => {
       return null;
     }
 
-    console.log('[AI] rankArticles:', scope, subcat, '— sending', candidates.length, 'candidates to', cfg.endpoint);
+    console.log('[AI] rankArticles:', scope, subcat, '— sending', candidates.length, 'candidates to xAI');
     if (onProgress) onProgress({ step: 'ranking', text: 'AI ranking ' + candidates.length + ' articles…' });
 
     const items = candidates.map((a, i) => `${i}:${(a.title || '').replace(/\s+/g, ' ').trim().slice(0, 100)}`).join('\n');
