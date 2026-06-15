@@ -2,13 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#000000">
   <meta name="description" content="Global & Local News Aggregator">
   <title>News-Feeds</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+
+  <script>
+    // Lock the orientation to portrait for mobile devices. This is a
+    // progressive enhancement — ignored on devices that don't support it.
+    (function() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('portrait').catch(function() {});
+        }
+      } catch (e) {}
+      // Belt-and-suspenders CSS hint for browsers that respect it
+      var style = document.createElement('style');
+      style.textContent = 'html, body { orientation: portrait; }';
+      document.head.appendChild(style);
+    })();
+  </script>
 
   <div class="sticky-zone" id="sticky-zone">
     <header class="app-header">
@@ -273,7 +289,7 @@
   </div>
 
   <div class="modal-overlay" id="article-modal">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg modal-article">
       <div class="modal-header">
         <h2 id="article-modal-title">Article</h2>
         <button class="modal-close" id="article-modal-close">&times;</button>
