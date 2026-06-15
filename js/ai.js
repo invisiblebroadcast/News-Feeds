@@ -40,6 +40,7 @@ const AI = (() => {
 
   async function complete({ system, user, signal }) {
     const cfg = getConfig();
+    console.log('[AI] complete() called, endpoint:', cfg.endpoint, 'model:', cfg.model, 'key length:', cfg.key ? cfg.key.length : 0);
     if (!cfg.key) throw new Error('AI API key not configured. Add it in Settings → AI Top List.');
     const messages = [
       { role: 'system', content: system },
@@ -80,8 +81,8 @@ const AI = (() => {
   async function upsertTopList(date, scope, subcat, articles) {
     try {
       const client = SupabaseStore.getClient();
-      // Store full article objects: rank, title, url, source, pubDate, summary, score, reason
-      const { error } = await client
+      console.log('[AI] upsertTopList: saving', date, scope, subcat, '— articles count:', articles.length);
+      const { data, error } = await client
         .from(TABLE)
         .upsert({
           date,
@@ -89,9 +90,14 @@ const AI = (() => {
           subcat,
           articles,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'date,scope,subcat' });
-      if (error) console.warn('Supabase: upsert top_list error', error.message);
-      return !error;
+        }, { onConflict: 'date,scope,subcat' })
+        .select();
+      if (error) {
+        console.warn('Supabase: upsert top_list error', error.message, '— code:', error.code, '— details:', error.details);
+        return false;
+      }
+      console.log('[AI] upsertTopList: success, returned rows:', data ? data.length : 0);
+      return true;
     } catch (e) {
       console.warn('Supabase: upsert top_list exception', e);
       return false;
@@ -141,8 +147,12 @@ const AI = (() => {
   /* ── AI ranking engine ── */
 
   async function rankArticles(articles, scope, subcat, onProgress) {
-    if (!articles || !articles.length) return null;
+    if (!articles || !articles.length) {
+      console.log('[AI] rankArticles: no articles input for', scope, subcat);
+      return null;
+    }
     const date = todayStr();
+    console.log('[AI] rankArticles:', scope, subcat, '— input articles:', articles.length);
 
     if (onProgress) onProgress({ step: 'preparing', text: 'Preparing articles…' });
 
@@ -158,10 +168,12 @@ const AI = (() => {
     }
 
     if (candidates.length < 5) {
+      console.log('[AI] rankArticles:', scope, subcat, '— too few candidates:', candidates.length, '(need 5+)');
       if (onProgress) onProgress({ step: 'error', text: 'Not enough articles to rank' });
       return null;
     }
 
+    console.log('[AI] rankArticles:', scope, subcat, '— sending', candidates.length, 'candidates to', cfg.endpoint);
     if (onProgress) onProgress({ step: 'ranking', text: 'AI ranking ' + candidates.length + ' articles…' });
 
     const items = candidates.map((a, i) => `${i}:${(a.title || '').replace(/\s+/g, ' ').trim().slice(0, 100)}`).join('\n');
@@ -218,6 +230,7 @@ const AI = (() => {
     result.splice(25);
 
     const saved = await upsertTopList(date, scope, subcat, result);
+    console.log('[AI] rankArticles:', scope, subcat, '— saved to Supabase:', saved, 'date:', date);
 
     if (onProgress) onProgress({ step: 'done', text: saved ? 'Ranking complete' : 'Ranking saved locally' });
 
@@ -228,7 +241,9 @@ const AI = (() => {
 
   async function needsRanking(date, scope, subcat) {
     const existing = await loadTopList(date, scope, subcat);
-    return !existing;
+    const needs = !existing;
+    console.log('[AI] needsRanking:', date, scope, subcat, '— existing:', !!existing, '— needs:', needs);
+    return needs;
   }
 
   return {
