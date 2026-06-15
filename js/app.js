@@ -1698,12 +1698,48 @@
     displayCurrentSubcat();
   }
 
+  // Periodic auto-refresh interval (5 minutes). The user can click IB to
+  // refresh manually any time. Both manual and auto refresh update the cache
+  // silently — the visible page never re-renders. The "show recent" icon
+  // appears when fresh data is waiting, and the user clicks it to apply.
+  const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  let autoRefreshTimer = null;
+
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    autoRefreshTimer = setInterval(() => {
+      // Don't start another refresh if one is already running, or if the
+      // document is hidden (no point refreshing in the background tab).
+      if (isBackgroundRefreshing) return;
+      if (document.hidden) return;
+      backgroundRefresh();
+    }, AUTO_REFRESH_INTERVAL_MS);
+  }
+
+  function stopAutoRefresh() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
+  // Reset the auto-refresh timer whenever the user manually clicks IB
+  // (so the next auto-refresh is 5 minutes from THEIR click, not from the
+  // last auto-refresh).
+  function resetAutoRefreshTimer() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      startAutoRefresh();
+    }
+  }
+
   function bindIBRow() {
     const ibBtn = $('#ib-refresh-btn');
     if (ibBtn) {
       ibBtn.addEventListener('click', () => {
         if (isBackgroundRefreshing) return;
         backgroundRefresh();
+        resetAutoRefreshTimer();
       });
     }
     const recentBtn = $('#ib-recent-btn');
@@ -3734,6 +3770,12 @@
     bindDateToggle();
     bindSourcesConfig();
     await renderContent();
+
+    // Start periodic auto-refresh — fetches silently in the background
+    // every 5 minutes. The page never re-renders automatically; user clicks
+    // the "show recent" icon to apply the fresh data.
+    startAutoRefresh();
+    window.addEventListener('beforeunload', stopAutoRefresh);
   }
 
   init();
