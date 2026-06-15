@@ -132,6 +132,7 @@
     settingsOllamaAddress: $('#settings-ollama-address'),
     settingsOllamaModel: $('#settings-ollama-model'),
     settingsAiContextCount: $('#settings-ai-context-count'),
+    settingsAiTopList: $('#settings-ai-top-list'),
     settingsOllamaTestBtn: $('#settings-ollama-test-btn'),
     settingsAiMsg: $('#settings-ai-msg'),
     settingsAiOllamaBlock: $('#settings-ai-ollama-block'),
@@ -554,6 +555,9 @@
     const rankHtml = currentMode === 'top' && article._rank
       ? '<span class="score-badge" style="color:' + (article._rank <= 3 ? 'var(--accent)' : 'var(--text-tertiary)') + '">#' + article._rank + '</span>'
       : '';
+    const aiBadgeHtml = article._aiBoost
+      ? '<span class="ai-badge" title="AI boosted">AI</span>'
+      : '';
 
     const ad = getArticleData(article.link);
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
@@ -571,6 +575,7 @@
             '<span class="source">' + escHtml(article.source) + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
+            aiBadgeHtml +
             flagHtml +
           '</div>' +
           '<div class="card-actions">' +
@@ -1368,6 +1373,22 @@
     // perPage (or 3× perPage in top mode) and offers a Load More button.
     // We do NOT cap here so the user gets the full ranking.
 
+    // AI Top List: re-rank using the AI model when enabled and in top mode
+    if (currentMode === 'top') {
+      const settings = Settings.load();
+      if (settings.aiTopList) {
+        setTopListStatus('AI ranking…');
+        try {
+          articles = await AI.rankArticles(articles);
+        } catch (e) {
+          // Fall through with keyword-ranked articles
+          console.warn('AI ranking failed, using keyword ranking:', e);
+        } finally {
+          clearTopListStatus();
+        }
+      }
+    }
+
     try {
       await renderTranslated(articles);
     } catch (e) {
@@ -1906,6 +1927,7 @@
     if (el.settingsAiCloudEndpoint) el.settingsAiCloudEndpoint.value = settings.aiCloudEndpoint || 'https://api.openai.com/v1';
     if (el.settingsAiCloudModel) el.settingsAiCloudModel.value = settings.aiCloudModel || 'gpt-4o-mini';
     if (el.settingsAiContextCount) el.settingsAiContextCount.value = settings.aiNewsContextCount ?? 20;
+    if (el.settingsAiTopList) el.settingsAiTopList.checked = !!settings.aiTopList;
     setSettingsAIStatus('', null);
     updateAIProviderUI();
     refreshWebLLMModelStatus();
@@ -1930,6 +1952,7 @@
     const aiCloudKey = (el.settingsAiCloudKey?.value || '').trim();
     const aiCloudEndpoint = (el.settingsAiCloudEndpoint?.value || '').trim() || 'https://api.openai.com/v1';
     const aiCloudModel = (el.settingsAiCloudModel?.value || '').trim() || 'gpt-4o-mini';
+    const aiTopList = !!el.settingsAiTopList?.checked;
     const aiContext = parseInt(el.settingsAiContextCount?.value || '20', 10);
     Settings.save({
       articlesPerPage: perPage,
@@ -1941,6 +1964,7 @@
       aiCloudKey,
       aiCloudEndpoint,
       aiCloudModel,
+      aiTopList,
       aiNewsContextCount: isNaN(aiContext) ? 20 : aiContext
     });
     syncSettingsToCloud();
@@ -3115,6 +3139,15 @@
   function closeAIChat() {
     if (aiChatBusy) AI.abort();
     if (el.aiChatPage) el.aiChatPage.style.display = 'none';
+  }
+
+  function setTopListStatus(text) {
+    const el2 = $('#ai-top-status');
+    if (el2) { el2.textContent = text; el2.style.display = 'inline'; }
+  }
+  function clearTopListStatus() {
+    const el2 = $('#ai-top-status');
+    if (el2) { el2.textContent = ''; el2.style.display = 'none'; }
   }
 
   function updateAIChatStatus() {

@@ -1604,6 +1604,16 @@ body.cards-view {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
 }
+.article-meta .ai-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  vertical-align: middle;
+  margin-left: 1px;
+}
 .flag-badge {
   font-size: 0.62rem;
   font-weight: 700;

@@ -13,7 +13,8 @@ const Settings = (() => {
     aiSystemPrompt: '',
     aiCloudKey: '',
     aiCloudEndpoint: 'https://api.openai.com/v1',
-    aiCloudModel: 'gpt-4o-mini'
+    aiCloudModel: 'gpt-4o-mini',
+    aiTopList: false
   };
 
   let cache = null;

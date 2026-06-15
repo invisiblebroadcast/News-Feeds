@@ -171,6 +171,7 @@
         <button class="mode-btn" data-mode="top">Top</button>
         <button class="mode-btn active" data-mode="live">Live</button>
       </div>
+      <span id="ai-top-status" style="font-size:0.7rem;color:var(--accent);white-space:nowrap;display:none;margin-right:4px;"></span>
       <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
       </button>
@@ -367,6 +368,13 @@
               News context articles:
               <input type="number" id="settings-ai-context-count" min="0" max="200" step="10" style="width:70px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 8px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;">
             </label>
+          </div>
+          <div class="feed-input-row" style="margin-top:8px;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--text-secondary);">
+              <input type="checkbox" id="settings-ai-top-list" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+              AI Top List
+            </label>
+            <span style="font-size:0.75rem;color:var(--text-tertiary);flex:1;">Ranks top articles using AI instead of keyword patterns</span>
           </div>
           <div id="settings-ai-msg" class="feed-validate-msg"></div>
         </div>
@@ -713,12 +721,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=6"></script>
-  <script src="js/supabase-store.js?v=6"></script>
-  <script src="js/feeds.js?v=6"></script>
-  <script src="js/fetcher.js?v=6"></script>
-  <script src="js/translator.js?v=6"></script>
-  <script src="js/ai.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/settings.js?v=7"></script>
+  <script src="js/supabase-store.js?v=7"></script>
+  <script src="js/feeds.js?v=7"></script>
+  <script src="js/fetcher.js?v=7"></script>
+  <script src="js/translator.js?v=7"></script>
+  <script src="js/ai.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

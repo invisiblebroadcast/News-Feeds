@@ -696,6 +696,164 @@ const AI = (() => {
     return e && e.message === '__aborted__';
   }
 
+  /* ── Non-streaming completion (for AI ranking etc.) ── */
+
+  async function complete({ messages, signal }) {
+    const cfg = getProviderConfig();
+    if (cfg.provider === 'ollama') return completeOllama(messages, signal);
+    if (cfg.provider === 'webllm') return completeWebLLM(messages, signal);
+    if (cfg.provider === 'cloud') return completeCloud(messages, signal);
+    throw new Error('No provider configured for AI ranking');
+  }
+
+  async function completeOllama(messages, signal) {
+    const cfg = getProviderConfig();
+    const base = normalizeBase(cfg.address);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const combined = signal
+      ? { signal: AbortSignal.any?.([signal, controller.signal]) || signal }
+      : { signal: controller.signal };
+    try {
+      const res = await fetch(base + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: cfg.model, messages, stream: false, options: { temperature: 0.3 } }),
+        ...combined
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      return data.message?.content || '';
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
+    }
+  }
+
+  async function completeWebLLM(messages, signal) {
+    const cfg = getProviderConfig();
+    const engine = await loadWebLLMModel(cfg.webllmModel);
+    const abortObj = { aborted: false };
+    if (signal) {
+      if (signal.aborted) abortObj.aborted = true;
+      signal.addEventListener('abort', () => { abortObj.aborted = true; });
+    }
+    try {
+      const res = await engine.chat.completions.create({
+        messages,
+        temperature: 0.3,
+        max_tokens: 1024
+      });
+      return res?.choices?.[0]?.message?.content || '';
+    } catch (e) {
+      if (abortObj.aborted) throw new Error('__aborted__');
+      throw e;
+    }
+  }
+
+  async function completeCloud(messages, signal) {
+    const cfg = getProviderConfig();
+    const base = cfg.cloudEndpoint;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const combined = signal
+      ? { signal: AbortSignal.any?.([signal, controller.signal]) || signal }
+      : { signal: controller.signal };
+    try {
+      const res = await fetch(base + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.cloudKey },
+        body: JSON.stringify({ model: cfg.cloudModel, messages, temperature: 0.3, max_tokens: 1024 }),
+        ...combined
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      return data?.choices?.[0]?.message?.content || '';
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
+    }
+  }
+
+  /* ── AI-powered article ranking ── */
+
+  let _aiRankCache = { batchKey: null, timestamp: 0, scores: null };
+
+  function _rankBatchKey(articles) {
+    if (!articles || !articles.length) return '';
+    let key = '';
+    for (let i = 0; i < Math.min(5, articles.length); i++) {
+      key += (articles[i]._url || articles[i].link || '') + '|';
+    }
+    return key + '|' + articles.length;
+  }
+
+  async function rankArticles(articles) {
+    if (!articles || !articles.length) return articles;
+
+    const MAX_CANDIDATES = 50;
+    const candidates = articles.slice(0, MAX_CANDIDATES);
+    const batchKey = _rankBatchKey(candidates);
+
+    // Return cached scores if same batch and < 5 min old
+    if (_aiRankCache.batchKey === batchKey && Date.now() - _aiRankCache.timestamp < 300000) {
+      return _applyAiScores(articles, _aiRankCache.scores);
+    }
+
+    const items = candidates.map((a, i) => ({
+      idx: i,
+      title: (a.title || '').slice(0, 120),
+      src: (a.source || '').slice(0, 30),
+      summary: stripHtml((a.summary || '')).replace(/\s+/g, ' ').trim().slice(0, 200)
+    }));
+
+    const prompt = {
+      role: 'system',
+      content: 'You rank news articles by importance. Score each 0-100:\n' +
+        '90-100: Breaking news, emergencies, war, disasters, alarming events\n' +
+        '60-89: Important stories covered by multiple sources\n' +
+        '30-59: Notable but not critical\n' +
+        '0-29: Routine or trivial\n\n' +
+        'Return ONLY a valid JSON array: [{"idx":0,"score":85,"reason":"..."}]'
+    };
+    const userMsg = { role: 'user', content: JSON.stringify(items) };
+
+    try {
+      const text = await complete({ messages: [prompt, userMsg] });
+      let parsed;
+      try { parsed = JSON.parse(text); } catch { return articles; }
+      if (!Array.isArray(parsed)) return articles;
+
+      const scores = new Map();
+      for (const item of parsed) {
+        if (typeof item.idx !== 'number' || typeof item.score !== 'number') continue;
+        const a = candidates[item.idx];
+        if (a) scores.set(a._url || a.link || item.idx, { score: item.score, reason: item.reason || '' });
+      }
+
+      _aiRankCache = { batchKey, timestamp: Date.now(), scores };
+      return _applyAiScores(articles, scores);
+    } catch {
+      return articles;
+    }
+  }
+
+  function _applyAiScores(articles, scores) {
+    if (!scores || !scores.size) return articles;
+    return articles.map(a => {
+      const key = a._url || a.link;
+      const s = key ? scores.get(key) : null;
+      if (s) {
+        const ai = Math.max(0, Math.min(100, s.score));
+        const boost = ai * 2;
+        return { ...a, _score: (a._score || 0) + boost, _aiBoost: boost, _aiReason: s.reason };
+      }
+      return a;
+    }).sort((a, b) => (b._score || 0) - (a._score || 0));
+  }
+
   return {
     buildNewsContext,
     buildSystemPrompt,
@@ -708,6 +866,8 @@ const AI = (() => {
     getWebLLMStatus,
     webllmModels: WEBLLM_MODELS,
     chat,
+    complete,
+    rankArticles,
     abort,
     isAbortedError,
     loadHistory,
