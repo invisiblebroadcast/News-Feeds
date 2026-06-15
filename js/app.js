@@ -145,7 +145,18 @@
     const date = new Date(d);
     if (isNaN(date.getTime())) return d;
     const diff = Date.now() - date.getTime();
-    if (diff < 0) return 'just now';
+    // Future-dated articles (publisher's clock skew, scheduled posts, bad data)
+    // should never show as "just now" — show the actual future date instead so
+    // the user can see something is off, rather than being misled.
+    if (diff < 0) {
+      // If within a day in the future, show "upcoming" / "in Xh"
+      const futureMins = Math.floor(-diff / 60000);
+      if (futureMins < 60) return 'in ' + futureMins + 'm';
+      const futureHours = Math.floor(futureMins / 60);
+      if (futureHours < 24) return 'in ' + futureHours + 'h';
+      // Beyond a day in the future — show the actual date
+      return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    }
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return mins + 'm ago';
     const hours = Math.floor(mins / 60);
@@ -398,9 +409,10 @@
       let display;
       let totalShown;
       if (currentMode === 'live') {
-        const liveTotalCap = 5000;
+        // Cap the "Load All" view at 500 articles for mobile safety. 500 cards
+        // is already a lot to scroll; showing 5,000+ would freeze the page.
+        const liveTotalCap = 500;
         if (liveAllLoaded) {
-          // "Load All" was clicked — show everything (capped so mobile stays snappy)
           display = articles.slice(0, liveTotalCap);
         } else {
           // Default live view: exactly ONE article per source, the most recent.
@@ -423,21 +435,24 @@
       // the content area so the user can opt in to seeing everything.
       let loadAllHtml = '';
       if (currentMode === 'live' && !liveAllLoaded && articles.length > display.length) {
+        const remaining = articles.length;
+        const showing = totalShown;
+        const cap = 500;
+        const willShow = Math.min(remaining, cap);
         loadAllHtml = '<div class="load-all-row">' +
           '<div class="load-all-info">' +
-            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles</strong>' +
+            '<strong>Showing ' + showing + ' of ' + remaining + ' articles</strong>' +
           '</div>' +
-          '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
+          '<button class="btn btn-primary" id="load-all-btn">Load All ' + willShow + ' Articles</button>' +
         '</div>';
       }
 
       updateStickyHeader(totalShown + ' of ' + articles.length);
 
-      el.main.innerHTML =
-        loadAllHtml +
-        '<div class="article-grid">' +
-          display.map((a, i) => renderCard(a, i)).join('') +
-        '</div>';
+      // Build the grid using a DocumentFragment so we don't keep reflowing on
+      // each append. For very large lists (500+ cards) we chunk the work
+      // across multiple animation frames so the UI stays responsive.
+      renderArticleGrid(loadAllHtml, display);
 
       const loadAllBtn = $('#load-all-btn');
       if (loadAllBtn) {
@@ -450,6 +465,42 @@
       console.error('renderArticles failed:', e);
       showError('Failed to render list view. Try refreshing.');
     }
+  }
+
+  // Render the article grid. For lists up to 50 articles we use a single
+  // innerHTML write (fastest). For larger lists (especially "Load All" with
+  // 500 cards) we build a DocumentFragment to batch the DOM operations and
+  // chunk the rendering across animation frames so the page never freezes.
+  function renderArticleGrid(loadAllHtml, display) {
+    if (display.length <= 50) {
+      el.main.innerHTML =
+        loadAllHtml +
+        '<div class="article-grid">' +
+          display.map((a, i) => renderCard(a, i)).join('') +
+        '</div>';
+      return;
+    }
+    // Big list: build the grid scaffold + load banner, then append cards
+    // in chunks via requestAnimationFrame.
+    el.main.innerHTML = loadAllHtml + '<div class="article-grid" id="article-grid"></div>';
+    const grid = $('#article-grid');
+    if (!grid) return;
+    const CHUNK = 50;
+    let i = 0;
+    function appendChunk() {
+      const frag = document.createDocumentFragment();
+      const end = Math.min(i + CHUNK, display.length);
+      for (; i < end; i++) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = renderCard(display[i], i);
+        frag.appendChild(tmp.firstElementChild);
+      }
+      grid.appendChild(frag);
+      if (i < display.length) {
+        requestAnimationFrame(appendChunk);
+      }
+    }
+    requestAnimationFrame(appendChunk);
   }
 
   function renderCard(article, index) {
