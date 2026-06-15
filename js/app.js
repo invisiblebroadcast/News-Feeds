@@ -334,6 +334,22 @@
   // Track whether the user has chosen to "load all" in live mode.
   let liveAllLoaded = false;
 
+  // In live mode, show only the most recent article from each source in the
+  // default view. The "Load All" button then reveals everything fetched.
+  // This keeps the initial view light (1 card per source) while making it
+  // clear how many sources actually returned content.
+  function pickOnePerSource(articles) {
+    const seen = new Set();
+    const out = [];
+    for (const a of articles) {
+      const src = a.source || '__none__';
+      if (seen.has(src)) continue;
+      seen.add(src);
+      out.push(a);
+    }
+    return out;
+  }
+
   function renderArticles(articles) {
     try {
       if (!articles.length) { showEmpty(); return; }
@@ -350,14 +366,14 @@
       let display;
       let totalShown;
       if (currentMode === 'live') {
-        // Live mode: show only perPage by default. "Load All" button shows
-        // everything (capped to liveTotalCap so mobile doesn't hang).
-        const liveTotalCap = 500;
+        const liveTotalCap = 5000;
         if (liveAllLoaded) {
+          // "Load All" was clicked — show everything (capped so mobile stays snappy)
           display = articles.slice(0, liveTotalCap);
         } else {
-          if (!loadedCount) loadedCount = perPage;
-          display = articles.slice(0, Math.min(loadedCount, articles.length));
+          // Default live view: exactly ONE article per source, the most recent.
+          // This guarantees a manageable initial load no matter how many sources.
+          display = pickOnePerSource(articles);
         }
         totalShown = display.length;
       } else {
@@ -374,10 +390,10 @@
       // Build the "Load All" button (live mode only) — placed at the TOP of
       // the content area so the user can opt in to seeing everything.
       let loadAllHtml = '';
-      if (currentMode === 'live' && !liveAllLoaded && articles.length > perPage) {
+      if (currentMode === 'live' && !liveAllLoaded && articles.length > display.length) {
         loadAllHtml = '<div class="load-all-row">' +
           '<div class="load-all-info">' +
-            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles</strong>' +
+            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles (1 per source)</strong>' +
             '<span class="load-all-hint">Click below to load all ' + articles.length + ' articles (one-time, sticky)</span>' +
           '</div>' +
           '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
@@ -1155,10 +1171,10 @@
       // stable result once the fetch is done.
       showProgress('Fetching ' + feeds.length + ' sources\u2026');
 
-      // In live mode, cap each source at 25 items to keep the load light
-      // and ranking stable. In top mode, we want ALL items from every source
-      // for proper concept-importance ranking.
-      const perSourceCap = currentMode === 'live' ? 25 : 0;
+      // In live mode, cap each source at 100 items to keep "Load All"
+      // meaningful (e.g. 100 sources × 100 = up to 10,000 articles). In top
+      // mode, we want ALL items from every source for proper concept ranking.
+      const perSourceCap = currentMode === 'live' ? 100 : 0;
 
       const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
 
