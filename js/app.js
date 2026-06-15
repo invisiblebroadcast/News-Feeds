@@ -116,7 +116,43 @@
     commentsReplyCancel: $('#comments-reply-cancel'),
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
-    deleteCommentCancel: $('#delete-comment-cancel')
+    deleteCommentCancel: $('#delete-comment-cancel'),
+    aiChatBtn: $('#ai-chat-btn'),
+    aiChatPage: $('#ai-chat-page'),
+    aiChatBackBtn: $('#ai-chat-back-btn'),
+    aiChatClearBtn: $('#ai-chat-clear-btn'),
+    aiChatMessages: $('#ai-chat-messages'),
+    aiChatInput: $('#ai-chat-input'),
+    aiChatSendBtn: $('#ai-chat-send-btn'),
+    aiChatStopBtn: $('#ai-chat-stop-btn'),
+    aiChatStatus: $('#ai-chat-status'),
+    aiChatSuggestions: $('#ai-chat-suggestions'),
+    aiChatDragHandle: $('#ai-chat-drag-handle'),
+    settingsAiProvider: $('#settings-ai-provider'),
+    settingsOllamaAddress: $('#settings-ollama-address'),
+    settingsOllamaModel: $('#settings-ollama-model'),
+    settingsAiContextCount: $('#settings-ai-context-count'),
+    settingsOllamaTestBtn: $('#settings-ollama-test-btn'),
+    settingsAiMsg: $('#settings-ai-msg'),
+    settingsAiOllamaBlock: $('#settings-ai-ollama-block'),
+    settingsAiWebllmBlock: $('#settings-ai-webllm-block'),
+    settingsAiCloudBlock: $('#settings-ai-cloud-block'),
+    settingsAiCloudKey: $('#settings-ai-cloud-key'),
+    settingsAiCloudEndpoint: $('#settings-ai-cloud-endpoint'),
+    settingsAiCloudModel: $('#settings-ai-cloud-model'),
+    settingsCheckDeviceBtn: $('#settings-check-device-btn'),
+    settingsWebllmModel: $('#settings-webllm-model'),
+    settingsWebllmDownloadBtn: $('#settings-webllm-download-btn'),
+    aiDeviceCard: $('#ai-device-card'),
+    aiDeviceWebgpu: $('#ai-device-webgpu'),
+    aiDeviceGpu: $('#ai-device-gpu'),
+    aiDeviceRam: $('#ai-device-ram'),
+    aiDeviceCores: $('#ai-device-cores'),
+    aiDeviceRecommendation: $('#ai-device-recommendation'),
+    aiModelStatus: $('#ai-model-status'),
+    aiProgressWrap: $('#ai-progress-wrap'),
+    aiProgressFill: $('#ai-progress-fill'),
+    aiProgressText: $('#ai-progress-text')
   };
 
   if (!el.modal) return;
@@ -1862,6 +1898,17 @@
     if (pp) pp.checked = true;
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
+    if (el.settingsAiProvider) el.settingsAiProvider.value = settings.aiProvider || 'ollama';
+    if (el.settingsOllamaAddress) el.settingsOllamaAddress.value = settings.ollamaAddress || '';
+    if (el.settingsOllamaModel) el.settingsOllamaModel.value = settings.ollamaModel || 'qwen2.5:1.5b';
+    if (el.settingsWebllmModel) el.settingsWebllmModel.value = settings.webllmModel || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+    if (el.settingsAiCloudKey) el.settingsAiCloudKey.value = settings.aiCloudKey || '';
+    if (el.settingsAiCloudEndpoint) el.settingsAiCloudEndpoint.value = settings.aiCloudEndpoint || 'https://api.openai.com/v1';
+    if (el.settingsAiCloudModel) el.settingsAiCloudModel.value = settings.aiCloudModel || 'gpt-4o-mini';
+    if (el.settingsAiContextCount) el.settingsAiContextCount.value = settings.aiNewsContextCount ?? 20;
+    setSettingsAIStatus('', null);
+    updateAIProviderUI();
+    refreshWebLLMModelStatus();
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -1876,7 +1923,26 @@
   function saveSettings() {
     const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
-    Settings.save({ articlesPerPage: perPage, language: lang });
+    const aiProvider = el.settingsAiProvider?.value || 'ollama';
+    const ollamaAddress = (el.settingsOllamaAddress?.value || '').trim();
+    const ollamaModel = (el.settingsOllamaModel?.value || '').trim() || 'qwen2.5:1.5b';
+    const webllmModel = el.settingsWebllmModel?.value || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+    const aiCloudKey = (el.settingsAiCloudKey?.value || '').trim();
+    const aiCloudEndpoint = (el.settingsAiCloudEndpoint?.value || '').trim() || 'https://api.openai.com/v1';
+    const aiCloudModel = (el.settingsAiCloudModel?.value || '').trim() || 'gpt-4o-mini';
+    const aiContext = parseInt(el.settingsAiContextCount?.value || '20', 10);
+    Settings.save({
+      articlesPerPage: perPage,
+      language: lang,
+      aiProvider,
+      ollamaAddress,
+      ollamaModel,
+      webllmModel,
+      aiCloudKey,
+      aiCloudEndpoint,
+      aiCloudModel,
+      aiNewsContextCount: isNaN(aiContext) ? 20 : aiContext
+    });
     syncSettingsToCloud();
     closeSettings();
     displayCurrentSubcat();
@@ -3017,6 +3083,584 @@
     });
   }
 
+  /* ── AI Chat ── */
+  let aiChatBusy = false;
+  let aiChatAbortController = null;
+  const aiSuggestions = [
+    'Summarize the top stories right now',
+    'What\'s happening in technology?',
+    'Give me 3 headlines from India today',
+    'Any major science news recently?'
+  ];
+
+  function getAvailableArticlesForAI() {
+    const out = [];
+    for (const key of Object.keys(scopeCache)) {
+      const cached = scopeCache[key];
+      if (!cached || !cached.articles) continue;
+      for (const a of cached.articles) out.push(a);
+    }
+    return out;
+  }
+
+  function openAIChat() {
+    if (!el.aiChatPage) return;
+    el.aiChatPage.style.display = 'flex';
+    el.aiChatPage.style.height = '70vh';
+    renderAIChatHistory();
+    updateAIChatStatus();
+    setTimeout(() => el.aiChatInput?.focus(), 50);
+  }
+
+  function closeAIChat() {
+    if (aiChatBusy) AI.abort();
+    if (el.aiChatPage) el.aiChatPage.style.display = 'none';
+  }
+
+  function updateAIChatStatus() {
+    if (!el.aiChatStatus) return;
+    if (aiChatBusy) {
+      el.aiChatStatus.textContent = 'thinking…';
+      el.aiChatStatus.className = 'ai-chat-status ai-chat-status-busy';
+      return;
+    }
+    const cfg = AI.getProviderConfig();
+    if (cfg.provider === 'webllm') {
+      const status = AI.getWebLLMStatus();
+      const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
+      if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
+        el.aiChatStatus.textContent = modelLabel;
+        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-ready';
+      } else if (status.state === 'loading') {
+        el.aiChatStatus.textContent = 'loading ' + modelLabel + '…';
+        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-busy';
+      } else if (status.state === 'error') {
+        el.aiChatStatus.textContent = 'load failed';
+        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-warn';
+      } else {
+        el.aiChatStatus.textContent = modelLabel + ' (not loaded)';
+        el.aiChatStatus.className = 'ai-chat-status ai-chat-status-warn';
+      }
+      return;
+    }
+    if (cfg.provider === 'cloud') {
+      el.aiChatStatus.textContent = cfg.cloudModel || '';
+      el.aiChatStatus.className = cfg.cloudKey
+        ? 'ai-chat-status ai-chat-status-ready'
+        : 'ai-chat-status ai-chat-status-warn';
+      return;
+    }
+    el.aiChatStatus.textContent = cfg.model || '';
+    el.aiChatStatus.className = cfg.address
+      ? 'ai-chat-status ai-chat-status-ready'
+      : 'ai-chat-status ai-chat-status-warn';
+  }
+
+  function renderAIChatHistory() {
+    if (!el.aiChatMessages) return;
+    const history = AI.loadHistory();
+    el.aiChatMessages.innerHTML = '';
+    if (!history.length) {
+      el.aiChatMessages.appendChild(buildEmptyState());
+      attachEmptyStateHandlers();
+      return;
+    }
+    for (const m of history) {
+      el.aiChatMessages.appendChild(buildAIMessageEl(m));
+    }
+    scrollAIChatToBottom();
+  }
+
+  function buildEmptyState() {
+    const empty = document.createElement('div');
+    empty.className = 'ai-chat-empty';
+    const cfg = AI.getProviderConfig();
+    if (cfg.provider === 'webllm') {
+      const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
+      const size = AI.webllmModels[cfg.webllmModel]?.size || '';
+      const status = AI.getWebLLMStatus();
+      let actionHtml = '';
+      if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
+        actionHtml = '<p class="ai-chat-empty-meta">✓ ' + modelLabel + ' ready</p>' +
+          '<div class="ai-chat-suggestions" id="ai-chat-suggestions"></div>';
+      } else if (status.state === 'loading') {
+        actionHtml = '<div class="ai-chat-empty-progress">' +
+          '<div class="ai-progress-bar"><div class="ai-progress-fill" id="ai-chat-progress-fill"></div></div>' +
+          '<div class="ai-progress-text" id="ai-chat-progress-text">Loading…</div></div>';
+      } else if (status.state === 'error') {
+        actionHtml = '<p class="ai-chat-empty-meta ai-chat-empty-meta-bad">Failed to load: ' +
+          escHtml(status.error || 'unknown error') + '</p>' +
+          '<button class="btn btn-primary" id="ai-chat-download-btn">Try download again</button>';
+      } else {
+        actionHtml = '<p class="ai-chat-empty-meta">Model not downloaded yet (' + size + '). Download happens on first message — make sure you\'re on Wi-Fi.</p>' +
+          '<button class="btn btn-primary" id="ai-chat-download-btn">Download & start</button>';
+      }
+      empty.innerHTML = '<div class="ai-chat-empty-icon">&#x1F4AC;</div>' +
+        '<p>On-device AI. Ask anything — recent news is shared as context.</p>' + actionHtml;
+    } else {
+      empty.innerHTML = '<div class="ai-chat-empty-icon">&#x1F4AC;</div>' +
+        '<p>Ask anything. Recent news articles are shared with the model as context.</p>' +
+        (cfg.address ? '<div class="ai-chat-suggestions" id="ai-chat-suggestions"></div>' : '<p class="ai-chat-empty-meta ai-chat-empty-meta-bad">No Ollama address set. Open Settings → AI Chat.</p>');
+    }
+    return empty;
+  }
+
+  function attachEmptyStateHandlers() {
+    const dlBtn = el.aiChatMessages?.querySelector('#ai-chat-download-btn');
+    if (dlBtn) {
+      dlBtn.addEventListener('click', async () => {
+        const cfg = AI.getProviderConfig();
+        dlBtn.disabled = true;
+        try {
+          await AI.downloadWebLLMModel(cfg.webllmModel, (report) => {
+            const fill = el.aiChatMessages.querySelector('#ai-chat-progress-fill');
+            const text = el.aiChatMessages.querySelector('#ai-chat-progress-text');
+            if (fill) {
+              const p = typeof report.progress === 'number' ? Math.max(0, Math.min(1, report.progress)) : null;
+              fill.style.width = p != null ? (p * 100).toFixed(0) + '%' : '20%';
+            }
+            if (text) text.textContent = report.text || 'Loading…';
+          });
+          renderAIChatHistory();
+          updateAIChatStatus();
+        } catch (e) {
+          renderAIChatHistory();
+        }
+      });
+    }
+    renderAISuggestions();
+  }
+
+  function renderAISuggestions() {
+    const wrap = el.aiChatMessages?.querySelector('.ai-chat-suggestions');
+    if (!wrap) return;
+    wrap.innerHTML = aiSuggestions.map(s =>
+      '<button class="ai-chat-suggestion-btn">' + escHtml(s) + '</button>'
+    ).join('');
+    wrap.querySelectorAll('.ai-chat-suggestion-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (aiChatBusy) return;
+        el.aiChatInput.value = btn.textContent;
+        sendAIMessage();
+      });
+    });
+  }
+
+  function buildAIMessageEl(m) {
+    const div = document.createElement('div');
+    div.className = 'ai-chat-msg ai-chat-msg-' + m.role;
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-chat-bubble';
+    bubble.textContent = m.content || '';
+    div.appendChild(bubble);
+    return div;
+  }
+
+  function appendAIMessage(role, content) {
+    if (!el.aiChatMessages) return null;
+    const empty = el.aiChatMessages.querySelector('.ai-chat-empty');
+    if (empty) empty.remove();
+    const div = document.createElement('div');
+    div.className = 'ai-chat-msg ai-chat-msg-' + role;
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-chat-bubble';
+    if (role === 'assistant') {
+      if (content) {
+        bubble.classList.add('ai-chat-bubble-streaming');
+        bubble.textContent = content;
+      } else {
+        bubble.classList.add('ai-chat-bubble-thinking');
+        bubble.innerHTML = '<span>Thinking</span><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span>';
+      }
+    } else {
+      bubble.textContent = content || '';
+    }
+    div.appendChild(bubble);
+    el.aiChatMessages.appendChild(div);
+    scrollAIChatToBottom();
+    return bubble;
+  }
+
+  function scrollAIChatToBottom() {
+    if (!el.aiChatMessages) return;
+    requestAnimationFrame(() => {
+      el.aiChatMessages.scrollTop = el.aiChatMessages.scrollHeight;
+    });
+  }
+
+  function setAIChatBusy(busy) {
+    aiChatBusy = busy;
+    if (el.aiChatSendBtn) el.aiChatSendBtn.style.display = busy ? 'none' : 'flex';
+    if (el.aiChatStopBtn) el.aiChatStopBtn.style.display = busy ? 'flex' : 'none';
+    if (el.aiChatInput) el.aiChatInput.disabled = busy;
+    updateAIChatStatus();
+  }
+
+  function showAIError(err) {
+    if (!el.aiChatMessages) return;
+    const div = document.createElement('div');
+    div.className = 'ai-chat-error';
+    const isAbort = AI.isAbortedError(err);
+    div.textContent = isAbort
+      ? 'Stopped.'
+      : ('Error: ' + (err?.message || 'unknown error'));
+    el.aiChatMessages.appendChild(div);
+    scrollAIChatToBottom();
+  }
+
+  async function sendAIMessage() {
+    if (aiChatBusy) return;
+    const text = (el.aiChatInput?.value || '').trim();
+    if (!text) return;
+    const cfg = AI.getProviderConfig();
+    if (cfg.provider === 'ollama' && !cfg.address) {
+      openSettings();
+      return;
+    }
+    if (cfg.provider === 'webllm') {
+      const status = AI.getWebLLMStatus();
+      if (status.state === 'error') {
+        showAIError(new Error('Model failed to load: ' + (status.error || 'unknown')));
+        return;
+      }
+    }
+    if (cfg.provider === 'cloud' && !cfg.cloudKey) {
+      openSettings();
+      return;
+    }
+    el.aiChatInput.value = '';
+    autoResizeAIInput();
+
+    const history = AI.loadHistory();
+    history.push({ role: 'user', content: text });
+    appendAIMessage('user', text);
+
+    const assistantBubble = appendAIMessage('assistant', '');
+    setAIChatBusy(true);
+    const messages = history.slice(-30);
+    const articles = getAvailableArticlesForAI();
+    let assembled = '';
+    let loadBanner = null;
+    const startTime = Date.now();
+    let elapsedTimer = null;
+
+    const startElapsedTimer = () => {
+      if (elapsedTimer) return;
+      elapsedTimer = setInterval(() => {
+        if (!el.aiChatStatus) return;
+        const secs = Math.floor((Date.now() - startTime) / 1000);
+        const elapsedText = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+        el.aiChatStatus.innerHTML = 'thinking… <span class="ai-chat-elapsed">' + elapsedText + '</span>';
+      }, 1000);
+    };
+    const stopElapsedTimer = () => {
+      if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    };
+    startElapsedTimer();
+
+    const showLoadBanner = (text2) => {
+      loadBanner = assistantBubble;
+      if (assistantBubble) {
+        assistantBubble.classList.remove('ai-chat-bubble-thinking');
+        assistantBubble.classList.add('ai-chat-bubble-streaming');
+        assistantBubble.textContent = text2;
+      }
+    };
+
+    const clearThinkingPlaceholder = () => {
+      if (assistantBubble && assistantBubble.classList.contains('ai-chat-bubble-thinking')) {
+        assistantBubble.classList.remove('ai-chat-bubble-thinking');
+        assistantBubble.classList.add('ai-chat-bubble-streaming');
+        assistantBubble.textContent = '';
+      }
+    };
+
+    const persistAssistant = () => {
+      const finalText = (assembled || (assistantBubble && assistantBubble !== loadBanner ? assistantBubble.textContent : '') || '').trim();
+      if (!finalText || finalText === '[stopped]') {
+        const idx = history.findIndex(m => m.role === 'user' && m.content === text);
+        if (idx >= 0) history.splice(idx, 1);
+        AI.saveHistory(history);
+        return;
+      }
+      history.push({ role: 'assistant', content: finalText });
+      AI.saveHistory(history);
+    };
+
+    try {
+      await AI.chat({
+        messages,
+        newsArticles: articles,
+        onLoadProgress: (report) => {
+          showLoadBanner('⏳ ' + (report.text || 'Loading model…'));
+        },
+        onChunk: (piece, full) => {
+          clearThinkingPlaceholder();
+          if (loadBanner) loadBanner = null;
+          assembled = full;
+          if (assistantBubble) assistantBubble.textContent = full;
+          scrollAIChatToBottom();
+        },
+        onDone: (full) => {
+          assembled = full || assembled;
+          persistAssistant();
+        },
+        onError: (err) => {
+          if (AI.isAbortedError(err)) {
+            if (assistantBubble && !assembled) {
+              assistantBubble.classList.remove('ai-chat-bubble-thinking');
+              assistantBubble.textContent = '[stopped]';
+            }
+          } else {
+            showAIError(err);
+          }
+          persistAssistant();
+        }
+      });
+    } catch (err) {
+      // AI.chat re-throws after calling onError. Nothing to do here.
+    } finally {
+      stopElapsedTimer();
+      if (assistantBubble) {
+        assistantBubble.classList.remove('ai-chat-bubble-streaming');
+        assistantBubble.classList.remove('ai-chat-bubble-thinking');
+      }
+      setAIChatBusy(false);
+      if (cfg.provider === 'webllm') updateAIChatStatus();
+    }
+  }
+
+  function stopAIMessage() {
+    if (aiChatBusy) AI.abort();
+  }
+
+  function clearAIChat() {
+    if (aiChatBusy) AI.abort();
+    AI.clearHistory();
+    renderAIChatHistory();
+  }
+
+  function autoResizeAIInput() {
+    if (!el.aiChatInput) return;
+    el.aiChatInput.style.height = 'auto';
+    el.aiChatInput.style.height = Math.min(el.aiChatInput.scrollHeight, 120) + 'px';
+  }
+
+  function bindAIChat() {
+    if (el.aiChatBtn) el.aiChatBtn.addEventListener('click', openAIChat);
+    if (el.aiChatBackBtn) el.aiChatBackBtn.addEventListener('click', closeAIChat);
+    if (el.aiChatClearBtn) el.aiChatClearBtn.addEventListener('click', clearAIChat);
+    if (el.aiChatSendBtn) el.aiChatSendBtn.addEventListener('click', sendAIMessage);
+    if (el.aiChatStopBtn) el.aiChatStopBtn.addEventListener('click', stopAIMessage);
+    if (el.aiChatInput) {
+      el.aiChatInput.addEventListener('input', autoResizeAIInput);
+      el.aiChatInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendAIMessage();
+        }
+      });
+    }
+    // Draggable resize
+    const dragHandle = el.aiChatDragHandle;
+    if (dragHandle && el.aiChatPage) {
+      let dragStartY = 0, dragStartH = 0, dragging = false;
+      const onDragStart = (clientY) => {
+        dragging = true;
+        dragStartY = clientY;
+        dragStartH = el.aiChatPage.offsetHeight;
+        el.aiChatPage.style.transition = 'none';
+      };
+      const onDragMove = (clientY) => {
+        if (!dragging) return;
+        const dy = dragStartY - clientY;
+        const newH = Math.min(window.innerHeight * 0.95, Math.max(280, dragStartH + dy));
+        el.aiChatPage.style.height = newH + 'px';
+      };
+      const onDragEnd = () => { dragging = false; };
+      dragHandle.addEventListener('mousedown', e => { e.preventDefault(); onDragStart(e.clientY); });
+      dragHandle.addEventListener('touchstart', e => { onDragStart(e.touches[0].clientY); }, { passive: true });
+      document.addEventListener('mousemove', e => onDragMove(e.clientY));
+      document.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY), { passive: true });
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchend', onDragEnd);
+    }
+  }
+
+  function setSettingsAIStatus(msg, type) {
+    if (!el.settingsAiMsg) return;
+    el.settingsAiMsg.textContent = msg || '';
+    el.settingsAiMsg.classList.remove('success', 'error');
+    if (type === 'ok') el.settingsAiMsg.classList.add('success');
+    if (type === 'err') el.settingsAiMsg.classList.add('error');
+  }
+
+  function updateAIProviderUI() {
+    const provider = el.settingsAiProvider?.value || 'ollama';
+    if (el.settingsAiOllamaBlock) el.settingsAiOllamaBlock.style.display = provider === 'ollama' ? 'block' : 'none';
+    if (el.settingsAiWebllmBlock) el.settingsAiWebllmBlock.style.display = provider === 'webllm' ? 'block' : 'none';
+    if (el.settingsAiCloudBlock) el.settingsAiCloudBlock.style.display = provider === 'cloud' ? 'block' : 'none';
+  }
+
+  function setRecommendationEl(rec) {
+    if (!el.aiDeviceRecommendation) return;
+    el.aiDeviceRecommendation.classList.remove('rec-yes', 'rec-cautious', 'rec-no');
+    if (!rec) { el.aiDeviceRecommendation.textContent = ''; return; }
+    if (rec.supported) {
+      const recClass = rec.recommendation === 'yes' ? 'rec-yes' : 'rec-cautious';
+      el.aiDeviceRecommendation.classList.add(recClass);
+      const sym = rec.recommendation === 'yes' ? '✓' : '⚠';
+      el.aiDeviceRecommendation.textContent = sym + ' ' + (rec.recommendation === 'yes'
+        ? 'Your device can run on-device AI.'
+        : 'Your device may run on-device AI, but slowly.');
+    } else {
+      el.aiDeviceRecommendation.classList.add('rec-no');
+      el.aiDeviceRecommendation.textContent = '✗ ' + (rec.reason || 'Not supported');
+    }
+  }
+
+  function renderDeviceCheckResult(rec) {
+    if (!rec) return;
+    if (el.aiDeviceWebgpu) {
+      el.aiDeviceWebgpu.textContent = rec.webgpu ? '✓ supported' : '✗ not supported';
+      el.aiDeviceWebgpu.className = 'ai-device-value ' + (rec.webgpu ? 'val-ok' : 'val-bad');
+    }
+    if (el.aiDeviceGpu) {
+      const g = rec.gpu;
+      const txt = g ? [g.vendor, g.architecture, g.device].filter(s => s && s !== 'unknown').join(' / ') || 'unknown' : '—';
+      el.aiDeviceGpu.textContent = txt;
+    }
+    if (el.aiDeviceRam) {
+      el.aiDeviceRam.textContent = rec.memory != null ? rec.memory + ' GB' : 'unknown';
+    }
+    if (el.aiDeviceCores) {
+      el.aiDeviceCores.textContent = rec.cores != null ? String(rec.cores) : 'unknown';
+    }
+    setRecommendationEl(rec);
+  }
+
+  async function runDeviceCheck() {
+    if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.disabled = true;
+    setSettingsAIStatus('Checking device…', null);
+    try {
+      const rec = await AI.checkWebGPUSupport();
+      renderDeviceCheckResult(rec);
+      if (rec.supported) {
+        setSettingsAIStatus(rec.recommendation === 'yes'
+          ? 'Device ready for on-device AI.'
+          : 'Device may work but could be slow.', 'ok');
+      } else {
+        setSettingsAIStatus(rec.reason || 'Not supported on this device.', 'err');
+      }
+    } catch (e) {
+      setSettingsAIStatus(e?.message || 'Check failed', 'err');
+    } finally {
+      if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.disabled = false;
+    }
+  }
+
+  function setWebLLMDownloadProgress(report) {
+    if (el.aiProgressWrap) el.aiProgressWrap.style.display = 'block';
+    if (el.aiProgressFill) {
+      const p = typeof report.progress === 'number' ? Math.max(0, Math.min(1, report.progress)) : null;
+      el.aiProgressFill.style.width = p != null ? (p * 100).toFixed(0) + '%' : '20%';
+    }
+    if (el.aiProgressText) {
+      const text = (report.text || '').trim();
+      el.aiProgressText.textContent = text || 'Working…';
+    }
+  }
+
+  function setWebLLMModelStatus(text, cls) {
+    if (!el.aiModelStatus) return;
+    el.aiModelStatus.textContent = text || '';
+    el.aiModelStatus.className = 'ai-model-status' + (cls ? ' ' + cls : '');
+  }
+
+  function refreshWebLLMModelStatus() {
+    const cfg = AI.getProviderConfig();
+    if (cfg.provider !== 'webllm') return;
+    const status = AI.getWebLLMStatus();
+    const modelLabel = AI.webllmModels[cfg.webllmModel]?.label || cfg.webllmModel;
+    if (status.state === 'loaded' && status.loadedModel === cfg.webllmModel) {
+      setWebLLMModelStatus('✓ ' + modelLabel + ' ready', 'status-ok');
+      if (el.aiProgressWrap) el.aiProgressWrap.style.display = 'none';
+    } else if (status.state === 'loading') {
+      setWebLLMModelStatus('Loading…', 'status-loading');
+    } else if (status.state === 'error') {
+      setWebLLMModelStatus('✗ ' + (status.error || 'load failed'), 'status-bad');
+    } else {
+      setWebLLMModelStatus('Not downloaded', 'status-neutral');
+    }
+  }
+
+  async function downloadModel() {
+    const cfg = AI.getProviderConfig();
+    if (cfg.provider !== 'webllm') {
+      setSettingsAIStatus('Switch provider to On-device first.', 'err');
+      return;
+    }
+    const modelId = cfg.webllmModel;
+    if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.disabled = true;
+    setSettingsAIStatus('Loading model… this may take a few minutes on first run.', null);
+    try {
+      await AI.downloadWebLLMModel(modelId, setWebLLMDownloadProgress);
+      setSettingsAIStatus('Model ready. You can now chat on-device.', 'ok');
+      refreshWebLLMModelStatus();
+    } catch (e) {
+      if (AI.isAbortedError(e)) {
+        setSettingsAIStatus('Download cancelled.', null);
+      } else {
+        setSettingsAIStatus('Download failed: ' + (e?.message || e), 'err');
+      }
+    } finally {
+      if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.disabled = false;
+      refreshWebLLMModelStatus();
+    }
+  }
+
+  function bindAISettings() {
+    if (el.settingsOllamaTestBtn) {
+      const testBtn = el.settingsOllamaTestBtn;
+      const originalLabel = testBtn.textContent;
+      testBtn.addEventListener('click', async () => {
+        // Read directly from the input so users can test before saving
+        const rawAddress = (el.settingsOllamaAddress?.value || '').trim();
+        const rawModel = (el.settingsOllamaModel?.value || '').trim();
+        if (!rawAddress) {
+          setSettingsAIStatus('Enter an Ollama address first.', 'err');
+          return;
+        }
+        testBtn.classList.add('btn-testing');
+        testBtn.innerHTML = 'Testing<span class="btn-label-suffix"></span>';
+        testBtn.disabled = true;
+        setSettingsAIStatus('Testing connection to ' + rawAddress + '…', null);
+        try {
+          const result = await AI.testOllamaConnectionAt(rawAddress, rawModel || 'qwen2.5:1.5b');
+          const modelNote = result.modelAvailable
+            ? ' Model "' + result.currentModel + '" is available.'
+            : ' ⚠ Model "' + result.currentModel + '" not found on server. Pull it with: ollama pull ' + result.currentModel;
+          const msg = 'Connected. ' + (result.models?.length || 0) + ' model(s) found.' + modelNote;
+          setSettingsAIStatus(result.warning ? (msg + ' ' + result.warning) : msg, result.warning ? 'err' : 'ok');
+        } catch (e) {
+          setSettingsAIStatus(e.message || 'Test failed', 'err');
+        } finally {
+          testBtn.classList.remove('btn-testing');
+          testBtn.textContent = originalLabel;
+          testBtn.disabled = false;
+        }
+      });
+    }
+    if (el.settingsAiProvider) el.settingsAiProvider.addEventListener('change', () => {
+      updateAIProviderUI();
+      setSettingsAIStatus('', null);
+      refreshWebLLMModelStatus();
+    });
+    if (el.settingsCheckDeviceBtn) el.settingsCheckDeviceBtn.addEventListener('click', runDeviceCheck);
+    if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.addEventListener('click', downloadModel);
+    if (el.settingsWebllmModel) el.settingsWebllmModel.addEventListener('change', refreshWebLLMModelStatus);
+  }
+
   /* ── Auth ── */
   let currentUser = null;
   let authMode = 'signin'; // 'signin' or 'signup'
@@ -3925,6 +4569,8 @@
     bindFeedControls();
     bindDateToggle();
     bindSourcesConfig();
+    bindAIChat();
+    bindAISettings();
     await renderContent();
 
     // Start periodic auto-refresh — fetches silently in the background

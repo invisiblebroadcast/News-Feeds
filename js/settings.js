@@ -4,7 +4,16 @@ const Settings = (() => {
     articlesPerPage: 10,
     language: 'en',
     dateRange: '7',
-    showDescription: false
+    showDescription: false,
+    aiProvider: 'ollama',
+    ollamaAddress: 'http://192.168.1.1:11434',
+    ollamaModel: 'qwen2.5:1.5b',
+    webllmModel: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+    aiNewsContextCount: 20,
+    aiSystemPrompt: '',
+    aiCloudKey: '',
+    aiCloudEndpoint: 'https://api.openai.com/v1',
+    aiCloudModel: 'gpt-4o-mini'
   };
 
   let cache = null;
