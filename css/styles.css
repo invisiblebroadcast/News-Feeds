@@ -2085,11 +2085,14 @@ body.cards-view {
 /* ─── Footer ─── */
 .app-footer {
   text-align: center;
-  padding: 32px 24px;
+  padding: 32px 24px 56px;
   font-size: 0.78rem;
   color: var(--text-tertiary);
   border-top: 1px solid var(--border-primary);
   margin-top: 40px;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ─── Responsive ─── */
