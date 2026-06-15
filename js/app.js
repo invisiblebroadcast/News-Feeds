@@ -385,13 +385,6 @@
       if (!articles.length) { showEmpty(); return; }
 
       currentArticles = articles;
-      const settings = Settings.load();
-      const perPage = settings.articlesPerPage || 10;
-
-      // In top mode, show more articles (up to 3x perPage by default) so the
-      // concept-importance ranking is actually visible.
-      const topShowMultiplier = 3;
-      const displayLimit = currentMode === 'top' ? perPage * topShowMultiplier : perPage;
 
       let display;
       let totalShown;
@@ -408,12 +401,7 @@
         }
         totalShown = display.length;
       } else {
-        if (currentMode === 'top') {
-          if (!loadedCount || loadedCount < displayLimit) loadedCount = displayLimit;
-          display = articles.slice(0, Math.min(loadedCount, articles.length));
-        } else {
-          display = articles.slice(0, perPage);
-        }
+        display = articles.slice(0, 25);
         display.forEach((a, i) => a._rank = i + 1);
         totalShown = display.length;
       }
@@ -577,10 +565,8 @@
   function renderReels(articles) {
     try {
       if (!articles.length) { showEmpty(); return; }
-      const settings = Settings.load();
-      const perPage = settings.articlesPerPage || 10;
       if (currentMode === 'top') {
-        articles = articles.slice(0, perPage);
+        articles = articles.slice(0, 25);
         articles.forEach((a, i) => a._rank = i + 1);
       }
       currentArticles = articles;
@@ -1824,8 +1810,6 @@
   /* ── Settings Modal ── */
   function openSettings() {
     const settings = Settings.load();
-    const pp = $('input[name="articlesPerPage"][value="' + settings.articlesPerPage + '"]');
-    if (pp) pp.checked = true;
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
     populateFeedSelects();
@@ -1840,9 +1824,8 @@
   }
 
   function saveSettings() {
-    const perPage = parseInt($('input[name="articlesPerPage"]:checked')?.value || '10', 10);
     const lang = $('#settings-language')?.value || 'en';
-    Settings.save({ articlesPerPage: perPage, language: lang });
+    Settings.save({ language: lang });
     syncSettingsToCloud();
     closeSettings();
     displayCurrentSubcat();
