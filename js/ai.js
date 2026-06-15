@@ -23,6 +23,8 @@ const AI = (() => {
   let webllmLoadPromise = null;
   let webllmAbortFlag = false;
 
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
   function loadHistory() {
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
@@ -513,7 +515,9 @@ const AI = (() => {
       throw e;
     }
 
-    const context = buildNewsContext(newsArticles, cfg.contextCount);
+    // On-device models are slow on mobile — use less context to reduce prefill cost
+    const ctxCount = Math.min(cfg.contextCount, 10);
+    const context = buildNewsContext(newsArticles, ctxCount);
     const systemPrompt = buildSystemPrompt(context);
     const fullMessages = [
       { role: 'system', content: systemPrompt },
@@ -526,14 +530,18 @@ const AI = (() => {
       signal.addEventListener('abort', () => { currentAbort.aborted = true; });
     }
 
+    // Yield to the UI thread before the prefill blocks the GPU pipeline
+    await sleep(10);
+
     try {
       const asyncGenerator = await engine.chat.completions.create({
         messages: fullMessages,
         stream: true,
         temperature: 0.7,
-        max_tokens: 1024
+        max_tokens: 512
       });
       let assembled = '';
+      let yieldCounter = 0;
       for await (const chunk of asyncGenerator) {
         if (currentAbort.aborted) break;
         const delta = chunk?.choices?.[0]?.delta?.content;
@@ -541,6 +549,8 @@ const AI = (() => {
           assembled += delta;
           if (onChunk) onChunk(delta, assembled);
         }
+        // Yield to the UI thread every few tokens so animations and scrolling stay smooth
+        if (++yieldCounter % 4 === 0) await sleep(0);
       }
       if (currentAbort.aborted) {
         const err = new Error('__aborted__');
