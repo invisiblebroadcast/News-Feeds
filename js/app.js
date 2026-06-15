@@ -3595,12 +3595,13 @@
   }
 
   async function downloadModel() {
-    const cfg = AI.getProviderConfig();
-    if (cfg.provider !== 'webllm') {
+    const provider = el.settingsAiProvider?.value || 'ollama';
+    if (provider !== 'webllm') {
       setSettingsAIStatus('Switch provider to On-device first.', 'err');
       return;
     }
-    const modelId = cfg.webllmModel;
+    const cfg = AI.getProviderConfig();
+    const modelId = el.settingsWebllmModel?.value || cfg.webllmModel;
     if (el.settingsWebllmDownloadBtn) el.settingsWebllmDownloadBtn.disabled = true;
     setSettingsAIStatus('Loading model… this may take a few minutes on first run.', null);
     try {
