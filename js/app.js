@@ -205,6 +205,7 @@
       currentNation = nation;
       FeedManager.setSelectedNation(nation);
       loadedCount = 0;
+      liveAllLoaded = false;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       renderSubTabs();
@@ -285,6 +286,7 @@
       if (sub === currentSubcat) return;
       currentSubcat = sub;
       loadedCount = 0;
+      liveAllLoaded = false;
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       displayCurrentSubcat();
@@ -329,6 +331,9 @@
     updateStickyHeader('0 articles');
   }
 
+  // Track whether the user has chosen to "load all" in live mode.
+  let liveAllLoaded = false;
+
   function renderArticles(articles) {
     try {
       if (!articles.length) { showEmpty(); return; }
@@ -345,8 +350,15 @@
       let display;
       let totalShown;
       if (currentMode === 'live') {
-        if (!loadedCount) loadedCount = perPage;
-        display = articles.slice(0, Math.min(loadedCount, articles.length));
+        // Live mode: show only perPage by default. "Load All" button shows
+        // everything (capped to liveTotalCap so mobile doesn't hang).
+        const liveTotalCap = 500;
+        if (liveAllLoaded) {
+          display = articles.slice(0, liveTotalCap);
+        } else {
+          if (!loadedCount) loadedCount = perPage;
+          display = articles.slice(0, Math.min(loadedCount, articles.length));
+        }
         totalShown = display.length;
       } else {
         if (currentMode === 'top') {
@@ -361,15 +373,37 @@
 
       const hasMoreInScope = totalShown < articles.length;
 
+      // Build the "Load All" button (live mode only) — placed at the TOP of
+      // the content area so the user can opt in to seeing everything.
+      let loadAllHtml = '';
+      if (currentMode === 'live' && !liveAllLoaded && articles.length > perPage) {
+        loadAllHtml = '<div class="load-all-row">' +
+          '<div class="load-all-info">' +
+            '<strong>Showing ' + totalShown + ' of ' + articles.length + ' articles</strong>' +
+            '<span class="load-all-hint">Click below to load all ' + articles.length + ' articles (one-time, sticky)</span>' +
+          '</div>' +
+          '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
+        '</div>';
+      }
+
       updateStickyHeader(totalShown + ' of ' + articles.length);
 
       el.main.innerHTML =
+        loadAllHtml +
         '<div class="article-grid">' +
           display.map((a, i) => renderCard(a, i)).join('') +
         '</div>' +
         (hasMoreInScope
           ? '<div style="text-align:center;padding:20px;"><button class="btn" id="load-more-btn">Load More (' + (articles.length - totalShown) + ' remaining)</button></div>'
           : '');
+
+      const loadAllBtn = $('#load-all-btn');
+      if (loadAllBtn) {
+        loadAllBtn.addEventListener('click', () => {
+          liveAllLoaded = true;
+          renderArticles(currentArticles);
+        });
+      }
 
       const loadMore = $('#load-more-btn');
       if (loadMore) loadMore.addEventListener('click', () => { loadedCount += perPage; renderArticles(currentArticles); });
@@ -1064,6 +1098,7 @@
       if (!btn || btn.classList.contains('active')) return;
       currentMode = btn.dataset.mode;
       loadedCount = 0;
+      liveAllLoaded = false;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updateSortOptions();
@@ -1122,59 +1157,42 @@
       const subs = FeedManager.subcategoriesForScope(currentScope);
       if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
 
-      const batchSize = 3;
-      let hasRendered = false;
+      // Wait for ALL sources to finish fetching before showing any results.
+      // This prevents the "auto-refresh every few seconds" problem where
+      // articles re-shuffle as each batch completes. The user sees a single
+      // stable result once the fetch is done.
+      showProgress('Fetching ' + feeds.length + ' sources\u2026');
 
-      for (let i = 0; i < feeds.length; i += batchSize) {
-        const batch = feeds.slice(i, i + batchSize);
-        const results = await Promise.allSettled(batch.map(f => FeedFetcher.fetchFeed(f)));
+      // In live mode, cap each source at 25 items to keep the load light
+      // and ranking stable. In top mode, we want ALL items from every source
+      // for proper concept-importance ranking.
+      const perSourceCap = currentMode === 'live' ? 25 : 0;
 
-        for (let j = 0; j < results.length; j++) {
-          const result = results[j];
-          if (result.status === 'fulfilled') {
-            const articles = result.value;
-            for (const a of articles) {
-              a.subcat = a.feedHint || 'politics';
-              const cat = a.subcat;
-              if (!groups[cat]) groups[cat] = [];
-              groups[cat].push(a);
-            }
-          } else {
-            console.warn('Feed failed: ' + batch[j]?.name, result.reason?.message);
+      const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
+
+      for (let j = 0; j < allResults.length; j++) {
+        const result = allResults[j];
+        if (result.status === 'fulfilled') {
+          const articles = result.value;
+          for (const a of articles) {
+            a.subcat = a.feedHint || 'politics';
+            const cat = a.subcat;
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(a);
           }
-        }
-
-        let allArticles = [];
-        for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
-        scopeCache[key] = { articles: allArticles, groups };
-        renderSubTabs();
-        updateStickyHeader();
-
-        const remaining = feeds.length - (i + batchSize);
-        if (remaining > 0) {
-          let articles = getFilteredArticles(currentSubcat, scopeCache[key]);
-          updateFilterSourceOptions(articles);
-          if (articles.length) {
-            // Don't cap during progressive loading — the renderer itself
-            // paginates to perPage (or 3x perPage in top mode) and offers
-            // Load More. Show everything the user asked for.
-            hasRendered = true;
-            el.main.innerHTML = '';
-            if (currentView === 'reels') renderReels(articles);
-            else renderArticles(articles);
-            const prog = document.createElement('div');
-            prog.id = 'loading-progress';
-            prog.style.cssText = 'text-align:center;padding:12px;font-size:0.82rem;color:var(--text-tertiary);border-top:1px solid var(--border-secondary);';
-            prog.textContent = 'Loading ' + Math.min(remaining, feeds.length > 1 ? batchSize : 0) + ' more sources\u2026';
-            el.main.appendChild(prog);
-          } else if (!hasRendered) {
-            showProgress('Fetching sources\u2026 (' + Math.min(i + batchSize, feeds.length) + '/' + feeds.length + ')');
-          }
+        } else {
+          console.warn('Feed failed: ' + feeds[j]?.name, result.reason?.message);
         }
       }
 
-      $('#loading-progress')?.remove();
+      let allArticles = [];
+      for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+      scopeCache[key] = { articles: allArticles, groups };
+      renderSubTabs();
+      updateStickyHeader();
+
       isFetching = false;
+      // Now display the final result ONCE — no progressive re-rendering.
       displayCurrentSubcat();
     } catch (err) {
       console.error(err);
@@ -1472,6 +1490,9 @@
     document.body.appendChild(overlay);
     document.querySelectorAll('#reels-refresh, .reels-refresh-btn, #refresh-btn').forEach(b => b.classList.add('btn-spin'));
 
+    // Reset sticky state so user has to opt into "Load All" again
+    liveAllLoaded = false;
+    loadedCount = 0;
     scopeCache[key] = null;
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
     if (!feeds.length) {

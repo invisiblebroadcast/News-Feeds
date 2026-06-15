@@ -130,10 +130,13 @@ const FeedFetcher = (() => {
     return collected;
   }
 
-  async function fetchFeed(feed) {
+  async function fetchFeed(feed, perSourceCap) {
+    // perSourceCap: optionally limit the number of items returned per source
+    // (live mode uses a small cap like 25; top mode lets everything through).
     if (isGoogleNewsUrl(feed.url)) {
       try {
-        return await proxyFetch(feed);
+        const items = await proxyFetch(feed);
+        return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
       } catch (err) {
         console.warn(`Google News feed failed: ${feed.name}`, err.message);
         return [];
@@ -145,7 +148,8 @@ const FeedFetcher = (() => {
     // We also try paginated fetching (?p=2, ?p=3) to go beyond the publisher's
     // default cap, which is critical for top-mode ranking.
     try {
-      return await proxyFetchPaginated(feed);
+      const items = await proxyFetchPaginated(feed);
+      return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
     } catch (proxyErr) {
       // Fall back to rss2json if the proxy fails (network, 503, etc.)
       const encodedUrl = encodeURIComponent(feed.url);
@@ -162,7 +166,7 @@ const FeedFetcher = (() => {
           throw new Error(data.message || 'Unknown RSS2JSON error');
         }
 
-        return (data.items || []).map(item => {
+        const allItems = (data.items || []).map(item => {
           let imageUrl = item.thumbnail || '';
           if (!imageUrl && item.description) {
             imageUrl = extractImageFromHtml(item.description);
@@ -182,6 +186,7 @@ const FeedFetcher = (() => {
             guid: item.guid || item.link || ''
           };
         });
+        return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
       } catch (rssErr) {
         console.warn(`Feed failed: ${feed.name} (${feed.url})`, proxyErr.message, rssErr.message);
         return [];

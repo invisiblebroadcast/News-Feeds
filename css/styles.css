@@ -485,6 +485,38 @@ body.cards-view .app-footer {
   padding-bottom: 24px;
 }
 
+/* ─── Load All Articles row (live mode banner) ─── */
+.load-all-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  margin: 12px 0 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+.load-all-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.load-all-info strong {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.load-all-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.load-all-row .btn {
+  flex-shrink: 0;
+}
+
 #sub-tab-bar {
   display: none;
   background: var(--bg-primary);
