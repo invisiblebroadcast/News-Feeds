@@ -1316,6 +1316,21 @@
       const scope = currentScope;
       const subcat = currentSubcat;
       const viewDate = (el.topDate && el.topDate.value) || today;
+
+      // If the seed (one batch covering ALL scope/subcat combos) hasn't
+      // started yet, kick it off now. If it's running, wait for it. This
+      // guarantees the user never triggers a per-category ranking on top of
+      // the seed — the seed produces every combo exactly once, then every
+      // subsequent switch just loads from DB.
+      if (!seedPromise) {
+        rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
+      }
+      if (seedPromise) {
+        setTopListStatus('Preparing AI rankings…');
+        try { await seedPromise; } catch (e) { console.warn('Seed failed:', e); }
+        clearTopListStatus();
+      }
+
       if (viewDate === today && await AI.needsRanking(today, scope, subcat)) {
         setTopListStatus('AI ranking…');
         try {
@@ -1741,6 +1756,7 @@
   /* ── Daily AI Rank Scheduler ── */
 
   let rankSchedulerTimer = null;
+  let seedPromise = null;
 
   function getISTHour() {
     const d = new Date();
@@ -1749,65 +1765,73 @@
   }
 
   async function rankAllCombos() {
-    const scopes = ['global', 'nation'];
-    const subs = FeedManager.subcategories();
-    const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    if (seedPromise) return seedPromise;
+    seedPromise = (async () => {
+      const scopes = ['global', 'nation'];
+      const subs = FeedManager.subcategories();
+      const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-    // First pass: count work to do so we can show "X / Y" progress.
-    const work = [];
-    for (const scope of scopes) {
-      const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
-      const feeds = FeedManager.getFeeds(scope, nation);
-      if (!feeds.length) continue;
+      // First pass: count work to do so we can show "X / Y" progress.
+      const work = [];
+      for (const scope of scopes) {
+        const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
+        const feeds = FeedManager.getFeeds(scope, nation);
+        if (!feeds.length) continue;
 
-      const groups = {};
-      const results = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, 0)));
-      for (const result of results) {
-        if (result.status !== 'fulfilled') continue;
-        for (const a of result.value) {
-          a.subcat = a.feedHint || 'politics';
-          const cat = a.subcat;
-          if (!groups[cat]) groups[cat] = [];
-          groups[cat].push(a);
+        const groups = {};
+        const results = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, 0)));
+        for (const result of results) {
+          if (result.status !== 'fulfilled') continue;
+          for (const a of result.value) {
+            a.subcat = a.feedHint || 'politics';
+            const cat = a.subcat;
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(a);
+          }
+        }
+
+        for (const subcat of subs) {
+          let articles;
+          if (subcat === 'all') {
+            articles = [];
+            for (const cat of Object.keys(groups)) articles.push(...groups[cat]);
+          } else {
+            articles = groups[subcat] || [];
+          }
+          if (!articles.length) continue;
+          articles = FeedFetcher.deduplicate(articles);
+          articles = FeedFetcher.filterByDate(articles, cutoffStr, null);
+          articles = FeedFetcher.sortByDate(articles);
+          if (articles.length < 5) continue;
+          const date = AI.todayStr();
+          if (await AI.needsRanking(date, scope, subcat)) {
+            work.push({ scope, subcat, articles, date });
+          }
         }
       }
 
-      for (const subcat of subs) {
-        let articles;
-        if (subcat === 'all') {
-          articles = [];
-          for (const cat of Object.keys(groups)) articles.push(...groups[cat]);
-        } else {
-          articles = groups[subcat] || [];
-        }
-        if (!articles.length) continue;
-        articles = FeedFetcher.deduplicate(articles);
-        articles = FeedFetcher.filterByDate(articles, cutoffStr, null);
-        articles = FeedFetcher.sortByDate(articles);
-        if (articles.length < 5) continue;
-        const date = AI.todayStr();
-        if (await AI.needsRanking(date, scope, subcat)) {
-          work.push({ scope, subcat, articles, date });
+      if (!work.length) { clearTopListStatus(); return; }
+
+      setTopListStatus('AI ranking 1 / ' + work.length + '…');
+      for (let i = 0; i < work.length; i++) {
+        const { scope, subcat, articles, date } = work[i];
+        setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
+        if (i > 0) await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
+        try {
+          const result = await AI.rankArticles(articles, scope, subcat);
+          console.log('[seed]', scope + '/' + subcat, '— saved:', !!result, 'date:', date);
+        } catch (e) {
+          console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
         }
       }
+      clearTopListStatus();
+    })();
+    try {
+      await seedPromise;
+    } finally {
+      // Keep the resolved promise around so subsequent calls short-circuit.
     }
-
-    if (!work.length) { clearTopListStatus(); return; }
-
-    setTopListStatus('AI ranking 1 / ' + work.length + '…');
-    for (let i = 0; i < work.length; i++) {
-      const { scope, subcat, articles, date } = work[i];
-      setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
-      if (i > 0) await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
-      try {
-        const result = await AI.rankArticles(articles, scope, subcat);
-        console.log('[seed]', scope + '/' + subcat, '— saved:', !!result, 'date:', date);
-      } catch (e) {
-        console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
-      }
-    }
-    clearTopListStatus();
   }
 
   function startRankScheduler() {
@@ -3915,10 +3939,14 @@
     // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)
     startRankScheduler();
 
-    // Seed: rank all scope/subcat combos once on first load
+    // Seed: rank all scope/subcat combos once on first load. We give it a
+    // short delay so feeds have a chance to populate, but the seed runs as
+    // a single in-flight promise — every displayCurrentSubcat in top mode
+    // waits for it before deciding to rank, so per-category switches can
+    // never trigger their own ranking on top of the batch.
     setTimeout(() => {
       rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
-    }, 5000);
+    }, 3000);
   }
 
   init();
