@@ -187,7 +187,9 @@ const AI = (() => {
     let text;
     try {
       text = await complete({ system, user: items });
+      console.log('[AI] response received, length:', text.length, 'preview:', text.slice(0, 80));
     } catch (e) {
+      console.warn('[AI] complete() failed:', e.message);
       if (onProgress) onProgress({ step: 'error', text: e.message || 'Ranking failed' });
       return null;
     }
@@ -202,6 +204,7 @@ const AI = (() => {
       else { scores = null; }
     }
     if (!Array.isArray(scores)) {
+      console.warn('AI rankArticles: invalid response — text:', text.slice(0, 200));
       if (onProgress) onProgress({ step: 'error', text: 'AI returned invalid format' });
       return null;
     }

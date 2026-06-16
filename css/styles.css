@@ -196,51 +196,6 @@ img { max-width: 100%; height: auto; }
   }
 }
 
-/* ── Date range row — sits below the header ── */
-.date-filter-fields {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.date-field {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  flex: 1;
-  min-width: 140px;
-}
-.date-field-label {
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.date-filter-fields input[type="date"] {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-family: var(--font);
-  cursor: pointer;
-  outline: none;
-  transition: border-color var(--transition);
-  min-width: 0;
-  width: 100%;
-  color-scheme: dark;
-}
-.date-filter-fields input[type="date"]:focus {
-  border-color: var(--accent);
-}
-.date-filter-fields input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
-  cursor: pointer;
-}
-
 @keyframes spin { to { transform: rotate(360deg); } }
 .btn-spin { animation: spin 1s linear infinite; }
 .btn {
@@ -2157,13 +2112,6 @@ body.cards-view {
   }
   .header-controls .btn-label {
     display: none;
-  }
-  .date-filter-fields input[type="date"] {
-    padding: 6px 8px;
-    font-size: 0.78rem;
-  }
-  .date-field-label {
-    font-size: 0.72rem;
   }
 
   .tab-bar {

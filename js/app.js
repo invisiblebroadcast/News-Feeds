@@ -22,9 +22,6 @@
     modalClose: $('#modal-close'),
     modalCancel: $('#modal-cancel'),
     modalSave: $('#modal-save'),
-    dateFrom: $('#date-from'),
-    dateTo: $('#date-to'),
-    dateRange: $('#date-range-row'),
     articleModal: $('#article-modal'),
     articleModalClose: $('#article-modal-close'),
     articleModalTitle: $('#article-modal-title'),
@@ -73,12 +70,6 @@
     hardRefreshModalClose: $('#hard-refresh-modal-close'),
     hardRefreshCancel: $('#hard-refresh-cancel'),
     hardRefreshConfirm: $('#hard-refresh-confirm'),
-    dateToggle: $('#date-toggle-btn'),
-    dateFilterModal: $('#date-filter-modal'),
-    dateFilterModalClose: $('#date-filter-modal-close'),
-    dateFilterCancel: $('#date-filter-cancel'),
-    dateFilterApply: $('#date-filter-apply'),
-    dateFilterClear: $('#date-filter-clear'),
     sourcesConfigModal: $('#sources-config-modal'),
     sourcesConfigModalClose: $('#sources-config-modal-close'),
     sourcesConfigSearch: $('#sources-config-search'),
@@ -1357,7 +1348,7 @@
           if (rankOk) {
             clearTopListStatus();
           } else {
-            // Fallback to live mode so the user isn't stuck on an error.
+            console.warn('AI ranking produced no result for', scope, subcat, '— falling back to Live mode');
             setTopListStatus('AI ranking failed — switching to Live');
             currentMode = 'live';
             $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
@@ -1473,13 +1464,6 @@
   }
 
   function applyDateFilter(articles) {
-    const dateFrom = el.dateFrom.value || null;
-    const dateTo = el.dateTo.value || null;
-
-    if (dateFrom && dateTo) {
-      return FeedFetcher.filterByDate(articles, dateFrom, dateTo);
-    }
-
     if (currentMode === 'top') {
       // Top mode: only consider articles from the last 10 days
       const last10d = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
@@ -1564,33 +1548,7 @@
     window.location.reload();
   }
 
-  /* ── Date Filter Modal ── */
-  function openDateFilterModal() {
-    if (!el.dateFilterModal) return;
-    el.dateFilterModal.classList.add('open');
-  }
-  function closeDateFilterModal() {
-    if (!el.dateFilterModal) return;
-    el.dateFilterModal.classList.remove('open');
-  }
-  function onApplyDateFilter() {
-    closeDateFilterModal();
-    refreshAll();
-  }
-  function clearDateFilter() {
-    if (el.dateFrom) el.dateFrom.value = '';
-    if (el.dateTo) el.dateTo.value = '';
-    closeDateFilterModal();
-    refreshAll();
-  }
-  function bindDateToggle() {
-    if (el.dateToggle) el.dateToggle.addEventListener('click', openDateFilterModal);
-    if (el.dateFilterModalClose) el.dateFilterModalClose.addEventListener('click', closeDateFilterModal);
-    if (el.dateFilterCancel) el.dateFilterCancel.addEventListener('click', closeDateFilterModal);
-    if (el.dateFilterApply) el.dateFilterApply.addEventListener('click', onApplyDateFilter);
-    if (el.dateFilterClear) el.dateFilterClear.addEventListener('click', clearDateFilter);
-    if (el.dateFilterModal) el.dateFilterModal.addEventListener('click', e => { if (e.target === el.dateFilterModal) closeDateFilterModal(); });
-  }
+  /* ── Top Date Picker ── */
 
   function bindTopDate() {
     const btn = el.topDateBtn;
@@ -3077,7 +3035,6 @@
       }
       if (e.key === 'Escape') {
         if (el.hardRefreshModal && el.hardRefreshModal.classList.contains('open')) closeHardRefreshModal();
-        else if (el.dateFilterModal && el.dateFilterModal.classList.contains('open')) closeDateFilterModal();
         else if (el.sourceModal.classList.contains('open')) closeSourceModal();
         else if (el.articleModal.classList.contains('open')) closeArticleModal();
         else if (el.modal.classList.contains('open')) closeSettings();
@@ -4004,7 +3961,6 @@
     bindActivity();
     bindArticleClicks();
     bindFeedControls();
-    bindDateToggle();
     bindTopDate();
     bindSourcesConfig();
     bindAiRankBtn();
