@@ -486,6 +486,9 @@
     const aiBadgeHtml = article._aiBoost
       ? '<span class="ai-badge" title="AI boosted">AI</span>'
       : '';
+    const aiRankedKicker = article._aiRanked
+      ? '<div class="ai-ranked-kicker"><span class="ark-sparkle">✦</span> AI Ranked</div>'
+      : '';
 
     const ad = getArticleData(article.link);
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
@@ -497,6 +500,7 @@
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
         thumbHtml +
         '<div class="article-body">' +
+          aiRankedKicker +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
           '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
@@ -612,7 +616,10 @@
     html += '<div class="reels-overlay">' +
         '<div class="reels-count-row">' +
           '<span class="reels-count"></span>' +
-          '<span class="reels-mode-badge"></span>' +
+          '<div class="reels-badges">' +
+            '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI Ranked</span>' +
+            '<span class="reels-mode-badge"></span>' +
+          '</div>' +
         '</div>' +
         '<h2 class="reels-title"></h2>' +
         '<div class="reels-meta">' +
@@ -685,6 +692,8 @@
       modeBadge.classList.toggle('mode-top', isTop);
       modeBadge.classList.toggle('mode-live', !isTop);
     }
+    const aiRankedEl = cardEl.querySelector('.reels-ai-ranked');
+    if (aiRankedEl) aiRankedEl.classList.toggle('visible', !!article._aiRanked);
     const title = cardEl.querySelector('.reels-title');
     if (title) title.textContent = article.title;
     const source = cardEl.querySelector('.reels-source');
@@ -1324,6 +1333,7 @@
       const ranked = await AI.loadTopList(viewDate, scope, subcat);
       if (ranked) {
         articles = ranked;
+        articles.forEach(a => a._aiRanked = true);
         clearTopListStatus();
       } else {
         const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
@@ -1346,7 +1356,7 @@
             rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
             rankInput = FeedFetcher.sortByDate(rankInput);
             const r = await AI.rankArticles(rankInput, scope, subcat);
-            if (r) { articles = r; rankOk = true; }
+            if (r) { articles = r; articles.forEach(a => a._aiRanked = true); rankOk = true; }
           } catch (e) {
             console.warn('AI ranking failed:', e);
             if (e.message && e.message.includes('rate limited')) showAiRateLimitModal();

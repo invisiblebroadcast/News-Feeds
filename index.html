@@ -133,12 +133,6 @@
       <div class="loading-spinner"></div>
       <p>Loading news feeds&hellip;</p>
     </div>
-    <div id="processing-overlay" class="processing-hidden" aria-live="polite">
-      <div class="processing-card">
-        <div class="processing-spinner"></div>
-        <div id="processing-text" class="processing-text">Loading…</div>
-      </div>
-    </div>
   </main>
 
   <div class="bottom-bar collapsed" id="bottom-bar">
@@ -590,6 +584,16 @@
         <button type="button" class="btn btn-primary" id="change-avatar-upload-btn" style="width:100%;justify-content:center;padding:10px;margin-top:8px;" disabled>Upload</button>
         <div id="change-avatar-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="processing-overlay" class="processing-hidden" aria-live="polite">
+    <div class="processing-card">
+      <div class="processing-spinner-wrap">
+        <div class="processing-spinner"></div>
+        <div class="processing-sparkle" aria-hidden="true">✦</div>
+      </div>
+      <div id="processing-text" class="processing-text">Loading…</div>
     </div>
   </div>
 
