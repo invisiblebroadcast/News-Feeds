@@ -1826,8 +1826,7 @@
         setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
         if (i > 0) await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
         try {
-          const result = await AI.rankArticles(articles, scope, subcat);
-          console.log('[seed]', scope + '/' + subcat, '— saved:', !!result, 'date:', date);
+          await AI.rankArticles(articles, scope, subcat);
         } catch (e) {
           console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
         }
