@@ -61,6 +61,7 @@
     searchToggle: $('#search-toggle'),
     filterToggle: $('#filter-btn'),
     sortBtn: $('#sort-btn'),
+    aiRankBtn: $('#ai-rank-btn'),
     filterPanel: $('#filter-panel'),
     sortPanel: $('#sort-panel'),
     viewToggle: $('#view-toggle'),
@@ -1749,6 +1750,26 @@
       el.sourcesConfigSearch.addEventListener('input', () => {
         subsConfigFilter = el.sourcesConfigSearch.value;
         renderSourcesConfigTable();
+      });
+    }
+  }
+
+  function bindAiRankBtn() {
+    if (el.aiRankBtn) {
+      el.aiRankBtn.addEventListener('click', async () => {
+        if (seedPromise) return; // already running
+        el.aiRankBtn.disabled = true;
+        // Reset the seed promise so rankAllCombos can run a fresh batch.
+        seedPromise = null;
+        try {
+          await rankAllCombos();
+        } catch (e) {
+          console.warn('Manual rank failed:', e);
+        } finally {
+          el.aiRankBtn.disabled = false;
+          // If we're in top mode, refresh the view so newly-saved rankings show.
+          if (currentMode === 'top') displayCurrentSubcat();
+        }
       });
     }
   }
@@ -3927,6 +3948,7 @@
     bindDateToggle();
     bindTopDate();
     bindSourcesConfig();
+    bindAiRankBtn();
     await renderContent();
 
     // Start periodic auto-refresh — fetches silently in the background
