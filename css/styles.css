@@ -2765,3 +2765,38 @@ body.cards-view {
 
 @keyframes ai-spin { to { transform: rotate(360deg); } }
 
+#ai-ranking-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  pointer-events: none;
+}
+#ai-ranking-overlay.ai-overlay-hidden { display: none; }
+#ai-ranking-overlay .ai-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+#ai-ranking-overlay .ai-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+#ai-ranking-overlay #ai-ranking-text {
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: #fff;
+}
+

@@ -1775,7 +1775,9 @@
         // Reset the seed promise so rankAllCombos can run a fresh batch.
         seedPromise = null;
         try {
-          await rankAllCombos();
+          // force=true: rank every scope/subcat combo regardless of whether
+          // today's data already exists.
+          await rankAllCombos(true);
         } catch (e) {
           console.warn('Manual rank failed:', e);
         } finally {
@@ -1798,7 +1800,7 @@
     return parseInt(ist, 10);
   }
 
-  async function rankAllCombos() {
+  async function rankAllCombos(force = false) {
     if (seedPromise) return seedPromise;
     seedPromise = (async () => {
       const scopes = ['global', 'nation'];
@@ -1831,12 +1833,14 @@
         }
 
         for (const subcat of subs) {
-          const [hasToday, hasYesterday] = await Promise.all([
-            AI.loadTopList(today, scope, subcat),
-            AI.loadTopList(yesterday, scope, subcat)
-          ]);
-          if (hasToday) continue;
-          if (!pastCutoff && hasYesterday) continue; // wait for 8 PM
+          if (!force) {
+            const [hasToday, hasYesterday] = await Promise.all([
+              AI.loadTopList(today, scope, subcat),
+              AI.loadTopList(yesterday, scope, subcat)
+            ]);
+            if (hasToday) continue;
+            if (!pastCutoff && hasYesterday) continue; // wait for 8 PM
+          }
           let articles;
           if (subcat === 'all') {
             articles = [];
@@ -1854,16 +1858,22 @@
 
       if (!work.length) { clearTopListStatus(); return; }
 
-      setTopListStatus('AI ranking 1 / ' + work.length + '…');
-      for (let i = 0; i < work.length; i++) {
-        const { scope, subcat, articles, date } = work[i];
-        setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
-        if (i > 0) await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
-        try {
-          await AI.rankArticles(articles, scope, subcat);
-        } catch (e) {
-          console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
-        }
+      // Process in parallel batches of 3 with a small gap so we stay well under
+      // Gemini's free-tier rate limit (15 RPM = 1 call per 4s, so 3 parallel
+      // every ~3s keeps us around 1/s on average).
+      const BATCH = 3;
+      const GAP_MS = 1000;
+      let done = 0;
+      for (let i = 0; i < work.length; i += BATCH) {
+        const slice = work.slice(i, i + BATCH);
+        setTopListStatus('AI ranking ' + (done + 1) + '–' + Math.min(done + slice.length, work.length) + ' / ' + work.length);
+        await Promise.allSettled(slice.map(item =>
+          AI.rankArticles(item.articles, item.scope, item.subcat)
+            .then(() => console.log('[rank] saved', item.scope + '/' + item.subcat))
+            .catch(e => console.warn('Rank failed for ' + item.scope + '/' + item.subcat + ':', e))
+        ));
+        done += slice.length;
+        if (done < work.length) await new Promise(r => setTimeout(r, GAP_MS));
       }
       clearTopListStatus();
     })();
@@ -3046,7 +3056,7 @@
     const ov = $('#ai-ranking-overlay');
     const tx = $('#ai-ranking-text');
     if (ov) {
-      ov.style.display = 'flex';
+      ov.classList.remove('ai-overlay-hidden');
       console.log('[overlay] shown:', text);
     } else {
       console.warn('[overlay] element not found');
@@ -3057,7 +3067,7 @@
     const ov = $('#ai-ranking-overlay');
     const tx = $('#ai-ranking-text');
     if (ov) {
-      ov.style.display = 'none';
+      ov.classList.add('ai-overlay-hidden');
       console.log('[overlay] hidden');
     }
     if (tx) tx.textContent = 'AI ranking…';
