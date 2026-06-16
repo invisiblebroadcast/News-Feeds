@@ -1754,6 +1754,8 @@
     const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
+    // First pass: count work to do so we can show "X / Y" progress.
+    const work = [];
     for (const scope of scopes) {
       const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
       const feeds = FeedManager.getFeeds(scope, nation);
@@ -1786,15 +1788,26 @@
         if (articles.length < 5) continue;
         const date = AI.todayStr();
         if (await AI.needsRanking(date, scope, subcat)) {
-          await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
-          try {
-            await AI.rankArticles(articles, scope, subcat);
-          } catch (e) {
-            console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
-          }
+          work.push({ scope, subcat, articles, date });
         }
       }
     }
+
+    if (!work.length) { clearTopListStatus(); return; }
+
+    setTopListStatus('AI ranking 1 / ' + work.length + '…');
+    for (let i = 0; i < work.length; i++) {
+      const { scope, subcat, articles, date } = work[i];
+      setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
+      if (i > 0) await new Promise(r => setTimeout(r, 1000)); // throttle to avoid rate limits
+      try {
+        const result = await AI.rankArticles(articles, scope, subcat);
+        console.log('[seed]', scope + '/' + subcat, '— saved:', !!result, 'date:', date);
+      } catch (e) {
+        console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
+      }
+    }
+    clearTopListStatus();
   }
 
   function startRankScheduler() {
@@ -2968,7 +2981,7 @@
 
   function setTopListStatus(text) {
     const el2 = $('#ai-top-status');
-    if (el2) { el2.textContent = text; el2.style.display = 'inline'; }
+    if (el2) { el2.textContent = text; el2.style.display = 'block'; }
   }
   function clearTopListStatus() {
     const el2 = $('#ai-top-status');
