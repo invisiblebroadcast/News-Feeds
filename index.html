@@ -148,10 +148,6 @@
       </div>
     </div>
     <nav class="tab-bar top-tab-bar" id="top-tab-bar">
-      <ul class="tab-list" id="top-tab-list">
-        <li class="tab-item active" data-scope="global">Global</li>
-        <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-      </ul>
       <div class="lang-select" style="flex-shrink:0;">
         <select id="lang-select" title="Translate">
           <option value="en">EN</option>
@@ -168,13 +164,19 @@
           <option value="pt">PT</option>
         </select>
       </div>
+      <ul class="tab-list" id="top-tab-list">
+        <li class="tab-item active" data-scope="global">Global</li>
+        <li class="tab-item" data-scope="nation" data-nation="india">India</li>
+      </ul>
+      <div class="tab-bar-right">
+        <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
+          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-btn" title="Sort">
+          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
+        </button>
+      </div>
       <div id="ai-top-status" style="display:none;"></div>
-      <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
-        <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
-      </button>
-      <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-btn" title="Sort">
-        <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
-      </button>
     </nav>
     <!-- Search row -->
     <div class="bottom-view-row">

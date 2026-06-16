@@ -699,7 +699,16 @@ body.cards-view .app-footer {
 #top-tab-bar {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
+  justify-content: flex-start; /* override .bottom-bar .top-tab-bar space-between */
+}
+#top-tab-bar .tab-list {
+  margin: 0 auto; /* center Global/India between the left translate and the right tools */
+}
+#top-tab-bar .tab-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 #top-tab-bar .view-toggle {
   margin-left: auto;
