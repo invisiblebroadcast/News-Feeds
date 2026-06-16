@@ -1430,11 +1430,10 @@
 
       if (currentRankType === 'keyword') {
         // Keyword ranking: compute on-the-fly from cached articles.
-        // No Supabase, no API call. We still show the loading overlay for
-        // ~500ms so the user gets the "ranking…" feedback with blurred bg.
+        // No Supabase, no API call. Uses the ENTIRE cached pool — no date
+        // filter, whatever is in the RSS feeds gets ranked.
         setTopListStatus('Ranking by keywords…');
         const t0 = Date.now();
-        const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
         let rankInput;
         if (subcat === 'all') {
           rankInput = [];
@@ -1443,7 +1442,6 @@
           rankInput = cached.groups[subcat] || [];
         }
         rankInput = FeedFetcher.deduplicate(rankInput);
-        rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
         rankInput = FeedFetcher.sortByDate(rankInput);
         const r = await AI.rankByKeywords(rankInput, scope, subcat);
         if (r && r.length) {
