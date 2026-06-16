@@ -2,11 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#000000">
-  <meta name="description" content="Global & Local News Aggregator">
-  <title>News-Feeds</title>
-  <link rel="stylesheet" href="css/styles.css?v=27">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ff2929" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ff2929">
+  <meta name="description" content="Invisible Broadcast — Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
+  <meta name="application-name" content="Invisible Broadcast">
+  <meta name="apple-mobile-web-app-title" content="Invisible Broadcast">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-TileColor" content="#ff2929">
+
+  <!-- PWA manifest + icons -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" media="(prefers-color-scheme: light)">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" media="(prefers-color-scheme: dark)">
+  <link rel="mask-icon" href="icons/icon.svg" color="#ff2929">
+
+  <!-- Open Graph / social media preview -->
+  <meta property="og:title" content="Invisible Broadcast">
+  <meta property="og:description" content="Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/social-2000x3000.png">
+  <meta property="og:image:width" content="2000">
+  <meta property="og:image:height" content="3000">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Invisible Broadcast">
+  <meta name="twitter:description" content="Global & Local News Aggregator.">
+  <meta name="twitter:image" content="icons/social-2000x3000.png">
+
+  <title>Invisible Broadcast</title>
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
@@ -603,14 +633,26 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=27"></script>
-  <script src="js/supabase-store.js?v=27"></script>
-  <script src="js/feeds.js?v=27"></script>
-  <script src="js/fetcher.js?v=27"></script>
-  <script src="js/translator.js?v=27"></script>
-  <script src="js/gemini-key.js?v=27"></script>
-  <script src="js/analyzer.js?v=27"></script>
-  <script src="js/ai.js?v=27"></script>
-  <script src="js/app.js?v=27"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/supabase-store.js"></script>
+  <script src="js/feeds.js"></script>
+  <script src="js/fetcher.js"></script>
+  <script src="js/translator.js"></script>
+  <script src="js/gemini-key.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Register the service worker for PWA install + offline app shell.
+    // Service workers require HTTPS (or localhost) so the registration
+    // is a no-op when served from file:// in some browsers; that's fine.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

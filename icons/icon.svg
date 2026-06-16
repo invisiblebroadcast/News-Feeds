@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Invisible Broadcast (IB) logo — vector source.
+  Brand colors:
+    red    = #ff2929  (app accent)
+    dark   = #0a0a0f  (app background-secondary)
+    white  = #ffffff  (icon foreground)
+  This SVG is the canonical source; the PNGs in /icons/ are rasterised
+  copies. Edit here, re-rasterise, don't hand-edit the PNGs.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Invisible Broadcast">
+  <!-- Rounded square background, matches the in-app .logo-icon pill -->
+  <rect width="512" height="512" rx="96" ry="96" fill="#ff2929"/>
+  <!-- "IB" monogram, centred.  The viewBox is 512x512; the letters are
+       roughly 180px tall, weight ~700 to match the in-app typography. -->
+  <g fill="#ffffff" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="800" font-size="200" text-anchor="middle">
+    <text x="256" y="220" letter-spacing="-6">IB</text>
+  </g>
+</svg>

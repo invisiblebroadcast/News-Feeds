@@ -1,0 +1,57 @@
+{
+  "name": "Invisible Broadcast",
+  "short_name": "IB",
+  "description": "Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.",
+  "id": "/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0f",
+  "theme_color": "#ff2929",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["news", "magazines"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Top AI",
+      "short_name": "Top AI",
+      "description": "Show the AI-ranked top stories for today",
+      "url": "./?mode=top&rank=ai"
+    },
+    {
+      "name": "Top Keyword",
+      "short_name": "Top KW",
+      "description": "Show the deterministic keyword-ranked top stories",
+      "url": "./?mode=top&rank=keyword"
+    },
+    {
+      "name": "Conflicts",
+      "short_name": "Conflicts",
+      "description": "Browse cross-source conflicts in the latest articles",
+      "url": "./?scope=conflicts"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": { "preferred_width": 480 }
+}
