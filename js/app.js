@@ -1315,6 +1315,8 @@
       const subcat = currentSubcat;
       const settings = Settings.load();
       const viewDate = settings.topDate || today;
+      // Reset the rate-limit modal flag for this top-mode entry.
+      resetRateLimitFlag();
 
       const ranked = await AI.loadTopList(viewDate, scope, subcat);
       if (ranked) {
@@ -1344,6 +1346,7 @@
             if (r) { articles = r; rankOk = true; }
           } catch (e) {
             console.warn('AI ranking failed:', e);
+            if (e.message && e.message.includes('rate limited')) showAiRateLimitModal();
           }
           if (rankOk) {
             clearTopListStatus();
@@ -1774,6 +1777,7 @@
         el.aiRankBtn.disabled = true;
         // Reset the seed promise so rankAllCombos can run a fresh batch.
         seedPromise = null;
+        resetRateLimitFlag();
         // Show the overlay IMMEDIATELY so the user gets instant feedback.
         setTopListStatus('Preparing…');
         try {
@@ -1873,6 +1877,11 @@
           console.log('[rank] saved', scope + '/' + subcat);
         } catch (e) {
           console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
+          if (e.message && e.message.includes('rate limited')) {
+            showAiRateLimitModal();
+            // Stop the batch — no point hammering the API while it's limited.
+            break;
+          }
         }
       }
       clearTopListStatus();
@@ -3065,6 +3074,27 @@
     if (ov) ov.classList.add('ai-overlay-hidden');
   }
 
+  // Show the rate-limit modal at most once per "session" (one click or one
+  // top-mode entry). The user dismisses it; subsequent 429s during the same
+  // run are silent (logged only).
+  let rateLimitModalShown = false;
+  function showAiRateLimitModal() {
+    if (rateLimitModalShown) return;
+    rateLimitModalShown = true;
+    const m = $('#ai-rate-limit-modal');
+    if (m) m.classList.add('open');
+  }
+  function resetRateLimitFlag() { rateLimitModalShown = false; }
+  function bindAiRateLimitModal() {
+    const m = $('#ai-rate-limit-modal');
+    if (!m) return;
+    const close = $('#ai-rate-limit-modal-close');
+    const ok = $('#ai-rate-limit-modal-ok');
+    if (close) close.addEventListener('click', () => m.classList.remove('open'));
+    if (ok) ok.addEventListener('click', () => m.classList.remove('open'));
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+  }
+
   /* ── Auth ── */
   let currentUser = null;
   let authMode = 'signin'; // 'signin' or 'signup'
@@ -3974,6 +4004,7 @@
     bindTopDate();
     bindSourcesConfig();
     bindAiRankBtn();
+    bindAiRateLimitModal();
     await renderContent();
 
     // Start periodic auto-refresh — fetches silently in the background

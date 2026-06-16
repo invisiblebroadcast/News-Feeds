@@ -77,6 +77,10 @@ const AI = (() => {
           await sleep(wait);
           continue;
         }
+        if (res.status === 429) {
+          // Exhausted retries — surface as a clean, detectable error.
+          throw new Error('AI rate limited — please try later');
+        }
         if (!res.ok) {
           let detail = '';
           try { detail = (await res.text()).slice(0, 300); } catch {}
@@ -205,6 +209,8 @@ const AI = (() => {
       console.log('[AI] response received, length:', text.length, 'preview:', text.slice(0, 80));
     } catch (e) {
       console.warn('[AI] complete() failed:', e.message);
+      // Rethrow rate limit errors so the caller can show a modal.
+      if (e.message && e.message.includes('rate limited')) throw e;
       if (onProgress) onProgress({ step: 'error', text: e.message || 'Ranking failed' });
       return null;
     }
@@ -251,10 +257,29 @@ const AI = (() => {
     result.sort((a, b) => b.score - a.score);
     result.forEach((r, i) => r.rank = i + 1);
 
-    // Keep only top 25
-    result.splice(25);
+    // Keep only top 25. If the ranked list is shorter than 25 (truncated
+    // response or too few candidates), backfill with the most recent articles
+    // from the full input that weren't already ranked.
+    let final = result.slice(0, 25);
+    if (final.length < 25) {
+      const usedUrls = new Set(final.map(a => a.url));
+      const remaining = articles.filter(a => !usedUrls.has(a.link || a._url || ''));
+      remaining.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+      for (let i = 0; final.length < 25 && i < remaining.length; i++) {
+        const a = remaining[i];
+        final.push({
+          rank: final.length + 1,
+          title: (a.title || '').trim(),
+          url: a.link || a._url || '',
+          source: a.source || '',
+          pubDate: a.pubDate || null,
+          summary: stripHtml(a.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+          score: 0
+        });
+      }
+    }
 
-    const saved = await upsertTopList(date, scope, subcat, result);
+    const saved = await upsertTopList(date, scope, subcat, final);
     if (!saved) {
       if (onProgress) onProgress({ step: 'error', text: 'Failed to save ranking to cloud' });
       console.warn('AI rankArticles: Supabase save failed for', scope, subcat, date);
@@ -263,7 +288,7 @@ const AI = (() => {
 
     if (onProgress) onProgress({ step: 'done', text: saved ? 'Ranking complete' : 'Ranking saved locally' });
 
-    return result;
+    return final;
   }
 
   /* ── Check if today's ranking exists ── */
