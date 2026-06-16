@@ -5010,6 +5010,11 @@
 
     currentNation = FeedManager.getSelectedNation();
     await SupabaseStore.load();
+    // Resume any article-archive queue from a previous session.
+    // This must happen AFTER SupabaseStore is ready (the archive
+    // uses SupabaseStore.getClient()) and after FeedManager is
+    // loaded (the archive looks up feed lang by URL).
+    if (window.ArticleArchive && ArticleArchive.init) ArticleArchive.init();
     bindAuth();
 
     renderTopTabs();

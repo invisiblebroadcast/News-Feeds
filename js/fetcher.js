@@ -276,11 +276,23 @@ const FeedFetcher = (() => {
   // exhaustion, not a problem with the source. proxyFetchPaginated
   // therefore returns its first page's count for the result, and
   // anything with at least one item is a success.
+  //
+  // On success, also hand every parsed article to ArticleArchive so
+  // it ends up in the Supabase `seen_articles` table for analysis
+  // (cross-source conflict detection, dedup ratios, per-source
+  // volume, etc). The archive is fire-and-forget — we don't await
+  // the Supabase write so the UI render is never blocked by it.
   function afterFetch(feed, items, err) {
     if (!window.SourceHealth || !feed || !feed.url) return;
     const ok = Array.isArray(items) && items.length > 0;
-    if (ok) SourceHealth.recordSuccess(feed.url);
-    else SourceHealth.recordFailure(feed.url, err || new Error('No items returned'));
+    if (ok) {
+      SourceHealth.recordSuccess(feed.url);
+      if (window.ArticleArchive) {
+        for (const a of items) ArticleArchive.ingest(a, feed.lang);
+      }
+    } else {
+      SourceHealth.recordFailure(feed.url, err || new Error('No items returned'));
+    }
   }
 
   function filterByDate(articles, dateFrom, dateTo) {

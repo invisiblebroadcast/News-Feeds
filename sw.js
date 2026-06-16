@@ -1,26 +1,34 @@
 /* Invisible Broadcast — service worker
  *
  * Strategy:
- *   - App shell (HTML, CSS, JS, icons, manifest) is pre-cached on install
- *     and served cache-first. This makes the install prompt reliable and
- *     lets the app launch offline (with an empty feed).
+ *   - App shell (HTML, CSS, JS, icons, manifest, feeds.json) is
+ *     pre-cached on install and served cache-first. This makes the
+ *     install prompt reliable and lets the app launch offline (with
+ *     whatever feed list was bundled at install time).
  *   - External requests (RSS, CORS proxies, rss2json, Supabase, Gemini)
  *     are network-only. We don't try to cache feed data because it's
  *     time-sensitive and large. Network failures fall through to the
  *     shell so the user at least sees the UI with the existing cache.
  *
- * Bump CACHE_VERSION whenever the app shell changes (HTML/CSS/JS) so
- * the activate step can clean up the old cache and re-fetch.
+ * Bump CACHE_VERSION whenever the app shell changes (HTML/CSS/JS or
+ * feeds.json with new sources) so the activate step can clean up
+ * the old cache and re-fetch. feeds.json is included in the shell
+ * deliberately — when we add new global sources we want the next
+ * app launch to pick them up immediately, not after the user
+ * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v2';
+const CACHE_VERSION = 'ib-v3';
 const SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './data/feeds.json',
   './css/styles.css',
   './js/settings.js',
+  './js/source-health.js',
   './js/supabase-store.js',
   './js/feeds.js',
+  './js/article-archive.js',
   './js/fetcher.js',
   './js/translator.js',
   './js/gemini-key.js',
