@@ -1805,6 +1805,183 @@ body.cards-view {
   white-space: nowrap;
 }
 
+/* Conflict (cross-source disagreement) indicators. */
+.conflict-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ff922b;
+  background: rgba(255, 146, 43, 0.12);
+  border: 1px solid rgba(255, 146, 43, 0.4);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  width: fit-content;
+  cursor: pointer;
+  user-select: none;
+  text-shadow: 0 0 8px rgba(255, 146, 43, 0.3);
+}
+.conflict-kicker:hover { background: rgba(255, 146, 43, 0.2); }
+.conflict-kicker .ck-warn {
+  font-size: 0.95rem;
+  font-weight: 800;
+  display: inline-block;
+  animation: ark-pulse 1.6s ease-in-out infinite;
+}
+.conflict-details {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.conflict-details.expanded {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.conflict-details .cd-row { line-height: 1.5; }
+.conflict-details .cd-value {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.conflict-details .cd-metric {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.conflict-details .cd-metric em {
+  color: var(--accent);
+  font-style: normal;
+}
+.conflict-details .cd-src {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.conflict-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 4px;
+  color: #ff922b;
+  background: rgba(255, 146, 43, 0.12);
+  border: 1px solid rgba(255, 146, 43, 0.4);
+  white-space: nowrap;
+}
+
+/* Reels-view conflict badge (in the top badge row) */
+.reels-conflict {
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ff922b;
+  background: rgba(255, 146, 43, 0.14);
+  border: 1px solid rgba(255, 146, 43, 0.4);
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-shadow: 0 0 6px rgba(255, 146, 43, 0.3);
+}
+.reels-conflict .rc-warn {
+  font-size: 0.9rem;
+  font-weight: 800;
+  animation: ark-pulse 1.6s ease-in-out infinite;
+}
+
+/* Reels-view conflict panel (between meta and summary) */
+.reels-conflict-panel {
+  margin: 8px 0 4px 0;
+  padding: 10px 12px;
+  background: rgba(255, 146, 43, 0.08);
+  border: 1px solid rgba(255, 146, 43, 0.35);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.reels-conflict-panel .rcp-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #ff922b;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.reels-conflict-panel .rcp-warn {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+.reels-conflict-panel .rcp-row { line-height: 1.5; margin-top: 2px; }
+.reels-conflict-panel .rcp-metric {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.reels-conflict-panel .rcp-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+.reels-conflict-panel .rcp-sources {
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin: 0 4px;
+}
+
+/* Article modal "Other sources report" section */
+#article-modal-conflicts {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+#article-modal-conflicts .amc-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ff922b;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+#article-modal-conflicts .amc-warn {
+  font-size: 1rem;
+  font-weight: 800;
+}
+#article-modal-conflicts .amc-body { display: flex; flex-direction: column; gap: 10px; }
+#article-modal-conflicts .amc-row { line-height: 1.5; }
+#article-modal-conflicts .amc-metric {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+#article-modal-conflicts .amc-value-group {
+  padding: 3px 0 3px 8px;
+  border-left: 2px solid rgba(255, 146, 43, 0.4);
+  margin-top: 2px;
+}
+#article-modal-conflicts .amc-value {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 4px;
+}
+#article-modal-conflicts .amc-sources {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
 .reels-flag {
   font-size: 0.6rem;
   font-weight: 700;

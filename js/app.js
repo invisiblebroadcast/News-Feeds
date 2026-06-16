@@ -531,11 +531,43 @@
     const dislikeCount = ad.dislikeCount || 0;
     const commentCount = (ad.comments && ad.comments.length) || 0;
 
+    // Conflict kicker: when this article is part of a cluster with
+    // different reported facts (numbers, scores, etc.), show a warning
+    // kicker and an expandable "Other sources report" panel.
+    let conflictBlock = '';
+    if (article._conflicts && article._conflicts.isConflicting) {
+      const c = article._conflicts;
+      conflictBlock =
+        '<div class="conflict-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false" title="' + escAttr('Conflicting reports — click for details') + '">' +
+          '<span class="ck-warn">⚠</span> Conflicting reports · ' + c.clusterSize + ' sources' +
+        '</div>' +
+        '<div class="conflict-details ranked-details" aria-hidden="true">' +
+          c.conflicts.map(group => {
+            // Claim conflicts: show "X verb: source1 vs source2" format.
+            if (group.metric === 'claim') {
+              const subjectLabel = group.subject ? 'About <em>' + escHtml(group.subject) + '</em>:' : 'Claim:';
+              const parts = group.detail.map(g =>
+                '<span class="cd-value">' + escHtml(g.value) + '</span>' +
+                '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>'
+              ).join(' vs ');
+              return '<div class="cd-row"><span class="cd-metric">' + subjectLabel + '</span> ' + parts + '</div>';
+            }
+            // Numeric conflicts: keep the original "metric: value (sources)" format.
+            const lines = group.detail.map(g =>
+              '<span class="cd-value">' + escHtml(group.metric) + ': ' + escHtml(g.value) + '</span>' +
+              '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>'
+            ).join(' ');
+            return '<div class="cd-row">' + lines + '</div>';
+          }).join('') +
+        '</div>';
+    }
+
     return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
         thumbHtml +
         '<div class="article-body">' +
           rankedBlock +
+          conflictBlock +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
           '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
@@ -544,6 +576,9 @@
             rankHtml +
             aiBadgeHtml +
             flagHtml +
+            (article._conflicts && article._conflicts.isConflicting
+              ? '<span class="conflict-pill" title="Conflicting reports across sources">⚠ conflicting</span>'
+              : '') +
           '</div>' +
           '<div class="card-actions">' +
             '<button class="card-action-btn card-like-btn ' + (ad.like ? 'active' : '') + '" data-article="' + encoded + '" title="Like">' +
@@ -654,6 +689,7 @@
           '<div class="reels-badges">' +
             '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI · <span class="rk-num"></span></span>' +
             '<span class="reels-kw-ranked"><span class="krk-hash">#</span> Trending · <span class="rk-num"></span></span>' +
+            '<span class="reels-conflict" style="display:none"><span class="rc-warn">⚠</span> Conflict</span>' +
             '<span class="reels-mode-badge"></span>' +
           '</div>' +
         '</div>' +
@@ -663,6 +699,10 @@
           '<span class="reels-date"></span>' +
           '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
+        '</div>' +
+        '<div class="reels-conflict-panel" style="display:none">' +
+          '<div class="rcp-header"><span class="rcp-warn">⚠</span> Conflicting reports</div>' +
+          '<div class="rcp-body"></div>' +
         '</div>' +
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
         '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
@@ -747,6 +787,33 @@
       liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
       const n = liveTrendingEl.querySelector('.rk-num');
       if (n) n.textContent = show ? article._trendingCount : '';
+    }
+    const conflictBadge = cardEl.querySelector('.reels-conflict');
+    const conflictPanel = cardEl.querySelector('.reels-conflict-panel');
+    const conflictBody = cardEl.querySelector('.rcp-body');
+    if (conflictBadge) {
+      const has = !!(article._conflicts && article._conflicts.isConflicting);
+      conflictBadge.style.display = has ? 'inline-flex' : 'none';
+    }
+    if (conflictPanel && conflictBody) {
+      const c = article._conflicts;
+      if (c && c.isConflicting) {
+        conflictBody.innerHTML = c.conflicts.map(group => {
+          const label = group.metric === 'claim'
+            ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
+            : escHtml(group.metric);
+          return '<div class="rcp-row">' +
+            '<span class="rcp-metric">' + label + ':</span> ' +
+            group.detail.map(g =>
+              '<span class="rcp-value">' + escHtml(g.value) + '</span>' +
+              '<span class="rcp-sources">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>'
+            ).join(' vs ') +
+          '</div>';
+        }).join('');
+        conflictPanel.style.display = 'block';
+      } else {
+        conflictPanel.style.display = 'none';
+      }
     }
     const title = cardEl.querySelector('.reels-title');
     if (title) title.textContent = article.title;
@@ -1410,6 +1477,8 @@
     }
   }
 
+  /* ── (no demo helpers) ── */
+
   async function displayCurrentSubcat() {
     const key = scopeKey();
     const cached = scopeCache[key];
@@ -1538,6 +1607,20 @@
       if (Array.isArray(cached.groups[cat])) fullCorpus.push(...cached.groups[cat]);
     }
     AI.computeTrendingInfo(articles, fullCorpus);
+
+    // Detect conflicting stories (same event, different facts) within the
+    // current article pool. The result is attached to each article as
+    // `._conflicts` so the card / reels view / article modal can surface a
+    // badge and an "Other sources report" panel.
+    try {
+      const conflictMap = AI.detectConflicts(articles);
+      for (const a of articles) {
+        const c = conflictMap.get(a.link);
+        if (c) a._conflicts = c;
+      }
+    } catch (e) {
+      console.warn('Conflict detection failed:', e);
+    }
 
     try {
       await renderTranslated(articles);
@@ -2497,6 +2580,43 @@
     el.articleModalRead.dataset.url = article.link;
     el.articleModalExt.dataset.url = article.link;
 
+    // Render the "Other sources report" panel inside the article modal.
+    // It's a sibling of #article-modal-summary and is empty unless this
+    // article is part of a cluster with conflicting facts (numeric OR
+    // claim/narrative).
+    const conflictSection = $('#article-modal-conflicts');
+    if (conflictSection) {
+      const c = article._conflicts;
+      if (c && c.isConflicting) {
+        const hasClaims = c.conflicts.some(g => g.metric === 'claim');
+        const headerText = hasClaims && c.conflicts.every(g => g.metric === 'claim')
+          ? 'Other sources report conflicting claims'
+          : 'Other sources report different figures or claims';
+        conflictSection.innerHTML =
+          '<div class="amc-header"><span class="amc-warn">⚠</span> ' + headerText + '</div>' +
+          '<div class="amc-body">' +
+            c.conflicts.map(group => {
+              const metricLabel = group.metric === 'claim'
+                ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
+                : escHtml(group.metric);
+              return '<div class="amc-row">' +
+                '<div class="amc-metric">' + metricLabel + '</div>' +
+                group.detail.map(g =>
+                  '<div class="amc-value-group">' +
+                    '<span class="amc-value">' + escHtml(g.value) + '</span>' +
+                    '<span class="amc-sources">— ' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + '</span>' +
+                  '</div>'
+                ).join('') +
+              '</div>';
+            }).join('') +
+          '</div>';
+        conflictSection.style.display = 'block';
+      } else {
+        conflictSection.style.display = 'none';
+        conflictSection.innerHTML = '';
+      }
+    }
+
     const ad = getArticleData(article.link);
     const flagEl = $('#article-modal-flag');
     // Like / Dislike buttons in article modal
@@ -2567,6 +2687,16 @@
     const cached = scopeCache[key];
     if (!cached) return;
     const articles = getFilteredArticles(currentSubcat, cached);
+    // Re-run conflict detection on the filtered list so cards keep their
+    // badges after search / source filter / sort changes.
+    try {
+      const conflictMap = AI.detectConflicts(articles);
+      for (const a of articles) {
+        const c = conflictMap.get(a.link);
+        if (c) a._conflicts = c;
+        else delete a._conflicts;
+      }
+    } catch (e) { /* keep stale badges silently */ }
     renderTranslated(articles);
   }
 

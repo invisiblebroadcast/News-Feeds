@@ -338,8 +338,9 @@ const AI = (() => {
   }
 
   /**
-   * Rank articles by alarming-keyword weight + repetitive/trending keyword
-   * frequency. Deterministic, free, and instant — no LLM or Supabase.
+   * Rank articles using the deterministic Analyzer (TF-IDF + recency + buzz
+   * + source authority). No LLM, no Supabase, no API calls — runs entirely
+   * in the browser and adapts to the current corpus each time.
    *
    * @param {Array} articles  Pool of articles to rank.
    * @param {string} scope
@@ -350,7 +351,7 @@ const AI = (() => {
    */
   async function rankByKeywords(articles, scope, subcat, onProgress) {
     if (!articles || !articles.length) return null;
-    if (onProgress) onProgress({ step: 'preparing', text: 'Scoring keywords…' });
+    if (onProgress) onProgress({ step: 'preparing', text: 'Analysing corpus…' });
 
     // Deduplicate by normalized title
     const seen = new Set();
@@ -363,58 +364,22 @@ const AI = (() => {
     }
     if (!candidates.length) return null;
 
-    // Build word frequency map (repetitive/trending detection)
-    const wordFreq = new Map();
-    for (const a of candidates) {
-      const text = (a.title || '') + ' ' + (a.summary || '');
-      for (const w of tokenize(text)) {
-        wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
-      }
-    }
+    // Hand off to the Analyzer: TF-IDF × recency × buzz × source authority,
+    // plus a small additive bonus for alarming keywords.
+    const ranked = Analyzer.rankByAnalyzer(candidates);
 
-    // Score each article
-    const scored = candidates.map(a => {
-      const fullText = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
-
-      // Alarming score: sum of weights of matching alarming keywords
-      let alarmingScore = 0;
-      for (const kw in ALARMING_KEYWORDS) {
-        if (fullText.indexOf(kw) !== -1) alarmingScore += ALARMING_KEYWORDS[kw];
-      }
-
-      // Trending (repetitive) score: sum of corpus frequencies of unique
-      // title-words that appear in >1 article. sqrt-scaled so a single very
-      // common word doesn't dominate.
-      const titleWords = new Set(tokenize(a.title || ''));
-      let trendingRaw = 0;
-      for (const w of titleWords) {
-        const f = wordFreq.get(w) || 0;
-        if (f > 1) trendingRaw += f;
-      }
-      const trendingScore = Math.sqrt(trendingRaw) * 2;
-
-      const score = alarmingScore * 3 + trendingScore;
-      return Object.assign({}, a, { _kwScore: score });
-    });
-
-    // Sort by score desc, tiebreak by recency
-    scored.sort((a, b) => {
-      if (b._kwScore !== a._kwScore) return b._kwScore - a._kwScore;
-      return new Date(b.pubDate || 0) - new Date(a.pubDate || 0);
-    });
-
-    // Map to the same shape AI rankings use, top 25
-    let final = scored.slice(0, 25).map((a, i) => ({
+    // Map top 25 into the same shape AI rankings use.
+    let final = ranked.slice(0, 25).map((entry, i) => ({
       rank: i + 1,
-      title: (a.title || '').trim(),
-      url: a.link || a._url || '',
-      source: a.source || '',
-      pubDate: a.pubDate || null,
-      summary: stripHtml(a.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300),
-      score: Math.round(a._kwScore)
+      title: (entry.article.title || '').trim(),
+      url: entry.article.link || entry.article._url || '',
+      source: entry.article.source || '',
+      pubDate: entry.article.pubDate || null,
+      summary: stripHtml(entry.article.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+      score: Math.round(entry.score * 10) / 10
     }));
 
-    // Backfill up to 25 with most-recent unranked articles
+    // Backfill up to 25 with most-recent unranked articles.
     if (final.length < 25) {
       const usedUrls = new Set(final.map(a => a.url));
       const remaining = candidates.filter(a => !usedUrls.has(a.link || a._url || ''));
@@ -433,8 +398,16 @@ const AI = (() => {
       }
     }
 
-    if (onProgress) onProgress({ step: 'done', text: 'Keyword ranking complete' });
+    if (onProgress) onProgress({ step: 'done', text: 'Ranking complete' });
     return final;
+  }
+
+  /**
+   * Detect conflicts among the given articles. Delegates to Analyzer.
+   * Returns a Map<link, {isConflicting, clusterSize, conflicts:[{metric, detail}]}>.
+   */
+  function detectConflicts(articles) {
+    return Analyzer.detectConflicts(articles);
   }
 
   /* ── Check if today's ranking exists ── */
@@ -492,6 +465,7 @@ const AI = (() => {
     getAvailableDates,
     rankArticles,
     rankByKeywords,
+    detectConflicts,
     computeTrendingInfo,
     tokenize
   };
