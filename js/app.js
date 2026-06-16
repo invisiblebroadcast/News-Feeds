@@ -6,6 +6,7 @@
   let currentNation = FeedManager.getSelectedNation();
   let currentSubcat = 'all';
   let currentMode = 'live';
+  let currentRankType = 'ai'; // 'ai' or 'keyword' — only relevant when currentMode === 'top'
   let currentView = 'list';
   let scopeCache = {};
   let isFetching = false;
@@ -59,6 +60,7 @@
     filterToggle: $('#filter-btn'),
     sortBtn: $('#sort-btn'),
     aiRankBtn: $('#ai-rank-btn'),
+    keywordRankBtn: $('#keyword-rank-btn'),
     filterPanel: $('#filter-panel'),
     sortPanel: $('#sort-panel'),
     viewToggle: $('#view-toggle'),
@@ -332,7 +334,7 @@
       if (leftHtml) el.sectionMeta.innerHTML = leftHtml;
     }
     if (el.modeToggle) {
-      $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+      updateModeButtonActive();
     }
     updateViewToggleInNav();
   }
@@ -489,6 +491,9 @@
     const aiRankedKicker = article._aiRanked
       ? '<div class="ai-ranked-kicker"><span class="ark-sparkle">✦</span> AI Ranked</div>'
       : '';
+    const kwRankedKicker = article._kwRanked
+      ? '<div class="kw-ranked-kicker"><span class="krk-hash">#</span> Trending</div>'
+      : '';
 
     const ad = getArticleData(article.link);
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
@@ -501,6 +506,7 @@
         thumbHtml +
         '<div class="article-body">' +
           aiRankedKicker +
+          kwRankedKicker +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
           '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
@@ -618,6 +624,7 @@
           '<span class="reels-count"></span>' +
           '<div class="reels-badges">' +
             '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI Ranked</span>' +
+            '<span class="reels-kw-ranked"><span class="krk-hash">#</span> Trending</span>' +
             '<span class="reels-mode-badge"></span>' +
           '</div>' +
         '</div>' +
@@ -694,6 +701,8 @@
     }
     const aiRankedEl = cardEl.querySelector('.reels-ai-ranked');
     if (aiRankedEl) aiRankedEl.classList.toggle('visible', !!article._aiRanked);
+    const kwRankedEl = cardEl.querySelector('.reels-kw-ranked');
+    if (kwRankedEl) kwRankedEl.classList.toggle('visible', !!article._kwRanked);
     const title = cardEl.querySelector('.reels-title');
     if (title) title.textContent = article.title;
     const source = cardEl.querySelector('.reels-source');
@@ -1173,6 +1182,27 @@
     currentSort = el.sortBy.value;
   }
 
+  function updateModeButtonActive() {
+    if (!el.modeToggle) return;
+    $$('.mode-btn', el.modeToggle).forEach(b => {
+      const match = b.dataset.mode === currentMode &&
+        (currentMode !== 'top' || b.dataset.rankType === currentRankType);
+      b.classList.toggle('active', match);
+    });
+  }
+
+  // Show/hide the IB-block rank action buttons + the date picker.
+  // Sparkle (AI) and date picker → only in top-AI.
+  // Hashtag (keyword) → only in top-keyword.
+  // Live → none of them.
+  function updateRankControls() {
+    const inTopAi = currentMode === 'top' && currentRankType === 'ai';
+    const inTopKw = currentMode === 'top' && currentRankType === 'keyword';
+    if (el.aiRankBtn) el.aiRankBtn.style.display = inTopAi ? 'inline-flex' : 'none';
+    if (el.keywordRankBtn) el.keywordRankBtn.style.display = inTopKw ? 'inline-flex' : 'none';
+    if (el.topDateBtn) el.topDateBtn.style.display = inTopAi ? 'inline-flex' : 'none';
+  }
+
   function bindModeToggle() {
     const toggle = el.modeToggle;
     if (!toggle) return;
@@ -1180,17 +1210,38 @@
       const btn = e.target.closest('.mode-btn');
       if (!btn || btn.classList.contains('active')) return;
       currentMode = btn.dataset.mode;
+      // Both "Top AI" and "Top Keyword" set data-mode="top"; disambiguate
+      // with data-rank-type.
+      if (currentMode === 'top') {
+        currentRankType = btn.dataset.rankType || 'ai';
+      }
       loadedCount = 0;
       liveAllLoaded = false;
       hasFreshBackground = false;
-      $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      if (el.topDateBtn) {
-        el.topDateBtn.style.display = currentMode === 'top' ? 'inline-flex' : 'none';
-      }
+      updateModeButtonActive();
+      updateRankControls();
       updateSortOptions();
       updateStickyHeader();
       displayCurrentSubcat();
+    });
+  }
+
+  // Re-run keyword ranking for the current subcat/scope. Instant (no API),
+  // but we flash the processing overlay so the user gets feedback.
+  function bindKeywordRankBtn() {
+    if (!el.keywordRankBtn) return;
+    el.keywordRankBtn.addEventListener('click', async () => {
+      if (currentMode !== 'top' || currentRankType !== 'keyword') return;
+      el.keywordRankBtn.disabled = true;
+      setTopListStatus('Ranking by keywords…');
+      try {
+        await displayCurrentSubcat();
+      } catch (e) {
+        console.warn('Keyword re-rank failed:', e);
+      } finally {
+        el.keywordRankBtn.disabled = false;
+        setTimeout(clearTopListStatus, 400);
+      }
     });
   }
 
@@ -1318,63 +1369,86 @@
     // current scope/subcat (so the user always has something to look at).
     // If AI ranking fails for any reason, fall back to live mode.
     if (currentMode === 'top') {
-      const today = AI.todayStr();
-      const yesterday = AI.yesterdayStr();
       const scope = currentScope;
       const subcat = currentSubcat;
-      const settings = Settings.load();
-      const viewDate = settings.topDate || today;
-      // Reset the rate-limit modal flag for this top-mode entry.
       resetRateLimitFlag();
-      // Show the processing overlay for the entire top-mode flow: DB fetch
-      // and (if needed) AI ranking.
-      setTopListStatus('Loading rankings…');
 
-      const ranked = await AI.loadTopList(viewDate, scope, subcat);
-      if (ranked) {
-        articles = ranked;
-        articles.forEach(a => a._aiRanked = true);
-        clearTopListStatus();
-      } else {
-        const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
-        if (viewDate !== today) {
-          setTopListStatus('No ranking for ' + viewDate);
-          setTimeout(clearTopListStatus, 1500);
-        } else if (!hasYesterday) {
-          setTopListStatus('AI ranking…');
-          let rankOk = false;
-          try {
-            const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-            let rankInput;
-            if (subcat === 'all') {
-              rankInput = [];
-              for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
-            } else {
-              rankInput = cached.groups[subcat] || [];
-            }
-            rankInput = FeedFetcher.deduplicate(rankInput);
-            rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
-            rankInput = FeedFetcher.sortByDate(rankInput);
-            const r = await AI.rankArticles(rankInput, scope, subcat);
-            if (r) { articles = r; articles.forEach(a => a._aiRanked = true); rankOk = true; }
-          } catch (e) {
-            console.warn('AI ranking failed:', e);
-            if (e.message && e.message.includes('rate limited')) showAiRateLimitModal();
-          }
-          if (rankOk) {
-            clearTopListStatus();
-          } else {
-            console.warn('AI ranking produced no result for', scope, subcat, '— falling back to Live mode');
-            setTopListStatus('AI ranking failed — switching to Live');
-            currentMode = 'live';
-            $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
-            if (el.topDateBtn) el.topDateBtn.style.display = 'none';
-            setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
-            return;
-          }
+      if (currentRankType === 'keyword') {
+        // Keyword ranking: compute on-the-fly from cached articles.
+        // No Supabase, no API call. Instant — no loading overlay needed.
+        const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+        let rankInput;
+        if (subcat === 'all') {
+          rankInput = [];
+          for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
         } else {
-          setTopListStatus("Today's ranking will be ready at 8 PM IST");
-          setTimeout(clearTopListStatus, 2500);
+          rankInput = cached.groups[subcat] || [];
+        }
+        rankInput = FeedFetcher.deduplicate(rankInput);
+        rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
+        rankInput = FeedFetcher.sortByDate(rankInput);
+        const r = await AI.rankByKeywords(rankInput, scope, subcat);
+        if (r && r.length) {
+          articles = r;
+          // Normalize link from url so cards/buttons work, mark as keyword-ranked.
+          articles.forEach(a => { a.link = a.link || a.url; a._kwRanked = true; });
+        }
+      } else {
+        // AI ranking: load from Supabase, fall back to fresh AI rank.
+        const today = AI.todayStr();
+        const yesterday = AI.yesterdayStr();
+        const settings = Settings.load();
+        const viewDate = settings.topDate || today;
+        // Show the processing overlay for the entire AI top-mode flow:
+        // DB fetch and (if needed) AI ranking.
+        setTopListStatus('Loading rankings…');
+
+        const ranked = await AI.loadTopList(viewDate, scope, subcat);
+        if (ranked) {
+          articles = ranked;
+          articles.forEach(a => { a.link = a.link || a.url; a._aiRanked = true; });
+          clearTopListStatus();
+        } else {
+          const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
+          if (viewDate !== today) {
+            setTopListStatus('No ranking for ' + viewDate);
+            setTimeout(clearTopListStatus, 1500);
+          } else if (!hasYesterday) {
+            setTopListStatus('AI ranking…');
+            let rankOk = false;
+            try {
+              const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+              let rankInput;
+              if (subcat === 'all') {
+                rankInput = [];
+                for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
+              } else {
+                rankInput = cached.groups[subcat] || [];
+              }
+              rankInput = FeedFetcher.deduplicate(rankInput);
+              rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
+              rankInput = FeedFetcher.sortByDate(rankInput);
+              const r = await AI.rankArticles(rankInput, scope, subcat);
+              if (r) { articles = r; articles.forEach(a => { a.link = a.link || a.url; a._aiRanked = true; }); rankOk = true; }
+            } catch (e) {
+              console.warn('AI ranking failed:', e);
+              if (e.message && e.message.includes('rate limited')) showAiRateLimitModal();
+            }
+            if (rankOk) {
+              clearTopListStatus();
+            } else {
+              console.warn('AI ranking produced no result for', scope, subcat, '— falling back to Live mode');
+              setTopListStatus('AI ranking failed — switching to Live');
+              currentMode = 'live';
+              updateModeButtonActive();
+              updateRankControls();
+              setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
+              return;
+            }
+          } else {
+            setTopListStatus("Today's ranking will be ready at 8 PM IST");
+            setTimeout(clearTopListStatus, 2500);
+          }
         }
       }
     }
@@ -1714,7 +1788,8 @@
   function applyRecentAndShowLive() {
     // Switch to live mode
     currentMode = 'live';
-    $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+    updateModeButtonActive();
+    updateRankControls();
     loadedCount = 0;
     liveAllLoaded = false;
     hasFreshBackground = false;
@@ -1803,8 +1878,9 @@
           el.aiRankBtn.disabled = false;
           // Auto-switch to Top mode once the run completes.
           currentMode = 'top';
-          $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
-          if (el.topDateBtn) el.topDateBtn.style.display = 'inline-flex';
+          currentRankType = 'ai';
+          updateModeButtonActive();
+          updateRankControls();
           // displayCurrentSubcat handles the overlay for the load + render.
           await displayCurrentSubcat();
         }
@@ -4006,6 +4082,7 @@
     renderSubTabs();
     bindSubTabs();
     bindModeToggle();
+    bindKeywordRankBtn();
     bindViewToggle();
     bindLangSelect();
     bindSearch();
@@ -4027,10 +4104,9 @@
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
 
-    // Init top-date button (visible in top mode)
-    if (el.topDateBtn) {
-      el.topDateBtn.style.display = currentMode === 'top' ? 'inline-flex' : 'none';
-    }
+    // Init rank controls: top-date picker + IB-block rank buttons.
+    // Both start hidden (live mode is the default).
+    updateRankControls();
 
     // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)
     startRankScheduler();

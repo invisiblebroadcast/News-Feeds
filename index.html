@@ -38,6 +38,14 @@
               <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
             </svg>
           </button>
+          <button class="btn btn-ghost btn-icon" id="ai-rank-btn" title="Run AI ranking now" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 4 4 1.5-4 1.5L8 12l-1.5-4-4-1.5 4-1.5L8 1z"/><path d="M13 10l.7 1.8 1.8.7-1.8.7L13 15l-.7-1.8-1.8-.7 1.8-.7L13 10z"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-icon" id="keyword-rank-btn" title="Rank by trending keywords" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <line x1="6" y1="2" x2="4" y2="14"/><line x1="12" y1="2" x2="10" y2="14"/><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/>
+            </svg>
+          </button>
           <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
             <button class="btn btn-ghost btn-icon ib-refresh-spinner" id="ib-refresh-spinner" title="Refreshing in background…" disabled>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -161,13 +169,11 @@
         <li class="tab-item" data-scope="nation" data-nation="india">India</li>
       </ul>
       <div class="mode-toggle" id="mode-toggle">
-        <button class="mode-btn" data-mode="top">Top</button>
+        <button class="mode-btn" data-mode="top" data-rank-type="ai">Top AI</button>
+        <button class="mode-btn" data-mode="top" data-rank-type="keyword">Top Keyword</button>
         <button class="mode-btn active" data-mode="live">Live</button>
       </div>
       <div id="ai-top-status" style="display:none;"></div>
-      <button class="btn btn-ghost btn-icon filter-icon-btn" id="ai-rank-btn" title="Run AI ranking now">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 4 4 1.5-4 1.5L8 12l-1.5-4-4-1.5 4-1.5L8 1z"/><path d="M13 10l.7 1.8 1.8.7-1.8.7L13 15l-.7-1.8-1.8-.7 1.8-.7L13 10z"/></svg>
-      </button>
       <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
         <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
       </button>

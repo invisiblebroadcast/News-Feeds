@@ -291,6 +291,152 @@ const AI = (() => {
     return final;
   }
 
+  /* ── Keyword-based ranking (no LLM, no Supabase) ── */
+
+  // Weighted "alarming buzz" keywords. Higher = more urgent/breaking.
+  // Matched case-insensitively as substrings against title + summary.
+  const ALARMING_KEYWORDS = {
+    'breaking': 10, 'just in': 10, 'urgent': 9, 'developing': 8, 'alert': 8, 'emergency': 9, 'evolving': 6,
+    'earthquake': 9, 'explosion': 9, 'explodes': 9, 'wildfire': 8, 'flood': 7, 'flooding': 7,
+    'typhoon': 8, 'hurricane': 8, 'tornado': 8, 'tsunami': 9, 'landslide': 8, 'avalanche': 8,
+    'attack': 8, 'attacks': 8, 'killed': 9, 'kills': 8, 'dies': 7, 'death': 7, 'dead': 7, 'dying': 8,
+    'shooting': 9, 'shot': 7, 'missile': 9, 'missiles': 9, 'bomb': 8, 'bombing': 9, 'war': 8, 'invasion': 9,
+    'strike': 6, 'strikes': 7, 'casualties': 8, 'wounded': 7, 'injured': 6, 'massacre': 9,
+    'terror': 9, 'terrorist': 8, 'terrorist attack': 10,
+    'crisis': 7, 'protest': 6, 'protests': 6, 'riot': 7, 'riots': 7,
+    'resign': 6, 'resigns': 6, 'resigned': 6, 'coup': 9, 'overthrow': 8,
+    'evacuate': 8, 'evacuation': 8, 'hostage': 8, 'hostages': 8, 'siege': 8,
+    'rescue': 6, 'trapped': 6, 'collapse': 7, 'collapsed': 7,
+    'outbreak': 7, 'pandemic': 7, 'epidemic': 7, 'recall': 5,
+    'scandal': 6, 'indicted': 7, 'indictment': 7, 'convicted': 7, 'arrested': 7, 'arrest': 6,
+    'crash': 7, 'plunge': 6, 'plunges': 6, 'default': 6, 'sanctions': 5,
+    'tragedy': 6, 'catastrophe': 8, 'catastrophic': 8, 'mayhem': 6, 'chaos': 5,
+    'threat': 5, 'threatens': 6, 'warns': 5, 'warning': 5, 'leak': 5, 'spill': 4,
+    'ban': 5, 'banned': 5, 'suspended': 5, 'outage': 5, 'blackout': 6,
+    'supreme court': 5, 'overturned': 6, 'verdict': 5
+  };
+
+  const STOPWORDS = new Set([
+    'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','is','was','are','were','be','been','being',
+    'has','have','had','do','does','did','will','would','could','should','may','might','must','can','this','that','these','those',
+    'it','its','he','she','they','them','his','her','their','we','our','you','your','i','my','me',
+    'not','no','if','than','then','so','what','when','where','who','how','why','which','about','after','before','over','under','up','down','out','off',
+    'new','old','first','last','next','just','also','more','most','some','any','all','each','every','other','such','only','own','same',
+    'into','through','during','between','against','around','near','far','here','there','now','still','already','yet',
+    'amid','says','said','say','told','tell','tells','report','reports','reported','according','claim','claims','claimed',
+    'live','updates','update','news','top','watch','video','read','full','story','photos','photo','video','watch',
+    'one','two','three','four','five','six','seven','eight','nine','ten','vs','per'
+  ]);
+
+  function tokenize(text) {
+    if (!text) return [];
+    return text.toLowerCase()
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/[^a-z0-9\s'-]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w && w.length > 2 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+  }
+
+  /**
+   * Rank articles by alarming-keyword weight + repetitive/trending keyword
+   * frequency. Deterministic, free, and instant — no LLM or Supabase.
+   *
+   * @param {Array} articles  Pool of articles to rank.
+   * @param {string} scope
+   * @param {string} subcat
+   * @param {Function} [onProgress]
+   * @returns {Array} Top 25 ranked articles in the same shape as AI rankings
+   *   ({rank, title, url, source, pubDate, summary, score}).
+   */
+  async function rankByKeywords(articles, scope, subcat, onProgress) {
+    if (!articles || !articles.length) return null;
+    if (onProgress) onProgress({ step: 'preparing', text: 'Scoring keywords…' });
+
+    // Deduplicate by normalized title
+    const seen = new Set();
+    const candidates = [];
+    for (const a of articles) {
+      const key = (a.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(a);
+    }
+    if (!candidates.length) return null;
+
+    // Build word frequency map (repetitive/trending detection)
+    const wordFreq = new Map();
+    for (const a of candidates) {
+      const text = (a.title || '') + ' ' + (a.summary || '');
+      for (const w of tokenize(text)) {
+        wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
+      }
+    }
+
+    // Score each article
+    const scored = candidates.map(a => {
+      const fullText = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
+
+      // Alarming score: sum of weights of matching alarming keywords
+      let alarmingScore = 0;
+      for (const kw in ALARMING_KEYWORDS) {
+        if (fullText.indexOf(kw) !== -1) alarmingScore += ALARMING_KEYWORDS[kw];
+      }
+
+      // Trending (repetitive) score: sum of corpus frequencies of unique
+      // title-words that appear in >1 article. sqrt-scaled so a single very
+      // common word doesn't dominate.
+      const titleWords = new Set(tokenize(a.title || ''));
+      let trendingRaw = 0;
+      for (const w of titleWords) {
+        const f = wordFreq.get(w) || 0;
+        if (f > 1) trendingRaw += f;
+      }
+      const trendingScore = Math.sqrt(trendingRaw) * 2;
+
+      const score = alarmingScore * 3 + trendingScore;
+      return Object.assign({}, a, { _kwScore: score });
+    });
+
+    // Sort by score desc, tiebreak by recency
+    scored.sort((a, b) => {
+      if (b._kwScore !== a._kwScore) return b._kwScore - a._kwScore;
+      return new Date(b.pubDate || 0) - new Date(a.pubDate || 0);
+    });
+
+    // Map to the same shape AI rankings use, top 25
+    let final = scored.slice(0, 25).map((a, i) => ({
+      rank: i + 1,
+      title: (a.title || '').trim(),
+      url: a.link || a._url || '',
+      source: a.source || '',
+      pubDate: a.pubDate || null,
+      summary: stripHtml(a.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+      score: Math.round(a._kwScore)
+    }));
+
+    // Backfill up to 25 with most-recent unranked articles
+    if (final.length < 25) {
+      const usedUrls = new Set(final.map(a => a.url));
+      const remaining = candidates.filter(a => !usedUrls.has(a.link || a._url || ''));
+      remaining.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+      for (let i = 0; final.length < 25 && i < remaining.length; i++) {
+        const a = remaining[i];
+        final.push({
+          rank: final.length + 1,
+          title: (a.title || '').trim(),
+          url: a.link || a._url || '',
+          source: a.source || '',
+          pubDate: a.pubDate || null,
+          summary: stripHtml(a.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+          score: 0
+        });
+      }
+    }
+
+    if (onProgress) onProgress({ step: 'done', text: 'Keyword ranking complete' });
+    return final;
+  }
+
   /* ── Check if today's ranking exists ── */
 
   return {
@@ -303,6 +449,7 @@ const AI = (() => {
     upsertTopList,
     loadTopList,
     getAvailableDates,
-    rankArticles
+    rankArticles,
+    rankByKeywords
   };
 })();
