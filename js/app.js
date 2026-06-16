@@ -412,7 +412,7 @@
           '<div class="load-all-info">' +
             '<strong>Showing ' + showing + ' of ' + remaining + ' articles</strong>' +
           '</div>' +
-          '<button class="btn btn-primary" id="load-all-btn">Load All ' + willShow + ' Articles</button>' +
+          '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
         '</div>';
       }
 
