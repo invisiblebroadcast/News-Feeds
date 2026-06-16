@@ -2349,6 +2349,195 @@ body.cards-view {
   text-align: center;
 }
 
+/* ─── SCM: scope tabs (Global / Nation) ─────────────────── */
+.scm-scope-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+.scm-scope-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.scm-scope-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+.scm-scope-btn.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.scm-scope-count {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  background: var(--bg-primary);
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+.scm-scope-btn.active .scm-scope-count {
+  color: var(--text-secondary);
+}
+.scm-refused-dot {
+  color: var(--accent);
+  font-size: 0.85rem;
+  margin-left: 2px;
+  line-height: 1;
+}
+
+/* ─── SCM: status filter (All / Refused) ────────────────── */
+.scm-status-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.scm-status-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 14px;
+  padding: 5px 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.scm-status-btn:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+.scm-status-btn.active {
+  background: rgba(255, 41, 41, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── SCM: region chips (collapsed by default) ─────────── */
+.scm-regions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+.scm-regions:not(.scm-regions-expanded) {
+  max-height: 80px;
+  overflow: hidden;
+}
+.scm-region-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.scm-region-btn:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+.scm-region-btn.active {
+  background: rgba(77, 171, 247, 0.15);
+  border-color: #4dabf7;
+  color: #4dabf7;
+}
+.scm-region-btn-search {
+  /* Region chips that only appear when the user is searching —
+     slightly distinct so the user can tell which ones are the
+     "always visible" core vs the search-uncovered extras. */
+  border-style: dashed;
+}
+
+/* ─── SCM: bulk-action row ──────────────────────────────── */
+.scm-bulk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.scm-bulk-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.scm-bulk-count strong {
+  color: var(--text-primary);
+}
+.scm-bulk-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.scm-bulk-actions .btn {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+}
+
+/* ─── SCM: row states ───────────────────────────────────── */
+/* Whole row is the click target. The cursor + the slightly stronger
+   hover background make it obvious that any tap toggles. The
+   checkbox cell stays "pointer" too so users have visual continuity. */
+.scm-row {
+  cursor: pointer;
+}
+.scm-row .scm-check {
+  cursor: pointer;
+}
+
+/* Refused-source visual state: muted text + red left border +
+   inline "⚠ refused" pill on the name. The row is still fully
+   interactive (click to toggle, etc.) — being refused is a
+   warning, not a hard disable. */
+.scm-row.scm-refused td {
+  background: rgba(255, 41, 41, 0.04);
+}
+.scm-row.scm-refused .scm-name {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 41, 41, 0.5);
+  text-decoration-thickness: 1px;
+}
+.scm-row.scm-refused.scm-active .scm-name {
+  text-decoration: none;  /* keep the active row readable */
+}
+.scm-refused-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: rgba(255, 41, 41, 0.18);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  text-decoration: none;
+}
+
 /* ─── Article Detail & Source Modals ─── */
 .modal-lg {
   max-width: 920px;

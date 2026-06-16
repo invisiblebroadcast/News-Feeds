@@ -116,6 +116,18 @@ const SourceHealth = (() => {
     return (map[url] && map[url].failures) || 0;
   }
 
+  // A source is considered "refused" once it has hit the auto-disable
+  // threshold (or has been explicitly disabled by the user / toggle).
+  // Used by the Configure Sources modal's status filter and to render
+  // a refused badge on the source row.
+  function isRefused(url) {
+    if (!url) return false;
+    const map = load();
+    const s = map[url];
+    if (!s) return false;
+    return (s.failures || 0) >= FAILURE_THRESHOLD || !!s.disabled;
+  }
+
   // Return every source we've ever seen a failure from, sorted by
   // most-recent failure first. Used by the Activity → Failed sources
   // tab. Includes currently-disabled AND warned-but-still-active ones
@@ -190,6 +202,7 @@ const SourceHealth = (() => {
     WARN_AT,
     get,
     isDisabled,
+    isRefused,
     getFailureCount,
     getTrackedSources,
     getVisibleSources,

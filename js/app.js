@@ -3150,13 +3150,23 @@
   }
 
   // Modal state for sources config
+  //   - filter:    free-text search (matches name / region / lang)
+  //   - scope:     'global' or 'nation' — which tab the user is on
+  //   - region:    which region chip is selected (defaults to 'all')
+  //   - status:    'all' | 'refused' — show only refused sources?
   let subsConfigFilter = '';
+  let subsConfigScope = 'global';
   let subsConfigRegion = 'all';
+  let subsConfigStatus = 'all';
 
   function openSourcesConfigModal() {
     if (!$('#sources-config-modal')) return;
     subsConfigFilter = '';
     subsConfigRegion = 'all';
+    subsConfigStatus = 'all';
+    // Default the scope tab to whichever scope the user is currently
+    // viewing on the main page, so the modal opens to a relevant list.
+    subsConfigScope = (currentScope === 'nation') ? 'nation' : 'global';
     openModal('sourcesConfig', $('#sources-config-modal'));
     renderSourcesConfigTable();
   }
@@ -3165,46 +3175,137 @@
     closeModal('sourcesConfig');
   }
 
+  // Pick a stable "few" region chips to show when the user isn't
+  // searching. We always show "All" + 4 of the most common regions
+  // for the current scope so the chip row stays compact. When the
+  // user types in the search box, all matching regions appear (so
+  // niche categories like Education/Environment aren't hidden behind
+  // a search barrier).
+  const VISIBLE_REGION_COUNT = 4;
+  function pickVisibleRegions(allRegions) {
+    if (allRegions.length <= VISIBLE_REGION_COUNT + 1) return allRegions;
+    // Prefer the scope's "All" bucket + the 4 most common sub-regions.
+    const allBucket = allRegions.find(r => /—\s*All$|^All$/.test(r));
+    const subRegions = allRegions.filter(r => r !== allBucket);
+    // Sort by typical popularity — All/Sports first, then by region
+    // size. We don't have a real popularity signal here without
+    // scanning the feeds, so fall back to alphabetical for stability.
+    subRegions.sort();
+    return [allBucket, ...subRegions.slice(0, VISIBLE_REGION_COUNT)].filter(Boolean);
+  }
+
   function renderSourcesConfigTable() {
     const body = $('#sources-config-body');
     if (!body) return;
     const allFeeds = FeedManager.getSubscribableFeeds();
     const subscribed = new Set(FeedManager.getSubscribedFeeds());
 
-    // Apply filters
+    // ── 1. Filter to the current scope ───────────────────────────
+    // The scope tab ('global' or 'nation') restricts the master list
+    // to one of the two top-level groups. The region chip then
+    // narrows further within that scope.
+    const scoped = allFeeds.filter(f => f.scope === subsConfigScope);
+
+    // ── 2. Apply search + region + status filters ────────────────
     const q = (subsConfigFilter || '').toLowerCase().trim();
-    const grouped = {};
-    for (const f of allFeeds) {
+    const filtered = [];
+    for (const f of scoped) {
       if (!f.hasRss || !f.url) continue;
       if (subsConfigRegion !== 'all' && f.region !== subsConfigRegion) continue;
+      if (subsConfigStatus === 'refused' && !(window.SourceHealth && SourceHealth.isRefused(f.url))) continue;
       if (q) {
-        const hay = ((f.name || '') + ' ' + (f.region || '') + ' ' + (f.lang || '')).toLowerCase();
+        const hay = ((f.name || '') + ' ' + (f.region || '') + ' ' + (f.lang || '') + ' ' + (f.hint || '')).toLowerCase();
         if (!hay.includes(q)) continue;
       }
+      filtered.push(f);
+    }
+
+    // ── 3. Build region chip list ────────────────────────────────
+    // "All" + the 4 most common regions for this scope, unless the
+    // user is searching — then show every region that has at least
+    // one match so niche categories (Education, Environment, etc.)
+    // aren't hidden behind a search barrier.
+    const scopedRegions = [...new Set(scoped.filter(f => f.hasRss).map(f => f.region || 'Other'))].sort();
+    const visibleRegions = q ? scopedRegions : pickVisibleRegions(scopedRegions);
+
+    // ── 4. Counts for scope tab badges ───────────────────────────
+    const globalCount = allFeeds.filter(f => f.scope === 'global' && f.hasRss).length;
+    const nationCount = allFeeds.filter(f => f.scope === 'nation' && f.hasRss).length;
+    const refusedGlobal = allFeeds.filter(f => f.scope === 'global' && f.hasRss && window.SourceHealth && SourceHealth.isRefused(f.url)).length;
+    const refusedNation = allFeeds.filter(f => f.scope === 'nation' && f.hasRss && window.SourceHealth && SourceHealth.isRefused(f.url)).length;
+
+    // ── 5. Scope tabs (Global / Nation) ──────────────────────────
+    const scopeTabs =
+      '<div class="scm-scope-tabs">' +
+        '<button class="scm-scope-btn' + (subsConfigScope === 'global' ? ' active' : '') + '" data-scope="global">' +
+          '🌍 Global' +
+          '<span class="scm-scope-count">' + globalCount + (refusedGlobal ? ' <span class="scm-refused-dot" title="' + refusedGlobal + ' refused">●</span>' : '') + '</span>' +
+        '</button>' +
+        '<button class="scm-scope-btn' + (subsConfigScope === 'nation' ? ' active' : '') + '" data-scope="nation">' +
+          'Nation' +
+          '<span class="scm-scope-count">' + nationCount + (refusedNation ? ' <span class="scm-refused-dot" title="' + refusedNation + ' refused">●</span>' : '') + '</span>' +
+        '</button>' +
+      '</div>';
+
+    // ── 6. Status filter (All / Refused) ─────────────────────────
+    const statusFilter =
+      '<div class="scm-status-row">' +
+        '<button class="scm-status-btn' + (subsConfigStatus === 'all' ? ' active' : '') + '" data-status="all">All</button>' +
+        '<button class="scm-status-btn' + (subsConfigStatus === 'refused' ? ' active' : '') + '" data-status="refused">' +
+          '⚠ Refused' +
+        '</button>' +
+      '</div>';
+
+    // ── 7. Region chips (collapsed by default) ───────────────────
+    // When NOT searching: only the few "always visible" regions
+    // (picked by pickVisibleRegions). When searching: every region
+    // in the current scope, with the "search-only" extras marked
+    // dashed so the user can tell which ones the modal auto-uncovered.
+    const regionsToShow = q ? scopedRegions : visibleRegions;
+    const regionSelector =
+      '<div class="scm-regions' + (q ? ' scm-regions-expanded' : '') + '">' +
+        '<button class="scm-region-btn' + (subsConfigRegion === 'all' ? ' active' : '') + '" data-region="all">All regions</button>' +
+        regionsToShow.map(r => {
+          const isSearchExtra = q && !visibleRegions.includes(r);
+          return '<button class="scm-region-btn' + (isSearchExtra ? ' scm-region-btn-search' : '') + (subsConfigRegion === r ? ' active' : '') + '" data-region="' + escAttr(r) + '">' + escHtml(r) + '</button>';
+        }).join('') +
+      '</div>';
+
+    // ── 8. Bulk-action row + count ───────────────────────────────
+    const visibleChecked = filtered.filter(f => subscribed.has(f.url)).length;
+    const bulkRow =
+      '<div class="scm-bulk-row">' +
+        '<span class="scm-bulk-count"><strong>' + visibleChecked + '</strong> / ' + filtered.length + ' selected</span>' +
+        '<div class="scm-bulk-actions">' +
+          '<button class="btn" data-bulk="select-all">Select all (visible)</button>' +
+          '<button class="btn" data-bulk="deselect-all">Deselect all (visible)</button>' +
+        '</div>' +
+      '</div>';
+
+    // ── 9. Build source rows ─────────────────────────────────────
+    const grouped = {};
+    for (const f of filtered) {
       const region = f.region || 'Other';
       if (!grouped[region]) grouped[region] = [];
       grouped[region].push(f);
     }
 
-    // Build region selector
-    const regions = [...new Set(allFeeds.filter(f => f.hasRss).map(f => f.region || 'Other'))].sort();
-    const regionSelector =
-      '<div class="scm-regions">' +
-        '<button class="scm-region-btn' + (subsConfigRegion === 'all' ? ' active' : '') + '" data-region="all">All</button>' +
-        regions.map(r => '<button class="scm-region-btn' + (subsConfigRegion === r ? ' active' : '') + '" data-region="' + escAttr(r) + '">' + escHtml(r) + '</button>').join('') +
-      '</div>';
-
-    // Build source rows
     let rowsHtml = '';
     for (const [region, feeds] of Object.entries(grouped)) {
       rowsHtml += '<tr class="scm-region-header"><td colspan="4">' + escHtml(region) + '</td></tr>';
       for (const f of feeds) {
         const checked = subscribed.has(f.url);
         const isG = f.isGoogleNews || (f.url && f.url.includes('news.google.com'));
+        const refused = !!(window.SourceHealth && SourceHealth.isRefused(f.url));
+        const refusedCount = (window.SourceHealth && SourceHealth.getFailureCount(f.url)) || 0;
         rowsHtml +=
-          '<tr class="scm-row' + (checked ? ' scm-active' : '') + (isG ? ' scm-google' : '') + '">' +
+          '<tr class="scm-row' + (checked ? ' scm-active' : '') + (isG ? ' scm-google' : '') + (refused ? ' scm-refused' : '') + '" data-url="' + escAttr(f.url) + '">' +
             '<td class="scm-check"><input type="checkbox" class="scm-checkbox" data-url="' + escAttr(f.url) + '"' + (checked ? ' checked' : '') + '></td>' +
-            '<td class="scm-name">' + escHtml(f.name) + (isG ? ' <span class="sub-google-badge">Google</span>' : '') + '</td>' +
+            '<td class="scm-name">' +
+              escHtml(f.name) +
+              (isG ? ' <span class="sub-google-badge">Google</span>' : '') +
+              (refused ? ' <span class="scm-refused-pill" title="This source refused to load ' + refusedCount + ' times">⚠ refused</span>' : '') +
+            '</td>' +
             '<td class="scm-cat">' + escHtml(f.hint || '') + '</td>' +
             '<td class="scm-lang">' + (f.lang || 'en').toUpperCase() + '</td>' +
           '</tr>';
@@ -3212,17 +3313,63 @@
     }
 
     if (!rowsHtml) {
-      rowsHtml = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-tertiary);">No sources match your search.</td></tr>';
+      const emptyMsg = subsConfigStatus === 'refused'
+        ? 'No refused sources in this scope. Nice — everything is loading.'
+        : (q ? 'No sources match your search.' : 'No sources in this scope.');
+      rowsHtml = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-tertiary);">' + emptyMsg + '</tr>';
     }
 
     body.innerHTML =
+      scopeTabs +
+      statusFilter +
       regionSelector +
-      '<table class="scm-table">' +
-        '<thead><tr><th></th><th>Name</th><th>Category</th><th>Lang</th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody>' +
-      '</table>';
+      bulkRow +
+      '<div class="scm-body">' +
+        '<table class="scm-table">' +
+          '<thead><tr><th></th><th>Name</th><th>Category</th><th>Lang</th></tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table>' +
+      '</div>';
 
-    // Bind region selector
+    // ── 10. Bind everything ──────────────────────────────────────
+    bindSourcesConfigControls();
+    // Also update the count on the settings page (the "X of Y
+    // sources enabled" line), since the bulk operations change it
+    // without us otherwise going through the subscribed count.
+    const meta = document.querySelector('.subs-config-meta');
+    if (meta) {
+      const total = allFeeds.filter(f => f.hasRss && f.url).length;
+      meta.textContent = FeedManager.getSubscribedFeeds().length + ' of ' + total + ' sources enabled';
+    }
+  }
+
+  // Wire up every interactive control in the Configure Sources body.
+  // Called on every re-render so dynamically-built elements stay
+  // responsive. We use a single delegated handler where possible to
+  // keep the listener count small.
+  function bindSourcesConfigControls() {
+    const body = $('#sources-config-body');
+    if (!body) return;
+
+    // Scope tabs
+    body.querySelectorAll('.scm-scope-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        subsConfigScope = b.dataset.scope;
+        subsConfigRegion = 'all';   // reset region when scope changes
+        subsConfigStatus = 'all';   // reset status too
+        renderSourcesConfigTable();
+      });
+    });
+
+    // Status filter (All / Refused)
+    body.querySelectorAll('.scm-status-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        subsConfigStatus = b.dataset.status;
+        renderSourcesConfigTable();
+      });
+    });
+
+    // Region chips
     body.querySelectorAll('.scm-region-btn').forEach(b => {
       b.addEventListener('click', () => {
         subsConfigRegion = b.dataset.region;
@@ -3230,18 +3377,97 @@
       });
     });
 
-    // Bind checkboxes
+    // Bulk actions: select / deselect every source currently visible
+    // in the filtered list. Operates on the rendered rows so the
+    // user gets a result that matches what they see on screen
+    // (respects search + region + status filters).
+    body.querySelectorAll('[data-bulk]').forEach(b => {
+      b.addEventListener('click', () => {
+        const mode = b.dataset.bulk; // 'select-all' | 'deselect-all'
+        const rows = body.querySelectorAll('.scm-row[data-url]');
+        let changed = false;
+        rows.forEach(r => {
+          const url = r.dataset.url;
+          const cb = r.querySelector('.scm-checkbox');
+          const want = (mode === 'select-all');
+          if (cb && cb.checked !== want) {
+            cb.checked = want;
+            FeedManager.toggleSubscription(url);
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+          syncSubscriptionsToCloud();
+          renderSourcesConfigTable();
+        }
+      });
+    });
+
+    // Row click → toggle subscription. The whole row is the click
+    // target (not just the checkbox) so the user can tap anywhere
+    // on the row, including the name, category, or lang cells.
+    // We still let the checkbox itself handle its own change event
+    // — clicking it directly fires both handlers, but toggle is
+    // idempotent so the second one is a no-op.
+    body.querySelectorAll('.scm-row[data-url]').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // If the user clicked the checkbox or a badge inside the
+        // checkbox cell, let the checkbox's own change event handle
+        // it. Otherwise the row click fires the toggle.
+        if (e.target.closest('.scm-check')) return;
+        const url = row.dataset.url;
+        const cb = row.querySelector('.scm-checkbox');
+        if (!cb) return;
+        FeedManager.toggleSubscription(url);
+        localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+        syncSubscriptionsToCloud();
+        // Optimistic UI update — toggle the visual state immediately
+        // and let the next render (or the settings-page count refresh)
+        // reconcile the persisted state.
+        const nowChecked = !cb.checked;
+        cb.checked = nowChecked;
+        row.classList.toggle('scm-active', nowChecked);
+        // Update the bulk-row count
+        const countEl = body.querySelector('.scm-bulk-count strong');
+        if (countEl) {
+          const newCount = nowChecked
+            ? parseInt(countEl.textContent, 10) + 1
+            : parseInt(countEl.textContent, 10) - 1;
+          countEl.textContent = String(newCount);
+        }
+        // Update the settings-page count too
+        const meta = document.querySelector('.subs-config-meta');
+        if (meta) {
+          const allFeeds = FeedManager.getSubscribableFeeds();
+          const total = allFeeds.filter(f => f.hasRss && f.url).length;
+          meta.textContent = FeedManager.getSubscribedFeeds().length + ' of ' + total + ' sources enabled';
+        }
+      });
+    });
+
+    // Checkbox change (when user clicks the checkbox directly)
     body.querySelectorAll('.scm-checkbox').forEach(cb => {
       cb.addEventListener('change', () => {
         FeedManager.toggleSubscription(cb.dataset.url);
         localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
         syncSubscriptionsToCloud();
-        // Lightweight refresh of just the count in the settings page
-        const subscribedCount = FeedManager.getSubscribedFeeds().length;
+        const row = cb.closest('.scm-row');
+        if (row) row.classList.toggle('scm-active', cb.checked);
+        // Update the bulk-row count
+        const countEl = body.querySelector('.scm-bulk-count strong');
+        if (countEl) {
+          const all = body.querySelectorAll('.scm-row[data-url] .scm-checkbox');
+          let n = 0;
+          all.forEach(c => { if (c.checked) n++; });
+          countEl.textContent = String(n);
+        }
+        // Update the settings-page count
         const meta = document.querySelector('.subs-config-meta');
         if (meta) {
-          const total = document.querySelectorAll('.scm-checkbox').length;
-          meta.textContent = subscribedCount + ' of ' + total + ' sources enabled';
+          const allFeeds = FeedManager.getSubscribableFeeds();
+          const total = allFeeds.filter(f => f.hasRss && f.url).length;
+          meta.textContent = FeedManager.getSubscribedFeeds().length + ' of ' + total + ' sources enabled';
         }
       });
     });
