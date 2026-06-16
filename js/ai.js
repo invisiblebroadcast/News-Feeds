@@ -354,7 +354,9 @@ const AI = (() => {
     if (!articles || !articles.length) return null;
     if (onProgress) onProgress({ step: 'preparing', text: 'Analysing corpus…' });
 
-    // Deduplicate by normalized title
+    // Deduplicate by normalized title (fast — yield afterwards so the
+    // browser can paint the "Ranking by keywords…" status before we
+    // hit the heavier analyzer + backfill steps).
     const seen = new Set();
     const candidates = [];
     for (const a of articles) {
@@ -364,6 +366,7 @@ const AI = (() => {
       candidates.push(a);
     }
     if (!candidates.length) return null;
+    await new Promise(r => setTimeout(r, 0));
 
     // Build a link/guid -> { likeCount, dislikeCount } map from the
     // Supabase store so the analyzer can apply the engagement boost.
@@ -379,10 +382,16 @@ const AI = (() => {
       }
       if (Object.keys(m).length) engagement = m;
     } catch {}
+    await new Promise(r => setTimeout(r, 0));
 
     // Hand off to the Analyzer: TF-IDF × recency × buzz × source authority
     // × user engagement, plus a small additive bonus for alarming keywords.
+    // This is the heaviest sync step. The yield before it lets the
+    // browser paint the status; the next yield after it lets the
+    // render start without further blocking.
+    if (onProgress) onProgress({ step: 'scoring', text: 'Scoring ' + candidates.length + ' articles…' });
     const ranked = Analyzer.rankByAnalyzer(candidates, engagement);
+    await new Promise(r => setTimeout(r, 0));
 
     // Map top 25 into the same shape AI rankings use.
     let final = ranked.slice(0, 25).map((entry, i) => ({

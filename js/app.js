@@ -12,6 +12,11 @@
   let isFetching = false;
   let currentArticles = [];
   let loadedCount = 0;
+  // Monotonically increasing token for in-flight mode switches. Each
+  // rAF callback checks against this and bails out if a newer click
+  // superseded it, so rapid Top-AI → Top-Keyword → Live clicks don't
+  // pile up stale renders.
+  let pendingModeSwitch = 0;
 
   const el = {
     topTabs: $('#top-tab-list'),
@@ -1451,21 +1456,24 @@
   // Click once  → enter Top (AI or Keyword) and load/rank the articles.
   // Click again (when already in that mode) → return to Live.
   // Clicking the other toggle while in one Top mode switches to the other.
+  //
+  // The mode change is split into two phases:
+  //   1. Synchronous UI updates (button states, sticky header, sort
+  //      options) and a "Switching to X…" status overlay — these run
+  //      immediately so the click feels instant.
+  //   2. Heavy work (ranking, conflict detection, render) is deferred
+  //      to the next animation frame. By then the browser has painted
+  //      the overlay and updated the button states, so the user never
+  //      sees a frozen UI.
   function toggleTopMode(rankType) {
+    const prevMode = currentMode;
     if (currentMode === 'top' && currentRankType === rankType) {
       currentMode = 'live';
     } else {
       currentMode = 'top';
       currentRankType = rankType;
     }
-    loadedCount = 0;
-    liveAllLoaded = false;
-    hasFreshBackground = false;
-    updateModeButtonActive();
-    updateRankControls();
-    updateSortOptions();
-    updateStickyHeader();
-    displayCurrentSubcat();
+    switchModeNonBlocking(prevMode);
   }
 
   function updateRankControls() {
@@ -1484,26 +1492,61 @@
     if (el.topDateBtn) el.topDateBtn.style.display = inTopAi ? 'inline-flex' : 'none';
   }
 
+  /**
+   * Shared helper used by every click handler that switches the top/live
+   * mode. Updates the synchronous UI bits (button states, header, sort
+   * options) and shows a "Switching to X…" overlay immediately, then
+   * defers the actual ranking + render to the next animation frame.
+   * A token ensures that if the user clicks multiple toggles in rapid
+   * succession, only the latest one runs the heavy work.
+   */
+  function switchModeNonBlocking(prevMode) {
+    const token = ++pendingModeSwitch;
+
+    loadedCount = 0;
+    liveAllLoaded = false;
+    hasFreshBackground = false;
+    updateModeButtonActive();
+    updateRankControls();
+    updateSortOptions();
+    updateStickyHeader();
+
+    // Pick a status message that matches the destination mode.
+    let msg;
+    if (currentMode === 'live') {
+      msg = 'Switching to Live…';
+    } else if (currentRankType === 'ai') {
+      msg = 'Switching to Top AI…';
+    } else {
+      msg = 'Switching to Top Keyword…';
+    }
+    setTopListStatus(msg);
+
+    // Schedule the heavy work for the next animation frame. By then
+    // the browser has painted the overlay and the new button states,
+    // so the user gets instant visual feedback. displayCurrentSubcat()
+    // will further update the status to a more specific message
+    // (e.g. "AI ranking…", "Ranking by keywords…") and finally clear it.
+    requestAnimationFrame(() => {
+      if (token !== pendingModeSwitch) return; // superseded by a newer click
+      displayCurrentSubcat();
+    });
+  }
+
   function bindModeToggle() {
     const toggle = el.modeToggle;
     if (!toggle) return;
     toggle.addEventListener('click', e => {
       const btn = e.target.closest('.mode-btn');
       if (!btn || btn.classList.contains('active')) return;
+      const prevMode = currentMode;
       currentMode = btn.dataset.mode;
       // Both "Top AI" and "Top Keyword" set data-mode="top"; disambiguate
       // with data-rank-type.
       if (currentMode === 'top') {
         currentRankType = btn.dataset.rankType || 'ai';
       }
-      loadedCount = 0;
-      liveAllLoaded = false;
-      hasFreshBackground = false;
-      updateModeButtonActive();
-      updateRankControls();
-      updateSortOptions();
-      updateStickyHeader();
-      displayCurrentSubcat();
+      switchModeNonBlocking(prevMode);
     });
   }
 
@@ -1648,6 +1691,10 @@
         // No Supabase, no API call. Uses the ENTIRE cached pool — no date
         // filter, whatever is in the RSS feeds gets ranked.
         setTopListStatus('Ranking by keywords…');
+        // Yield immediately so the "Ranking by keywords…" overlay paints
+        // before we start the (synchronous) analyzer work inside
+        // AI.rankByKeywords. The function itself also yields internally.
+        await new Promise(r => setTimeout(r, 0));
         const t0 = Date.now();
         let rankInput;
         if (subcat === 'all') {
@@ -1690,6 +1737,10 @@
             setTimeout(clearTopListStatus, 1500);
           } else if (!hasYesterday) {
             setTopListStatus('AI ranking…');
+            // Yield so the overlay paints before the (sync) input-prep
+            // steps below run. The actual rankArticles call is a network
+            // round-trip, so it's already non-blocking on its own.
+            await new Promise(r => setTimeout(r, 0));
             let rankOk = false;
             try {
               const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -1764,6 +1815,14 @@
     }
     AI.computeTrendingInfo(articles, fullCorpus);
 
+    // Yield to the event loop so the browser can paint the "AI ranking…"
+    // / "Ranking by keywords…" / "Switching to Live…" status overlay
+    // (set by the rAF or by the if-block above) before we start the
+    // expensive conflict-detection pass. Without this, the user sees
+    // the overlay flash for a single frame at the end of the work
+    // instead of at the start.
+    await new Promise(r => setTimeout(r, 0));
+
     // Detect conflicting stories (same event, different facts) within the
     // current article pool. The result is attached to each article as
     // `._conflicts` so the card / reels view / article modal can surface a
@@ -1778,11 +1837,22 @@
       console.warn('Conflict detection failed:', e);
     }
 
+    // One more yield before the render so the conflict badges have a
+    // frame to be visible on their own (in case the user is staring
+    // at the list while it re-renders).
+    await new Promise(r => setTimeout(r, 0));
+
     try {
       await renderTranslated(articles);
     } catch (e) {
       console.error('Error rendering articles:', e);
       showError('Failed to render articles. Try refreshing.');
+    } finally {
+      // Always clear the "Switching to…" / "AI ranking…" / "Ranking by
+      // keywords…" overlay when the work is done, no matter which path
+      // we took. Some sub-paths clear it explicitly; the finally is the
+      // safety net for the others (live, errors, early returns).
+      clearTopListStatus();
     }
   }
 
