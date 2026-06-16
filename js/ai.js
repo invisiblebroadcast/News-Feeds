@@ -47,6 +47,7 @@ const AI = (() => {
   async function complete({ system, user, signal }) {
     const cfg = getConfig();
     if (!cfg.key) throw new Error('AI API key not configured.');
+    console.log('[AI] POST', cfg.endpoint + '/chat/completions', 'model:', cfg.model);
     const messages = [
       { role: 'system', content: system },
       { role: 'user', content: user }
@@ -227,6 +228,11 @@ const AI = (() => {
     result.splice(25);
 
     const saved = await upsertTopList(date, scope, subcat, result);
+    if (!saved) {
+      if (onProgress) onProgress({ step: 'error', text: 'Failed to save ranking to cloud' });
+      console.warn('AI rankArticles: Supabase save failed for', scope, subcat, date);
+      return null;
+    }
 
     if (onProgress) onProgress({ step: 'done', text: saved ? 'Ranking complete' : 'Ranking saved locally' });
 

@@ -525,7 +525,8 @@ img { max-width: 100%; height: auto; }
 }
 
 /* Ensure main content isn't hidden behind bottom bar */
-.app-main {
+ .app-main {
+  position: relative;
   padding-bottom: 80px;
 }
 body.cards-view .app-main {
@@ -2809,8 +2810,10 @@ body.cards-view {
 .article-card:nth-child(4) { animation-delay: 0.08s; }
 .article-card:nth-child(5) { animation-delay: 0.10s; }
 .article-card:nth-child(6) { animation-delay: 0.12s; }
-.article-card:nth-child(7) { animation-delay: 0.14s; }
+ .article-card:nth-child(7) { animation-delay: 0.14s; }
 .article-card:nth-child(8) { animation-delay: 0.16s; }
 .article-card:nth-child(9) { animation-delay: 0.18s; }
 .article-card:nth-child(10) { animation-delay: 0.20s; }
+
+@keyframes ai-spin { to { transform: rotate(360deg); } }
 

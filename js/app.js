@@ -1313,7 +1313,10 @@
 
     // AI Top List: load from DB only. Ranking happens at 8 PM IST (scheduled)
     // or on-demand only when even yesterday's ranking is missing for the
+    // AI Top List: load from DB only. Ranking happens at 8 PM IST (scheduled)
+    // or on-demand only when even yesterday's ranking is missing for the
     // current scope/subcat (so the user always has something to look at).
+    // If AI ranking fails for any reason, fall back to live mode.
     if (currentMode === 'top') {
       const today = AI.todayStr();
       const yesterday = AI.yesterdayStr();
@@ -1327,16 +1330,13 @@
         articles = ranked;
         clearTopListStatus();
       } else {
-        // No ranking for viewDate. Decide whether to rank now.
-        // Rank now ONLY if both today and yesterday are missing (user has
-        // nothing to look at). Otherwise wait for the 8 PM scheduled job.
         const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
         if (viewDate !== today) {
           clearTopListStatus();
           setTopListStatus('No ranking for ' + viewDate);
         } else if (!hasYesterday) {
-          // First time for this combo — rank now so the page isn't empty.
           setTopListStatus('AI ranking…');
+          let rankOk = false;
           try {
             const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
             let rankInput;
@@ -1350,14 +1350,22 @@
             rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
             rankInput = FeedFetcher.sortByDate(rankInput);
             const r = await AI.rankArticles(rankInput, scope, subcat);
-            if (r) articles = r;
+            if (r) { articles = r; rankOk = true; }
           } catch (e) {
             console.warn('AI ranking failed:', e);
-          } finally {
+          }
+          if (rankOk) {
             clearTopListStatus();
+          } else {
+            // Fallback to live mode so the user isn't stuck on an error.
+            setTopListStatus('AI ranking failed — switching to Live');
+            currentMode = 'live';
+            $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+            if (el.topDateBtn) el.topDateBtn.style.display = 'none';
+            setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
+            return;
           }
         } else {
-          // Yesterday exists, today doesn't. Wait for 8 PM scheduled run.
           clearTopListStatus();
           setTopListStatus("Today's ranking will be ready at 8 PM IST");
         }
@@ -3078,12 +3086,16 @@
   }
 
   function setTopListStatus(text) {
-    const el2 = $('#ai-top-status');
-    if (el2) { el2.textContent = text; el2.style.display = 'block'; }
+    const ov = $('#ai-ranking-overlay');
+    const tx = $('#ai-ranking-text');
+    if (ov) ov.style.display = 'flex';
+    if (tx) tx.textContent = text || 'AI ranking…';
   }
   function clearTopListStatus() {
-    const el2 = $('#ai-top-status');
-    if (el2) { el2.textContent = ''; el2.style.display = 'none'; }
+    const ov = $('#ai-ranking-overlay');
+    const tx = $('#ai-ranking-text');
+    if (ov) ov.style.display = 'none';
+    if (tx) tx.textContent = 'AI ranking…';
   }
 
   /* ── Auth ── */
