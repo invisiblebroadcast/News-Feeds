@@ -194,12 +194,20 @@ const FeedFetcher = (() => {
   async function fetchFeed(feed, perSourceCap) {
     // perSourceCap: optionally limit the number of items returned per source
     // (live mode uses a small cap like 25; top mode lets everything through).
+    // Skip sources the user has disabled via the failed-sources flow —
+    // they get tracked but never hit the network until re-enabled.
+    if (window.SourceHealth && SourceHealth.isDisabled(feed.url)) {
+      return [];
+    }
+
     if (isGoogleNewsUrl(feed.url)) {
       try {
         const items = await proxyFetch(feed);
+        afterFetch(feed, items);
         return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
       } catch (err) {
         console.warn(`Google News feed failed: ${feed.name}`, err.message);
+        afterFetch(feed, [], err);
         return [];
       }
     }
@@ -210,6 +218,7 @@ const FeedFetcher = (() => {
     // default cap, which is critical for top-mode ranking.
     try {
       const items = await proxyFetchPaginated(feed);
+      afterFetch(feed, items);
       return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
     } catch (proxyErr) {
       // Fall back to rss2json if the proxy fails (network, 503, etc.)
@@ -248,12 +257,30 @@ const FeedFetcher = (() => {
             guid: item.guid || item.link || ''
           };
         });
+        afterFetch(feed, allItems);
         return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
       } catch (rssErr) {
         console.warn(`Feed failed: ${feed.name} (${feed.url})`, proxyErr.message, rssErr.message);
+        afterFetch(feed, [], rssErr);
         return [];
       }
     }
+  }
+
+  // Report a per-source fetch outcome to the health tracker. We treat
+  // an empty result array the same as an exception — a publisher that
+  // returned a valid 200 OK but a feed with zero items is just as
+  // broken for the user as a network error, and the threshold is
+  // designed to silence such feeds. We do NOT count "pagination
+  // page 2 returned no new items" as a failure — that's normal feed
+  // exhaustion, not a problem with the source. proxyFetchPaginated
+  // therefore returns its first page's count for the result, and
+  // anything with at least one item is a success.
+  function afterFetch(feed, items, err) {
+    if (!window.SourceHealth || !feed || !feed.url) return;
+    const ok = Array.isArray(items) && items.length > 0;
+    if (ok) SourceHealth.recordSuccess(feed.url);
+    else SourceHealth.recordFailure(feed.url, err || new Error('No items returned'));
   }
 
   function filterByDate(articles, dateFrom, dateTo) {

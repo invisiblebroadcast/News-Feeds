@@ -18,6 +18,272 @@
   // pile up stale renders.
   let pendingModeSwitch = 0;
 
+  /* ── Modal / "deeper view" history stack ──
+   *
+   * Goal: when the user presses the browser back button (or the
+   * mobile swipe-back gesture) while a modal (settings, article,
+   * auth, etc.) or full-screen sub-view (comments page) is open, the
+   * modal/view should close — NOT the whole page. Only the *next*
+   * back press should leave the app.
+   *
+   * Mechanism (frame-based with a pushed-state stack):
+   *   - Each "frame" is a logical group of modals/views that belong
+   *     together. The first member of a frame pushes a history
+   *     state; subsequent members of the same frame do not.
+   *   - When the user presses back (or we call history.back() to
+   *     consume a pushed state), the popstate handler closes the
+   *     ENTIRE topmost frame in one go — root + any nested modals.
+   *   - When the user closes a non-root modal via its X button, only
+   *     that modal closes. The frame (and the pushed state) stay
+   *     intact so the next back press still does the right thing.
+   *   - When the user closes the ROOT modal of a frame via X, the
+   *     entire frame closes and we call history.back() to consume
+   *     the pushed state.
+   *   - Multiple frames can stack on the history (e.g. user opens
+   *     article modal, then opens comments page on top of it). Each
+   *     back press pops one frame. We track this with a parallel
+   *     stack (pushedFrameStack) so we always know which frame to
+   *     close when popstate fires.
+   *
+   * Why frames + a pushed-state stack? The original code had a
+   * subtle bug: when the root modal was closed via X, it called
+   * history.back() and the popstate handler then popped the next
+   * modal from the stack (a nested one), closing the wrong modal.
+   * And when a modal was opened on top of another frame (e.g.
+   * reels-view → article modal), the popstate handler would close
+   * the wrong frame because it only tracked ONE active frame. The
+   * stack fixes both: popstate pops the topmost frame, and a
+   * root-modal close only consumes the matching history entry.
+   */
+  // Stack of currently-open modals. Each entry: { name, el, onClose,
+  // frameId, isRoot }. isRoot=true means this modal is the first
+  // member of its frame and therefore owns the pushed history state.
+  const modalStack = [];
+  // Same idea for full-screen sub-views (currently just the comments
+  // page). A single frame is all-modals or all-sub-views, but
+  // different frames can be of different types and stack on the
+  // history independently.
+  const subViewStack = [];
+  // Monotonically-increasing ID for each new frame. Used to associate
+  // modal-stack entries with their pushed history state.
+  let nextFrameId = 0;
+  // Stack of frameIds whose history state is currently pushed, in
+  // push order (oldest first). The TOP of this stack is the
+  // most-recently-pushed frame — the one popstate will close next.
+  // We use this instead of a single `activePushedFrameId` because
+  // frames can stack (reels-view → article modal → comments page) and
+  // popstate needs to know the exact topmost frame to close.
+  const pushedFrameStack = [];
+  // frameId of the currently-active cards/reels view (when the user
+  // is in cards view). Lives at the outer scope so the popstate
+  // handler can detect "the frame the user just popped was the reels
+  // view" and route to exitReelsFromBack() instead of closeFrame().
+  let reelsFrameId = -1;
+
+  function currentFrameId() {
+    if (modalStack.length > 0) return modalStack[modalStack.length - 1].frameId;
+    if (subViewStack.length > 0) return subViewStack[subViewStack.length - 1].frameId;
+    return -1;
+  }
+
+  // Start a new frame and push a history state. The state object
+  // carries a marker so we can ignore popstate events that come from
+  // history changes we didn't make (e.g. external scripts).
+  function beginNewFrame() {
+    const frameId = ++nextFrameId;
+    pushedFrameStack.push(frameId);
+    try { history.pushState({ ibFrame: frameId }, ''); } catch {}
+    return frameId;
+  }
+
+  // Drop a frame from the pushed-state stack without touching the
+  // browser. Used by the popstate handler (after the browser has
+  // already consumed the state) and by the reels-view code when
+  // exiting via a button (instead of via popstate).
+  function dropPushedFrame(frameId) {
+    const idx = pushedFrameStack.lastIndexOf(frameId);
+    if (idx >= 0) pushedFrameStack.splice(idx, 1);
+  }
+
+  // Close every member (modal OR sub-view) belonging to the given
+  // frame, across both stacks. Hides their UI, runs their onClose
+  // callbacks, and removes them from their stack. Does NOT touch the
+  // pushed-state stack — that's the caller's job (closeModal/
+  // closeSubView decide whether to call history.back(); popstate
+  // already consumed the state).
+  function closeFrame(frameId) {
+    for (let i = modalStack.length - 1; i >= 0; i--) {
+      if (modalStack[i].frameId === frameId) {
+        const m = modalStack[i];
+        m.el.classList.remove('open');
+        if (m.onClose) try { m.onClose(); } catch {}
+        modalStack.splice(i, 1);
+      }
+    }
+    for (let i = subViewStack.length - 1; i >= 0; i--) {
+      if (subViewStack[i].frameId === frameId) {
+        const m = subViewStack[i];
+        if (m.onClose) try { m.onClose(); } catch {}
+        subViewStack.splice(i, 1);
+      }
+    }
+  }
+
+  function openModal(name, modalEl, onClose) {
+    if (!modalEl) return;
+    if (modalStack.length === 0 && subViewStack.length === 0) {
+      // Fresh frame — push state so the next back press closes the
+      // whole frame (and not the whole page).
+      const frameId = beginNewFrame();
+      modalStack.push({ name, el: modalEl, onClose, frameId, isRoot: true });
+    } else {
+      // Nested within the current frame — same pushed state.
+      modalStack.push({ name, el: modalEl, onClose, frameId: currentFrameId(), isRoot: false });
+    }
+    modalEl.classList.add('open');
+  }
+
+  function closeModal(name) {
+    const idx = modalStack.findIndex(m => m.name === name);
+    if (idx === -1) return;
+    const m = modalStack[idx];
+
+    if (m.isRoot) {
+      // Closing the root of a frame: just call history.back() to
+      // consume the pushed state. The popstate handler is the
+      // SINGLE source of truth for closing frames — it will run
+      // closeFrame(m.frameId) for us. This avoids the previous bug
+      // where the popstate handler would pop a different (still-
+      // pushed) frame because we'd already removed the popped one
+      // from pushedFrameStack ourselves.
+      //
+      // But only do this when the frame's state is the TOP of the
+      // history. If another frame was pushed on top of this one
+      // (e.g. user opened article modal, then comments page, then
+      // closed the article modal via X), history.back() would
+      // pop the comments frame instead. In that case we just
+      // close the visual element and let the state stay on the
+      // history; a future back press will clean it up.
+      if (pushedFrameStack[pushedFrameStack.length - 1] === m.frameId) {
+        try { history.back(); } catch {
+          // If history.back() isn't available (e.g. file:// in some
+          // browsers), just close the visual element.
+          closeFrame(m.frameId);
+        }
+      } else {
+        closeFrame(m.frameId);
+      }
+    } else {
+      // Closing a nested modal: just hide it and remove from the
+      // stack. The frame and pushed state stay intact so the next
+      // back press still closes the root of this frame.
+      m.el.classList.remove('open');
+      if (m.onClose) try { m.onClose(); } catch {}
+      modalStack.splice(idx, 1);
+    }
+  }
+
+  // options.newFrame: when true, always start a fresh frame (push a
+  // new history state) even if another stack already has content.
+  // Used by the comments page so it gets its own back-stack entry on
+  // top of whatever modal opened it.
+  function openSubView(name, onClose, options) {
+    options = options || {};
+    const forceNewFrame = options.newFrame === true;
+    if ((subViewStack.length === 0 && modalStack.length === 0) || forceNewFrame) {
+      const frameId = beginNewFrame();
+      subViewStack.push({ name, onClose, frameId, isRoot: true });
+    } else {
+      subViewStack.push({ name, onClose, frameId: currentFrameId(), isRoot: false });
+    }
+  }
+
+  function closeSubView(name) {
+    const idx = subViewStack.findIndex(m => m.name === name);
+    if (idx === -1) return;
+    const m = subViewStack[idx];
+
+    if (m.isRoot) {
+      // Same logic as closeModal root: defer to popstate via
+      // history.back(), or close the visual element if the state
+      // is buried under another frame.
+      if (pushedFrameStack[pushedFrameStack.length - 1] === m.frameId) {
+        try { history.back(); } catch {
+          closeFrame(m.frameId);
+        }
+      } else {
+        closeFrame(m.frameId);
+      }
+    } else {
+      if (m.onClose) try { m.onClose(); } catch {}
+      subViewStack.splice(idx, 1);
+    }
+  }
+
+  // Single popstate handler: close the entire topmost frame whose
+  // state was just popped by the browser. With the pushed-state
+  // stack, this works for any combination of root + nested modals
+  // across multiple stacked frames (reels-view → article modal →
+  // comments page, etc).
+  //
+  // Trap behaviour: when there are no pushed frames left, the user
+  // pressed back from the "main" view. Instead of letting the
+  // browser navigate away from the app, we (re)install a sentinel
+  // state and swallow the back press. The user can still leave the
+  // app by closing the tab or tapping an external link.
+  //
+  // We use replaceState (not pushState) so the history doesn't grow
+  // unboundedly on repeat back presses. Initial install uses
+  // pushState so the trap is a NEW entry on top of whatever the
+  // browser had before — this is what "intercepts" the first back
+  // press on app load.
+  let trapInstalled = false;
+  function installBackTrap(useReplace) {
+    if (history.state && history.state.ibTrap) {
+      // Trap is already the current state — nothing to do.
+      trapInstalled = true;
+      return;
+    }
+    trapInstalled = true;
+    try {
+      if (useReplace) history.replaceState({ ibTrap: true }, '');
+      else history.pushState({ ibTrap: true }, '');
+    } catch {}
+  }
+  installBackTrap(false);
+
+  // Suppress re-entry while we're already inside a popstate handler
+  // (e.g. closeFrame calls history.back() which fires popstate again).
+  let popstateBusy = false;
+
+  window.addEventListener('popstate', () => {
+    if (popstateBusy) return;
+    if (pushedFrameStack.length === 0) {
+      // The user pressed back from the main view (no modals/views
+      // open). Re-install the trap so the next back press is a
+      // no-op too, instead of the browser navigating to whatever
+      // page the user was on before this app. Use replaceState so
+      // the history doesn't grow on repeat presses.
+      installBackTrap(true);
+      return;
+    }
+    popstateBusy = true;
+    try {
+      const frameId = pushedFrameStack[pushedFrameStack.length - 1];
+      dropPushedFrame(frameId);
+      // Special case: this frame was the cards/reels view frame. Exit
+      // back to list view instead of going through the modal/subView
+      // closeFrame path (which is a no-op for the reels view).
+      if (frameId === reelsFrameId) {
+        exitReelsFromBack();
+        return;
+      }
+      closeFrame(frameId);
+    } finally {
+      popstateBusy = false;
+    }
+  });
+
   const el = {
     topTabs: $('#top-tab-list'),
     subTabs: $('#sub-tab-list'),
@@ -116,7 +382,10 @@
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
     deleteCommentCancel: $('#delete-comment-cancel'),
-    topDateBtn: $('#top-date-btn')
+    topDateBtn: $('#top-date-btn'),
+    autoDisableFailingSources: $('#auto-disable-failing-sources'),
+    feedHealthCount: $('#feed-health-count'),
+    reenableAllBtn: $('#reenable-all-btn')
   };
 
   if (!el.modal) return;
@@ -1261,9 +1530,22 @@
     }
   }
 
+  // Exit reels view via the in-app exit button (e.g. the home button
+  // on the reels card). Cleans up the back-stack entry that was pushed
+  // when the user entered reels, so the next back press doesn't try
+  // to close an already-gone reels frame.
   function exitReels() {
+    if (currentView !== 'reels') return;
     currentView = 'list';
     document.body.classList.remove('cards-view');
+    $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === currentView);
+    });
+    if (pushedFrameStack[pushedFrameStack.length - 1] === reelsFrameId) {
+      dropPushedFrame(reelsFrameId);
+      try { history.back(); } catch {}
+    }
+    reelsFrameId = -1;
     updateStickyHeader();
     displayCurrentSubcat();
   }
@@ -1556,11 +1838,19 @@
     el.keywordRankBtn.addEventListener('click', () => toggleTopMode('keyword'));
   }
 
+  // Track the cards-view (reels) frame so the browser back button
+  // exits back to list view. We can't reuse the modal/subView stacks
+  // because reels is a body-level class toggle, not a DOM element.
+  // The frameId itself is declared at the outer scope (reelsFrameId)
+  // so the popstate handler can read it.
+
   function bindViewToggle() {
     document.addEventListener('click', e => {
       const btn = e.target.closest('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn');
       if (!btn || btn.classList.contains('active')) return;
-      currentView = btn.dataset.view;
+      const newView = btn.dataset.view;
+      const wasReels = currentView === 'reels';
+      currentView = newView;
       $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => b.classList.remove('active'));
       $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
         if (b.dataset.view === currentView) b.classList.add('active');
@@ -1568,10 +1858,41 @@
       document.body.classList.toggle('cards-view', currentView === 'reels');
       displayCurrentSubcat();
       sizeReelsContainer();
+
+      // Manage the back-stack entry for reels. Entering reels pushes
+      // a fresh frame; leaving it (back to list) consumes the frame.
+      if (currentView === 'reels' && !wasReels) {
+        reelsFrameId = ++nextFrameId;
+        pushedFrameStack.push(reelsFrameId);
+        try { history.pushState({ ibFrame: reelsFrameId, ibReels: true }, ''); } catch {}
+      } else if (wasReels && currentView !== 'reels' && pushedFrameStack[pushedFrameStack.length - 1] === reelsFrameId) {
+        dropPushedFrame(reelsFrameId);
+        try { history.back(); } catch {}
+      }
     });
     window.addEventListener('resize', () => {
       if (currentView === 'reels') sizeReelsContainer();
     });
+  }
+
+  // Exit reels view (e.g. via back button or Escape) without going
+  // through the click handler. Updates the back-stack so the next
+  // back press doesn't keep trying to close an already-gone reels
+  // frame.
+  function exitReelsFromBack() {
+    if (currentView !== 'reels') return;
+    currentView = 'list';
+    document.body.classList.remove('cards-view');
+    $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === currentView);
+    });
+    if (pushedFrameStack[pushedFrameStack.length - 1] === reelsFrameId) {
+      dropPushedFrame(reelsFrameId);
+      try { history.back(); } catch {}
+    }
+    reelsFrameId = -1;
+    updateStickyHeader();
+    displayCurrentSubcat();
   }
 
   /* ── Fetch & Refresh ── */
@@ -2005,10 +2326,10 @@
 
   /* ── Hard Refresh ── */
   function openHardRefreshModal() {
-    if (el.hardRefreshModal) el.hardRefreshModal.classList.add('open');
+    openModal('hardRefresh', el.hardRefreshModal);
   }
   function closeHardRefreshModal() {
-    if (el.hardRefreshModal) el.hardRefreshModal.classList.remove('open');
+    closeModal('hardRefresh');
   }
   function performHardRefresh() {
     // Clear all app caches from localStorage, but preserve the Supabase auth session
@@ -2375,12 +2696,48 @@
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
-    el.modal.classList.add('open');
+    renderFeedHealth();
+    openModal('settings', el.modal, () => {
+      if (el.feedValidateMsg) el.feedValidateMsg.textContent = '';
+    });
+  }
+
+  // Render the Feed Health section inside the Settings modal. Shows the
+  // current state of the auto-disable toggle, how many sources are
+  // currently disabled, and enables the "Re-enable All" button only
+  // when there's something to re-enable. Triggered on open AND on
+  // every source-health change so the count stays in sync.
+  function renderFeedHealth() {
+    if (!SourceHealth) return;
+    const settings = Settings.load();
+    if (el.autoDisableFailingSources) {
+      el.autoDisableFailingSources.checked = !!settings.autoDisableFailingSources;
+    }
+    const tracked = SourceHealth.getTrackedSources();
+    const disabled = tracked.filter(s => s.disabled);
+    const failing = tracked.filter(s => !s.disabled);
+    const count = tracked.length;
+    const countEl = el.feedHealthCount;
+    const btn = el.reenableAllBtn;
+    if (countEl) {
+      if (count === 0) {
+        countEl.textContent = 'No failing sources tracked yet. Sources are flagged after they fail to load.';
+        countEl.className = 'feed-health-count feed-health-count-empty';
+      } else {
+        const parts = [];
+        if (disabled.length) parts.push('<strong>' + disabled.length + '</strong> disabled');
+        if (failing.length) parts.push('<strong>' + failing.length + '</strong> with ' + (SourceHealth.WARN_AT || 2) + '+ failures');
+        countEl.innerHTML = parts.join(' · ');
+        countEl.className = 'feed-health-count';
+      }
+    }
+    if (btn) {
+      btn.disabled = disabled.length === 0;
+    }
   }
 
   function closeSettings() {
-    el.modal.classList.remove('open');
-    if (el.feedValidateMsg) el.feedValidateMsg.textContent = '';
+    closeModal('settings');
   }
 
   function saveSettings() {
@@ -2399,6 +2756,51 @@
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
+    // Feed Health controls (auto-disable toggle + re-enable-all button)
+    if (el.autoDisableFailingSources) {
+      el.autoDisableFailingSources.addEventListener('change', () => {
+        Settings.save({ autoDisableFailingSources: !!el.autoDisableFailingSources.checked });
+        syncSettingsToCloud();
+        // Re-evaluate every tracked source's disabled flag against the
+        // new setting. Flipping the toggle ON will disable anything
+        // already at/above the threshold; flipping OFF leaves existing
+        // disables in place (the user must explicitly re-enable).
+        if (SourceHealth) SourceHealth.syncDisabledState();
+        // Re-render so the count text and re-enable button reflect the
+        // new state.
+        renderFeedHealth();
+        // Also clear scope caches so the next fetch respects the
+        // current disabled-state immediately — otherwise the user
+        // would have to manually refresh after flipping the toggle.
+        for (const k of Object.keys(scopeCache)) scopeCache[k] = null;
+      });
+    }
+    if (el.reenableAllBtn) {
+      el.reenableAllBtn.addEventListener('click', () => {
+        if (!SourceHealth) return;
+        const count = SourceHealth.reEnableAll();
+        renderFeedHealth();
+        if (count > 0) {
+          for (const k of Object.keys(scopeCache)) scopeCache[k] = null;
+        }
+      });
+    }
+    // Keep Settings → Feed Health in sync with live fetches. Whenever
+    // a source's failure count changes, refresh the count text and
+    // re-enable button state — even if the modal is already open.
+    if (window.SourceHealth && typeof SourceHealth.onChange === 'function') {
+      SourceHealth.onChange(() => {
+        if (el.modal && el.modal.classList.contains('open')) renderFeedHealth();
+        // If the Activity → Failed sources tab is currently visible,
+        // re-render it so the row pills / buttons reflect the change.
+        if (el.activityModal && el.activityModal.classList.contains('open')) {
+          const activeTab = document.querySelector('.activity-tab.active');
+          if (activeTab && activeTab.dataset.actab === 'failed') {
+            renderActivityTab('failed');
+          }
+        }
+      });
+    }
     bindIBRow();
     const collapseBtn = $('#collapse-btn');
     const bottomBar = $('#bottom-bar');
@@ -2445,11 +2847,11 @@
 
   /* ── Activity ── */
   function openActivity() {
-    el.activityModal.classList.add('open');
+    openModal('activity', el.activityModal);
     renderActivityTab('history');
   }
 
-  function closeActivity() { el.activityModal.classList.remove('open'); }
+  function closeActivity() { closeModal('activity'); }
 
   function renderActivityTab(tab) {
     const container = el.activityContent;
@@ -2467,6 +2869,12 @@
       filtered = items.filter(([, d]) => d.dislike);
     } else if (tab === 'flagged') {
       filtered = items.filter(([, d]) => d.flag);
+    } else if (tab === 'failed') {
+      // Render Failed sources via a dedicated renderer — it pulls from
+      // SourceHealth, not from the article activity store, so the logic
+      // doesn't fit the generic "items" pipeline below.
+      renderActivityFailed(container);
+      return;
     }
 
     if (!filtered.length) {
@@ -2526,6 +2934,71 @@
       if (tab && el.activityModal && el.activityModal.classList.contains('open')) {
         renderActivityTab(tab.dataset.actab);
       }
+    });
+  }
+
+  // Failed Sources tab in Activity modal. Lists every RSS source the
+  // health tracker has recorded at least one failure for — including
+  // currently disabled ones (highlighted) and ones still below the
+  // threshold (so the user can see the buildup). Each row has a
+  // "Re-enable" button that resets the source's counter.
+  function renderActivityFailed(container) {
+    if (!SourceHealth) {
+      container.innerHTML = '<div class="activity-empty">Source health tracking unavailable.</div>';
+      return;
+    }
+    const tracked = SourceHealth.getVisibleSources();
+    if (!tracked.length) {
+      container.innerHTML = '<div class="activity-empty">No failed sources right now. ' +
+        'Sources appear here after they fail to load several times in a row.</div>';
+      return;
+    }
+    // Try to enrich each row with a friendly feed name + region by
+    // looking up the URL in the subscribable list and any custom feeds.
+    const subFeeds = FeedManager.getSubscribableFeeds();
+    const customFeeds = FeedManager.getCustomFeeds();
+    const nameByUrl = {};
+    for (const f of subFeeds) if (f.url) nameByUrl[f.url] = { name: f.name, region: f.region, hint: f.hint };
+    for (const f of customFeeds) if (f.url) nameByUrl[f.url] = { name: f.name, region: f.scope === 'nation' ? (FeedManager.getNations()[f.nation] || f.nation) : 'Custom', hint: f.subcat };
+
+    container.innerHTML = tracked.map(s => {
+      const meta = nameByUrl[s.url] || {};
+      const title = meta.name || (() => { try { return new URL(s.url).hostname; } catch { return s.url; } })();
+      const region = meta.region || '';
+      const isDisabled = !!s.disabled;
+      const failures = s.failures || 0;
+      const threshold = (SourceHealth.FAILURE_THRESHOLD || 5);
+      const lastErr = s.lastError || 'Unknown error';
+      const lastFail = s.lastFailureAt ? formatDateShort(s.lastFailureAt) : '';
+      return '<div class="failed-item' + (isDisabled ? ' failed-item-disabled' : '') + '">' +
+        '<div class="failed-row-main">' +
+          '<div class="failed-title">' + escHtml(title) +
+            (isDisabled ? '<span class="failed-disabled-pill" title="Skipped on every fetch">disabled</span>' :
+              '<span class="failed-count-pill">' + failures + ' / ' + threshold + ' failures</span>') +
+          '</div>' +
+          (region ? '<div class="failed-source">' + escHtml(region) + '</div>' : '') +
+          '<div class="failed-url" title="' + escAttr(s.url) + '">' + escHtml(s.url) + '</div>' +
+          '<div class="failed-error">Last error: ' + escHtml(lastErr) + (lastFail ? ' · ' + lastFail : '') + '</div>' +
+        '</div>' +
+        '<div class="failed-actions">' +
+          (isDisabled
+            ? '<button class="btn btn-primary failed-reenable-btn" data-url="' + escAttr(s.url) + '">Re-enable</button>'
+            : '<button class="btn failed-reenable-btn" data-url="' + escAttr(s.url) + '" title="Reset failure counter">Reset counter</button>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    container.querySelectorAll('.failed-reenable-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.dataset.url;
+        SourceHealth.reEnable(url);
+        // Re-render in place so the row updates immediately and the
+        // counter pill changes from "X/5" to (gone, once we filter
+        // out fully-reset entries below the WARN_AT threshold).
+        renderActivityFailed(container);
+        // Also refresh the Settings → Feed Health section if it's open.
+        if (el.modal && el.modal.classList.contains('open')) renderFeedHealth();
+      });
     });
   }
 
@@ -2684,13 +3157,12 @@
     if (!$('#sources-config-modal')) return;
     subsConfigFilter = '';
     subsConfigRegion = 'all';
-    $('#sources-config-modal').classList.add('open');
+    openModal('sourcesConfig', $('#sources-config-modal'));
     renderSourcesConfigTable();
   }
 
   function closeSourcesConfigModal() {
-    const m = $('#sources-config-modal');
-    if (m) m.classList.remove('open');
+    closeModal('sourcesConfig');
   }
 
   function renderSourcesConfigTable() {
@@ -2903,10 +3375,10 @@
       flagEl.oninput = flagHandler;
     }
 
-    el.articleModal.classList.add('open');
+    openModal('article', el.articleModal);
   }
 
-  function closeArticleModal() { el.articleModal.classList.remove('open'); }
+  function closeArticleModal() { closeModal('article'); }
 
   function renderCurrentList() {
     const key = scopeKey();
@@ -2928,7 +3400,15 @@
 
   async function openArticleReader(url, title) {
     el.sourceModalTitle.textContent = title || 'Original Article';
-    el.sourceModal.classList.add('open');
+    openModal('source', el.sourceModal, () => {
+      // Reset the reader view so the next open doesn't show stale content.
+      const content = $('#reader-content');
+      if (content) { content.innerHTML = ''; content.style.display = 'none'; }
+      const loading = $('#reader-loading');
+      if (loading) loading.style.display = 'flex';
+      const fallback = $('#source-fallback');
+      if (fallback) fallback.style.display = 'none';
+    });
 
     const loading = $('#reader-loading');
     const content = $('#reader-content');
@@ -3463,13 +3943,7 @@
   }
 
   function closeSourceModal() {
-    el.sourceModal.classList.remove('open');
-    const content = $('#reader-content');
-    if (content) { content.innerHTML = ''; content.style.display = 'none'; }
-    const loading = $('#reader-loading');
-    if (loading) loading.style.display = 'flex';
-    const fallback = $('#source-fallback');
-    if (fallback) fallback.style.display = 'none';
+    closeModal('source');
   }
 
   function bindArticleClicks() {
@@ -3573,11 +4047,14 @@
       if (currentView === 'reels') {
         if (e.key === 'ArrowLeft') { prevReel(); e.preventDefault(); return; }
         if (e.key === 'ArrowRight') { nextReel(); e.preventDefault(); return; }
-        if (e.key === 'Escape') { exitReels(); e.preventDefault(); return; }
+        if (e.key === 'Escape') { exitReelsFromBack(); e.preventDefault(); return; }
       }
       if (e.key === 'Escape') {
+        // Use the same close path the back button does so Escape and
+        // back-press are interchangeable from the user's perspective.
         if (el.hardRefreshModal && el.hardRefreshModal.classList.contains('open')) closeHardRefreshModal();
         else if (el.sourceModal.classList.contains('open')) closeSourceModal();
+        else if (el.commentsPage && el.commentsPage.style.display !== 'none') closeSubView('comments');
         else if (el.articleModal.classList.contains('open')) closeArticleModal();
         else if (el.modal.classList.contains('open')) closeSettings();
       }
@@ -3896,8 +4373,13 @@
     setAuthMode('signin');
     $$('#auth-form-fields input').forEach(i => i.value = '');
     clearInputErrors();
-    const modal = $('#auth-modal');
-    if (modal) modal.classList.add('open');
+    openModal('auth', $('#auth-modal'), () => {
+      // Reset state when the auth modal closes (whether via X or back).
+      setTimeout(() => {
+        showAuthMsg('', null);
+        clearInputErrors();
+      }, 200);
+    });
     // Focus first field after a short delay so the modal animation completes
     setTimeout(() => { $('#auth-email')?.focus(); }, 100);
     // Verify auth service is available
@@ -3913,12 +4395,7 @@
   }
 
   function closeAuthModal() {
-    const modal = $('#auth-modal');
-    if (modal) modal.classList.remove('open');
-    setTimeout(() => {
-      showAuthMsg('', null);
-      clearInputErrors();
-    }, 200);
+    closeModal('auth');
   }
 
   function handleAuthSubmit() {
@@ -3974,13 +4451,11 @@
     }
     const msg = $('#change-name-msg');
     if (msg) { msg.textContent = ''; msg.classList.remove('error', 'success'); }
-    const modal = $('#change-name-modal');
-    if (modal) modal.classList.add('open');
+    openModal('changeName', $('#change-name-modal'));
     setTimeout(() => input?.focus(), 100);
   }
   function closeChangeNameModal() {
-    const modal = $('#change-name-modal');
-    if (modal) modal.classList.remove('open');
+    closeModal('changeName');
   }
 
   async function handleChangeName() {
@@ -4022,13 +4497,11 @@
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const msg = $('#change-password-msg');
     if (msg) { msg.textContent = ''; msg.classList.remove('error', 'success'); }
-    const modal = $('#change-password-modal');
-    if (modal) modal.classList.add('open');
+    openModal('changePassword', $('#change-password-modal'));
     setTimeout(() => document.getElementById('change-password-current')?.focus(), 100);
   }
   function closeChangePasswordModal() {
-    const modal = $('#change-password-modal');
-    if (modal) modal.classList.remove('open');
+    closeModal('changePassword');
   }
 
   async function handleChangePassword() {
@@ -4081,13 +4554,12 @@
       if (preview) { preview.removeAttribute('src'); preview.style.display = 'none'; }
       if (fallback) fallback.style.display = 'flex';
     }
-    const modal = $('#change-avatar-modal');
-    if (modal) modal.classList.add('open');
+    openModal('changeAvatar', $('#change-avatar-modal'), () => {
+      pendingAvatarFile = null;
+    });
   }
   function closeChangeAvatarModal() {
-    const modal = $('#change-avatar-modal');
-    if (modal) modal.classList.remove('open');
-    pendingAvatarFile = null;
+    closeModal('changeAvatar');
   }
 
   function handleAvatarFileSelect(file) {
@@ -4178,6 +4650,11 @@
     hideReplyPreview();
     renderCommentsList();
     setTimeout(() => el.commentsInput?.focus(), 200);
+    // Register with the back-button stack as its OWN frame (newFrame:true)
+    // so the article modal (which is its own frame from the previous back
+    // press) stays open underneath — back closes the comments page first,
+    // then back again closes the article modal.
+    openSubView('comments', closeCommentsPage, { newFrame: true });
   }
 
   function closeCommentsPage() {
@@ -4185,10 +4662,16 @@
     commentsContextArticle = null;
     commentsReplyToId = null;
     hideReplyPreview();
-    // Restore the article modal if it was open before comments
-    if (commentsPreviousWasArticleModal) {
+    // With the new frame-based back-button stack, the article modal
+    // is in its own frame so it stays visible automatically when the
+    // comments page closes. We only need to re-show it explicitly if
+    // it was hidden by something OTHER than the subView system (e.g.
+    // a previous-version close that toggled .open off).
+    if (commentsPreviousWasArticleModal && el.articleModal && !el.articleModal.classList.contains('open')) {
       commentsPreviousWasArticleModal = false;
-      setTimeout(() => el.articleModal.classList.add('open'), 100);
+      el.articleModal.classList.add('open');
+    } else {
+      commentsPreviousWasArticleModal = false;
     }
   }
 
@@ -4322,7 +4805,10 @@
 
   function confirmDeleteComment(commentId) {
     commentsPendingDeleteId = commentId;
-    if (el.deleteCommentModal) el.deleteCommentModal.classList.add('open');
+    openModal('deleteComment', el.deleteCommentModal, () => {
+      // If the user closes without confirming, drop the pending id.
+      // The actual delete handler resets this to null on success.
+    });
   }
 
   function doDeleteComment() {
@@ -4334,7 +4820,7 @@
       saveArticleData(commentsContextArticle.link, ad);
     }
     commentsPendingDeleteId = null;
-    if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+    closeModal('deleteComment');
     renderCommentsList();
     // Update counts
     const newCount = (ad.comments && ad.comments.length) || 0;
@@ -4443,8 +4929,10 @@
     const changeAvatarUpload = $('#change-avatar-upload-btn');
     if (changeAvatarUpload) changeAvatarUpload.addEventListener('click', handleAvatarUpload);
 
-    // Comments page
-    if (el.commentsBackBtn) el.commentsBackBtn.addEventListener('click', closeCommentsPage);
+    // Comments page — route the in-app back button through the same
+    // closeSubView path that popstate uses, so a click and a browser
+    // back press behave identically (both consume the pushed state).
+    if (el.commentsBackBtn) el.commentsBackBtn.addEventListener('click', () => closeSubView('comments'));
     // Draggable resize for comments page — larger drag area, smoother interaction
     const dragHandle = $('#comments-drag-handle');
     if (dragHandle && el.commentsPage) {
@@ -4496,12 +4984,12 @@
     if (el.deleteCommentConfirm) el.deleteCommentConfirm.addEventListener('click', doDeleteComment);
     if (el.deleteCommentCancel) el.deleteCommentCancel.addEventListener('click', () => {
       commentsPendingDeleteId = null;
-      if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+      closeModal('deleteComment');
     });
     const delClose = $('#delete-comment-modal-close');
     if (delClose) delClose.addEventListener('click', () => {
       commentsPendingDeleteId = null;
-      if (el.deleteCommentModal) el.deleteCommentModal.classList.remove('open');
+      closeModal('deleteComment');
     });
     const delModal = $('#delete-comment-modal');
     if (delModal) delModal.addEventListener('click', e => { if (e.target === delModal) {

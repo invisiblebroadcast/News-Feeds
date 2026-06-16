@@ -4,7 +4,13 @@ const Settings = (() => {
     articlesPerPage: 10,
     language: 'en',
     showDescription: false,
-    topDate: ''
+    topDate: '',
+    // When ON, a source that fails 5 times in a row is automatically
+    // disabled and skipped on subsequent fetches. The user can see +
+    // re-enable failed sources from Settings → Feed Health and
+    // Activity → Failed sources. Default OFF so we don't surprise the
+    // user by silently dropping sources on first install.
+    autoDisableFailingSources: false
   };
 
   let cache = null;
