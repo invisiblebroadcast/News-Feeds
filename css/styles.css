@@ -3243,3 +3243,121 @@ body.cards-view {
   text-align: center;
 }
 
+/* Inline banner shown when AI ranking service is offline and we fall
+   back to the deterministic analyzer ranking. */
+#ai-offline-banner {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: calc(100vw - 24px);
+  padding: 10px 14px;
+  background: rgba(77, 171, 247, 0.95);
+  color: #0a1929;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+#ai-offline-banner button {
+  background: transparent;
+  border: none;
+  color: #0a1929;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+/* Conflicts view: severity badge + cluster list */
+.conflict-severity {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.conflict-severity.high { background: rgba(255, 80, 80, 0.18); color: #ff5050; border: 1px solid rgba(255, 80, 80, 0.5); }
+.conflict-severity.medium { background: rgba(255, 146, 43, 0.18); color: #ff922b; border: 1px solid rgba(255, 146, 43, 0.5); }
+.conflict-severity.low { background: rgba(120, 120, 120, 0.18); color: var(--text-secondary); border: 1px solid rgba(120, 120, 120, 0.4); }
+
+.conflict-cluster {
+  background: rgba(255, 146, 43, 0.06);
+  border: 1px solid rgba(255, 146, 43, 0.3);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.conflict-cluster h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.conflict-cluster h4 .cc-warn { color: #ff922b; font-size: 1.1rem; }
+.conflict-cluster .cc-meta {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+.conflict-cluster .cc-claims {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.conflict-cluster .cc-claim-row {
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(255,146,43,0.15);
+}
+.conflict-cluster .cc-claim-row:last-child { border-bottom: none; }
+.conflict-cluster .cc-claim-value { color: var(--accent); font-weight: 600; margin-right: 4px; }
+.conflict-cluster .cc-claim-sources { color: var(--text-tertiary); font-size: 0.78rem; }
+.conflict-cluster .cc-articles { margin-top: 8px; }
+.conflict-cluster .cc-article-link {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.conflict-cluster .cc-article-link:hover { text-decoration: underline; }
+
+/* Empty state for Conflicts view */
+.conflicts-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-tertiary);
+}
+.conflicts-empty .ce-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; }
+
+/* Conflicts tab (top-level) */
+.tab-item.conflicts-tab {
+  color: #ff922b;
+  font-weight: 600;
+}
+.tab-item.conflicts-tab .ct-icon { margin-right: 4px; }
+.tab-item.conflicts-tab .ct-count {
+  display: inline-block;
+  background: rgba(255, 146, 43, 0.25);
+  color: #ff922b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+  min-width: 18px;
+  text-align: center;
+}
+.conflicts-list { padding: 0 4px; }
+

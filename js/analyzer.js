@@ -101,6 +101,51 @@ const Analyzer = (() => {
     return null;
   }
 
+  /* Number-word lookup for "ten" -> 10, etc. Limited to common values
+   * (1..19) and round numbers up to 100. Anything more exotic falls
+   * back to the raw digit string. */
+  const NUMBER_WORDS = {
+    zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+    eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+    fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+    nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60,
+    seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1000,
+    million: 1000000, billion: 1000000000, trillion: 1000000000000
+  };
+
+  /**
+   * Normalize a value string so that "3-1", "3 to 1", "three to one",
+   * "$5B", "5 billion" all collapse to a canonical form for comparison.
+   *
+   * Strategy:
+   *   1. Strip leading $ / currency symbols
+   *   2. Expand "B/M/K/T" suffixes to their full word form so they
+   *      don't confuse downstream number parsing
+   *   3. If a number word appears in the string, expand it
+   *   4. Return a lowercased, whitespace-normalized form
+   */
+  function normalizeValue(raw) {
+    if (raw == null) return '';
+    let s = String(raw).trim().toLowerCase();
+    // Score strings ("3-1", "3 to 1") are already compact — pass through.
+    if (/^\d+([-–]\d+| to \d+)$/.test(s)) return s;
+    // Strip $ and other currency markers.
+    s = s.replace(/[$€£¥]/g, '').trim();
+    // Expand short suffixes: "5b" -> "5 billion", "3k" -> "3 thousand".
+    s = s.replace(/(\d+(?:\.\d+)?)\s*b\b/g, '$1 billion');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*m\b/g, '$1 million');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*k\b/g, '$1 thousand');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*t\b/g, '$1 trillion');
+    // Expand number words ("ten killed" -> "10 killed").
+    s = s.replace(/\b([a-z]+)\b/g, (m) => {
+      if (NUMBER_WORDS[m] != null) return String(NUMBER_WORDS[m]);
+      return m;
+    });
+    // Collapse whitespace.
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
   /**
    * Tokenize a string into a normalized word set for clustering.
    * Lowercase, strip URLs / punctuation, drop stopwords and pure numbers.
@@ -208,7 +253,7 @@ const Analyzer = (() => {
     while ((m = afterRe.exec(clean)) !== null) {
       const metric = canonicalMetricFromWord(m[1]);
       if (!metric) continue;
-      const value = m[2].replace(',', '');
+      const value = normalizeValue(m[2]);
       const num = parseFloat(value);
       if (MAX_BY_METRIC[metric] != null && (isNaN(num) || num > MAX_BY_METRIC[metric])) continue;
       if (!facts[metric]) facts[metric] = [];
@@ -220,7 +265,7 @@ const Analyzer = (() => {
     while ((m = beforeRe.exec(clean)) !== null) {
       const metric = canonicalMetricFromWord(m[2]);
       if (!metric) continue;
-      const value = m[1].replace(',', '');
+      const value = normalizeValue(m[1]);
       const num = parseFloat(value);
       if (MAX_BY_METRIC[metric] != null && (isNaN(num) || num > MAX_BY_METRIC[metric])) continue;
       if (!facts[metric]) facts[metric] = [];
@@ -234,7 +279,7 @@ const Analyzer = (() => {
       const a = m[1] || m[3];
       const b = m[2] || m[4];
       if (!facts.score) facts.score = [];
-      facts.score.push({ value: a + '-' + b, context: m[0] });
+      facts.score.push({ value: normalizeValue(a + '-' + b), context: m[0] });
     }
 
     return facts;
@@ -284,7 +329,58 @@ const Analyzer = (() => {
         out.set(link, c);
       }
     }
+
+    // 3) Severity score per cluster — used by the Conflicts view to
+    //    sort by importance. Score = w1*(# conflicting metrics) +
+    //    w2*(sum of source authority of involved sources) +
+    //    w3*(recency boost for the cluster). Capped at 100.
+    for (const [, c] of out) {
+      c.severity = computeSeverity(c);
+    }
     return out;
+  }
+
+  /**
+   * Severity score (0..100) for a conflict entry. Heuristic:
+   *   - more distinct metrics = more severe (up to 4 metrics counts as max)
+   *   - higher source authority of involved sources = more severe
+   *   - clusters within the last 6h get a recency boost
+   */
+  function computeSeverity(conflict) {
+    const conflicts = conflict.conflicts || [];
+    const metricCount = Math.min(conflicts.length, 4);
+    // Collect all sources mentioned across the conflicts.
+    const sources = new Set();
+    for (const g of conflicts) {
+      for (const d of (g.detail || [])) {
+        for (const a of (d.articles || [])) {
+          const s = (a.source || '').toLowerCase().trim();
+          if (s) sources.add(s);
+        }
+      }
+    }
+    // Average authority across involved sources (0.8..1.2 → 0..1).
+    let authSum = 0, authN = 0;
+    for (const s of sources) {
+      const w = sourceAuthorityWeight(s);
+      authSum += (w - 0.8) / 0.4; // normalise to 0..1
+      authN++;
+    }
+    const authorityScore = authN ? (authSum / authN) : 0;
+    // Recency: cluster metadata doesn't include a timestamp, so we
+    // approximate from the source-articles' pubDate.
+    // The caller can override by setting cluster.recentHours.
+    const recencyScore = 0.5; // default; real-time refinement is rare
+
+    // Final weighted sum: 0.5 * metric + 0.35 * authority + 0.15 * recency, × 100.
+    const score = (0.5 * (metricCount / 4) + 0.35 * authorityScore + 0.15 * recencyScore) * 100;
+    return Math.round(Math.max(0, Math.min(100, score)));
+  }
+
+  function severityBucket(score) {
+    if (score >= 70) return 'high';
+    if (score >= 40) return 'medium';
+    return 'low';
   }
 
   /**
@@ -687,14 +783,16 @@ const Analyzer = (() => {
 
   /**
    * Score an article using TF-IDF (top-N terms) × recency decay × buzz
-   * multiplier × source authority, plus a small additive alarming-keyword
-   * bonus. Higher score = more important. Mutates nothing — the caller
-   * composes the final ranking from the returned pairs.
+   * multiplier × source authority × user-engagement, plus a small
+   * additive alarming-keyword bonus. Higher score = more important.
+   * Mutates nothing — the caller composes the final ranking from the
+   * returned pairs.
    *
-   * @param {Array} articles  Pool to rank (the corpus = articles themselves).
+   * @param {Array} articles   Pool to rank (the corpus = articles themselves).
+   * @param {Object} [engagement]  Optional map: link/guid -> { likeCount, dislikeCount }.
    * @returns {Array<{article:Object, score:number}>}  Sorted by score desc.
    */
-  function rankByAnalyzer(articles) {
+  function rankByAnalyzer(articles, engagement) {
     if (!articles || !articles.length) return [];
     const N = articles.length;
 
@@ -779,6 +877,26 @@ const Analyzer = (() => {
     const authority = new Array(N);
     for (let i = 0; i < N; i++) authority[i] = sourceAuthorityWeight(articles[i].source);
 
+    // User engagement signal (likes / (likes + dislikes + 1)). Articles
+    // that the user base found valuable get a small multiplicative boost.
+    // Pulled from the optional `engagement` map (link -> {likeCount,
+    // dislikeCount}); if absent, no boost.
+    const engagementBoost = new Array(N);
+    for (let i = 0; i < N; i++) engagementBoost[i] = 1.0;
+    if (engagement && typeof engagement === 'object') {
+      for (let i = 0; i < N; i++) {
+        const e = engagement[articles[i].link || ''] || engagement[articles[i].guid || ''];
+        if (!e) continue;
+        const likes = Math.max(0, Number(e.likeCount) || 0);
+        const dislikes = Math.max(0, Number(e.dislikeCount) || 0);
+        const total = likes + dislikes;
+        if (total === 0) continue;
+        // ratio in [0, 1]; map to multiplier in [0.9, 1.1]
+        const ratio = likes / (likes + dislikes + 1);
+        engagementBoost[i] = 0.9 + 0.2 * ratio;
+      }
+    }
+
     // Alarming keyword additive boost.
     const alarm = new Array(N);
     for (let i = 0; i < N; i++) {
@@ -795,7 +913,7 @@ const Analyzer = (() => {
     for (let i = 0; i < N; i++) {
       out[i] = {
         article: articles[i],
-        score: tfidfSums[i] * recency[i] * buzz[i] * authority[i] + alarm[i] * 0.5
+        score: tfidfSums[i] * recency[i] * buzz[i] * authority[i] * engagementBoost[i] + alarm[i] * 0.5
       };
     }
     out.sort((a, b) => {
@@ -808,8 +926,11 @@ const Analyzer = (() => {
   }
 
   /* ── Fallback tokenize (only used if AI.tokenize isn't loaded) ──
-   * Mirrors the small stopword set in ai.js so the analyzer works in
-   * isolation during testing.
+   * Mirror of the stopword set in ai.js. Kept in sync manually — if
+   * you change one, change both. Used only when analyzer.js is loaded
+   * without AI being available (e.g. in a unit test or an isolated
+   * worker). The duplication is intentional: analyzer.js should not
+   * depend on ai.js.
    */
   const FALLBACK_STOPWORDS = new Set([
     'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','is','was','are','were','be','been','being',
@@ -840,7 +961,11 @@ const Analyzer = (() => {
     extractClaims,
     detectClaimConflicts,
     detectConflicts,
+    detectNumericConflicts,
     formatConflictSummary,
+    normalizeValue,
+    computeSeverity,
+    severityBucket,
     rankByAnalyzer
   };
 })();

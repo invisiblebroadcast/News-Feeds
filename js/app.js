@@ -229,6 +229,22 @@
     for (const [key, label] of Object.entries(nations)) {
       html += '<li class="tab-item' + (currentScope === 'nation' && current === key ? ' active' : '') + '" data-scope="nation" data-nation="' + key + '">' + label + '</li>';
     }
+    // Conflicts view is a special scope that lists articles in
+    // cross-source conflicting clusters. Compute its count up-front so
+    // the tab badge stays in sync with what the user will see.
+    let conflictCount = 0;
+    for (const key of Object.keys(scopeCache)) {
+      const cached = scopeCache[key];
+      if (!cached || !cached.groups) continue;
+      const all = [].concat(...Object.values(cached.groups));
+      if (!all.length) continue;
+      const map = AI.detectConflicts(all);
+      for (const c of map.values()) if (c.isConflicting) conflictCount++;
+    }
+    html += '<li class="tab-item conflicts-tab' + (currentScope === 'conflicts' ? ' active' : '') + '" data-scope="conflicts">' +
+      '<span class="ct-icon">⚠</span> Conflicts' +
+      (conflictCount ? '<span class="ct-count">' + conflictCount + '</span>' : '') +
+      '</li>';
     el.topTabs.innerHTML = html;
   }
 
@@ -247,8 +263,12 @@
       liveAllLoaded = false;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      renderSubTabs();
-      renderContent();
+      if (scope === 'conflicts') {
+        renderConflictsView();
+      } else {
+        renderSubTabs();
+        renderContent();
+      }
     });
   }
 
@@ -289,6 +309,11 @@
   }
 
   function renderSubTabs() {
+    if (currentScope === 'conflicts') {
+      el.subTabs.innerHTML = '';
+      el.subBar.style.display = 'none';
+      return;
+    }
     const subs = FeedManager.subcategoriesForScope(currentScope);
     const cacheKey = scopeKey();
     const cached = scopeCache[cacheKey];
@@ -322,6 +347,14 @@
   }
 
   function updateStickyHeader(metaText) {
+    if (currentScope === 'conflicts') {
+      if (el.sectionTitle) {
+        el.sectionTitle.innerHTML = '⚠ Conflicts view' +
+          '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">Cross-source disagreements</span>';
+      }
+      if (el.sectionMeta) el.sectionMeta.innerHTML = '';
+      return;
+    }
     const scopeLabel = currentScope === 'global' ? 'Global' : (FeedManager.getNations()[currentNation] || currentNation);
     const subLabel = FeedManager.subcatLabel(currentSubcat, currentScope);
     if (el.sectionTitle) {
@@ -1230,6 +1263,103 @@
     displayCurrentSubcat();
   }
 
+  /* ── Conflicts view ──
+   * Lists cross-source conflict clusters across all loaded scope caches,
+   * sorted by severity. Each cluster is a card showing the involved
+   * articles and the conflicting figures / claims.
+   */
+  function renderConflictsView() {
+    // 1) Aggregate all loaded articles across every scope cache.
+    const seen = new Set();
+    const all = [];
+    for (const key of Object.keys(scopeCache)) {
+      const cached = scopeCache[key];
+      if (!cached || !cached.groups) continue;
+      for (const cat of Object.keys(cached.groups)) {
+        if (!Array.isArray(cached.groups[cat])) continue;
+        for (const a of cached.groups[cat]) {
+          const id = a.link || a.guid || a.title;
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          all.push(a);
+        }
+      }
+    }
+    updateStickyHeader('Conflicts view');
+
+    if (!all.length) {
+      el.main.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">⚠️</div>' +
+        '<h3>No articles loaded yet</h3>' +
+        '<p>Visit Global or your Nation tab first so we can analyze the latest articles for conflicts.</p></div>';
+      return;
+    }
+
+    // 2) Run conflict detection on the aggregated pool.
+    const map = AI.detectConflicts(all);
+
+    // 3) Group by cluster (clusterSize + first metric + first subject
+    //    is a good enough identity — articles in the same cluster
+    //    share the same `conflicts` array shape).
+    const clusters = new Map();
+    for (const a of all) {
+      const c = map.get(a.link);
+      if (!c || !c.isConflicting) continue;
+      // Build a stable key from the conflict signatures.
+      const key = c.conflicts.map(g => g.metric + ':' + (g.subject || '') + ':' + g.detail.map(d => d.value).sort().join('|')).sort().join('||');
+      if (!clusters.has(key)) clusters.set(key, { conflicts: c.conflicts, severity: c.severity || 0, articles: [], clusterSize: c.clusterSize || 0 });
+      clusters.get(key).articles.push(a);
+    }
+    const list = Array.from(clusters.values());
+    list.sort((a, b) => (b.severity || 0) - (a.severity || 0));
+
+    if (!list.length) {
+      el.main.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">✓</div>' +
+        '<h3>No conflicts detected</h3>' +
+        '<p>Across ' + all.length + ' articles we didn\'t find any cross-source disagreements on numbers or claims.</p></div>';
+      return;
+    }
+
+    // 4) Render the cluster cards.
+    const html = list.map(cluster => {
+      const sev = cluster.severity || 0;
+      const bucket = AI.severityBucket ? AI.severityBucket(sev) : (sev >= 70 ? 'high' : sev >= 40 ? 'medium' : 'low');
+      const claimRows = (cluster.conflicts || []).map(group => {
+        const label = group.metric === 'claim'
+          ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
+          : escHtml(group.metric);
+        return '<div class="cc-claim-row">' +
+          '<span class="cc-claim-value">' + escHtml(label) + ':</span> ' +
+          group.detail.map(g =>
+            '<span class="cc-claim-value">' + escHtml(g.value) + '</span>' +
+            '<span class="cc-claim-sources">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>'
+          ).join(' vs ') +
+          '</div>';
+      }).join('');
+      const articleLinks = (cluster.articles || []).map(a =>
+        '<a class="cc-article-link" data-link="' + encodeURIComponent(a.link) + '">' + escHtml(a.title || a.link) + '</a>'
+      ).join('');
+      return '<div class="conflict-cluster">' +
+        '<h4><span class="cc-warn">⚠</span> ' + escHtml(cluster.conflicts[0].subject || (cluster.conflicts[0].metric + ' disagreement')) +
+        '<span class="conflict-severity ' + bucket + '">Severity ' + sev + '</span></h4>' +
+        '<div class="cc-meta">' + cluster.articles.length + ' of ' + cluster.clusterSize + ' sources disagree · ' +
+        cluster.conflicts.length + ' metric' + (cluster.conflicts.length > 1 ? 's' : '') + '</div>' +
+        '<div class="cc-claims">' + claimRows + '</div>' +
+        '<div class="cc-articles">' + articleLinks + '</div>' +
+        '</div>';
+    }).join('');
+
+    el.main.innerHTML = '<div class="conflicts-list">' + html + '</div>';
+
+    // Wire article links to open the modal.
+    el.main.querySelectorAll('.cc-article-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const url = decodeURIComponent(link.dataset.link);
+        openArticleDetail(url);
+      });
+    });
+  }
+
   function forceExitToHome() {
     if (document.fullscreenElement || document.webkitFullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
@@ -1582,13 +1712,39 @@
             if (rankOk) {
               clearTopListStatus();
             } else {
-              console.warn('AI ranking produced no result for', scope, subcat, '— falling back to Live mode');
-              setTopListStatus('AI ranking failed — switching to Live');
-              currentMode = 'live';
-              updateModeButtonActive();
-              updateRankControls();
-              setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
-              return;
+              // AI failed (rate limit / network / quota) — keep top mode
+              // active and fall back to the deterministic analyzer ranking
+              // so the user still gets a meaningful "Top" list. Show a
+              // small banner so they know the AI wasn't used.
+              console.warn('AI ranking unavailable for', scope, subcat, '— using analyzer fallback');
+              try {
+                let fbInput;
+                if (subcat === 'all') {
+                  fbInput = [];
+                  for (const cat of Object.keys(cached.groups)) fbInput.push(...cached.groups[cat]);
+                } else {
+                  fbInput = cached.groups[subcat] || [];
+                }
+                fbInput = FeedFetcher.deduplicate(fbInput);
+                fbInput = FeedFetcher.sortByDate(fbInput);
+                const r = await AI.rankByKeywords(fbInput, scope, subcat);
+                if (r && r.length) {
+                  articles = r;
+                  articles.forEach(a => { a.link = a.link || a.url; a._kwRanked = true; });
+                  showAiOfflineBanner();
+                  clearTopListStatus();
+                } else {
+                  throw new Error('Analyzer fallback also produced no result');
+                }
+              } catch (fbErr) {
+                console.warn('Analyzer fallback failed:', fbErr);
+                setTopListStatus('Ranking failed — switching to Live');
+                currentMode = 'live';
+                updateModeButtonActive();
+                updateRankControls();
+                setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
+                return;
+              }
             }
           } else {
             setTopListStatus("Today's ranking will be ready at 8 PM IST");
@@ -3380,6 +3536,22 @@
     if (m) m.classList.add('open');
   }
   function resetRateLimitFlag() { rateLimitModalShown = false; }
+
+  // Soft inline banner shown when the AI ranking service is unavailable
+  // and we fall back to the deterministic analyzer. One per page load.
+  let aiOfflineBannerShown = false;
+  function showAiOfflineBanner() {
+    if (aiOfflineBannerShown) return;
+    aiOfflineBannerShown = true;
+    if (document.getElementById('ai-offline-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'ai-offline-banner';
+    bar.innerHTML =
+      '<span>🤖 <strong>AI ranking offline</strong> — showing deterministic keyword ranking (TF-IDF + recency + buzz).</span>' +
+      '<button id="ai-offline-dismiss" aria-label="Dismiss">×</button>';
+    document.body.appendChild(bar);
+    document.getElementById('ai-offline-dismiss').onclick = () => bar.remove();
+  }
   function bindAiRateLimitModal() {
     const m = $('#ai-rate-limit-modal');
     if (!m) return;

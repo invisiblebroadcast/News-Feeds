@@ -325,7 +325,8 @@ const AI = (() => {
     'into','through','during','between','against','around','near','far','here','there','now','still','already','yet',
     'amid','says','said','say','told','tell','tells','report','reports','reported','according','claim','claims','claimed',
     'live','updates','update','news','top','watch','video','read','full','story','photos','photo','video','watch',
-    'one','two','three','four','five','six','seven','eight','nine','ten','vs','per'
+    'one','two','three','four','five','six','seven','eight','nine','ten','vs','per',
+    'said','says','told','tells','reports','reported','according','claim','claims','claimed'
   ]);
 
   function tokenize(text) {
@@ -364,9 +365,24 @@ const AI = (() => {
     }
     if (!candidates.length) return null;
 
-    // Hand off to the Analyzer: TF-IDF × recency × buzz × source authority,
-    // plus a small additive bonus for alarming keywords.
-    const ranked = Analyzer.rankByAnalyzer(candidates);
+    // Build a link/guid -> { likeCount, dislikeCount } map from the
+    // Supabase store so the analyzer can apply the engagement boost.
+    let engagement = null;
+    try {
+      const all = (SupabaseStore.getAll && SupabaseStore.getAll()) || {};
+      const m = {};
+      for (const k of Object.keys(all)) {
+        const d = all[k] || {};
+        if ((d.likeCount || 0) || (d.dislikeCount || 0)) {
+          m[k] = { likeCount: d.likeCount || 0, dislikeCount: d.dislikeCount || 0 };
+        }
+      }
+      if (Object.keys(m).length) engagement = m;
+    } catch {}
+
+    // Hand off to the Analyzer: TF-IDF × recency × buzz × source authority
+    // × user engagement, plus a small additive bonus for alarming keywords.
+    const ranked = Analyzer.rankByAnalyzer(candidates, engagement);
 
     // Map top 25 into the same shape AI rankings use.
     let final = ranked.slice(0, 25).map((entry, i) => ({
