@@ -1774,6 +1774,8 @@
         el.aiRankBtn.disabled = true;
         // Reset the seed promise so rankAllCombos can run a fresh batch.
         seedPromise = null;
+        // Show the overlay IMMEDIATELY so the user gets instant feedback.
+        setTopListStatus('Preparing…');
         try {
           // force=true: rank every scope/subcat combo regardless of whether
           // today's data already exists.
@@ -1782,6 +1784,7 @@
           console.warn('Manual rank failed:', e);
         } finally {
           el.aiRankBtn.disabled = false;
+          clearTopListStatus();
           // If we're in top mode, refresh the view so newly-saved rankings show.
           if (currentMode === 'top') displayCurrentSubcat();
         }
@@ -3054,20 +3057,12 @@
     const tx = $('#ai-ranking-text');
     if (ov) {
       ov.classList.remove('ai-overlay-hidden');
-      console.log('[overlay] shown:', text);
-    } else {
-      console.warn('[overlay] element not found');
     }
     if (tx) tx.textContent = text || 'AI ranking…';
   }
   function clearTopListStatus() {
     const ov = $('#ai-ranking-overlay');
-    const tx = $('#ai-ranking-text');
-    if (ov) {
-      ov.classList.add('ai-overlay-hidden');
-      console.log('[overlay] hidden');
-    }
-    if (tx) tx.textContent = 'AI ranking…';
+    if (ov) ov.classList.add('ai-overlay-hidden');
   }
 
   /* ── Auth ── */
