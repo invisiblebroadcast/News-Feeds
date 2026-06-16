@@ -654,6 +654,37 @@ body.cards-view .app-footer {
   color: var(--text-secondary);
 }
 .mode-btn-icon svg { display: block; }
+
+/* IB-row rank toggles (Top AI / Top Keyword). Always visible. */
+.ib-rank-toggle {
+  display: inline-flex;
+}
+.ib-rank-toggle.active {
+  background: rgba(77, 171, 247, 0.22);
+  border-color: #4dabf7;
+  color: #4dabf7;
+  box-shadow: 0 0 0 1px rgba(77, 171, 247, 0.45),
+              0 0 14px rgba(77, 171, 247, 0.25);
+}
+.ib-rank-toggle.active:hover {
+  background: rgba(77, 171, 247, 0.3);
+}
+
+/* Compact language select when it lives in the top-tab-bar (Global/India bar). */
+#top-tab-bar .lang-select select {
+  padding: 4px 8px;
+  font-size: 0.76rem;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+}
+#top-tab-bar .lang-select select:focus {
+  border-color: var(--accent);
+}
 .mode-btn:not(:last-child) {
   border-right: 1px solid var(--border-primary);
 }

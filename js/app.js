@@ -1250,11 +1250,40 @@
     return scopeName + ' · ' + subName;
   }
 
+  // Toggle the Top mode for a given rank type.
+  // Click once  → enter Top (AI or Keyword) and load/rank the articles.
+  // Click again (when already in that mode) → return to Live.
+  // Clicking the other toggle while in one Top mode switches to the other.
+  function toggleTopMode(rankType) {
+    if (currentMode === 'top' && currentRankType === rankType) {
+      currentMode = 'live';
+    } else {
+      currentMode = 'top';
+      currentRankType = rankType;
+    }
+    loadedCount = 0;
+    liveAllLoaded = false;
+    hasFreshBackground = false;
+    updateModeButtonActive();
+    updateRankControls();
+    updateSortOptions();
+    updateStickyHeader();
+    displayCurrentSubcat();
+  }
+
   function updateRankControls() {
     const inTopAi = currentMode === 'top' && currentRankType === 'ai';
     const inTopKw = currentMode === 'top' && currentRankType === 'keyword';
-    if (el.aiRankBtn) el.aiRankBtn.style.display = inTopAi ? 'inline-flex' : 'none';
-    if (el.keywordRankBtn) el.keywordRankBtn.style.display = inTopKw ? 'inline-flex' : 'none';
+    // Both IB-row rank toggles are always visible. The active one is
+    // highlighted in blue (see .ib-rank-toggle.active in styles.css).
+    if (el.aiRankBtn) {
+      el.aiRankBtn.classList.toggle('active', inTopAi);
+      el.aiRankBtn.setAttribute('aria-pressed', inTopAi ? 'true' : 'false');
+    }
+    if (el.keywordRankBtn) {
+      el.keywordRankBtn.classList.toggle('active', inTopKw);
+      el.keywordRankBtn.setAttribute('aria-pressed', inTopKw ? 'true' : 'false');
+    }
     if (el.topDateBtn) el.topDateBtn.style.display = inTopAi ? 'inline-flex' : 'none';
   }
 
@@ -1281,23 +1310,10 @@
     });
   }
 
-  // Re-run keyword ranking for the current subcat/scope. Instant (no API),
-  // but we flash the processing overlay so the user gets feedback.
+  // Keyword rank toggle in the IB row. Toggles Top Keyword <-> Live.
   function bindKeywordRankBtn() {
     if (!el.keywordRankBtn) return;
-    el.keywordRankBtn.addEventListener('click', async () => {
-      if (currentMode !== 'top' || currentRankType !== 'keyword') return;
-      el.keywordRankBtn.disabled = true;
-      setTopListStatus('Ranking by keywords…');
-      try {
-        await displayCurrentSubcat();
-      } catch (e) {
-        console.warn('Keyword re-rank failed:', e);
-      } finally {
-        el.keywordRankBtn.disabled = false;
-        setTimeout(clearTopListStatus, 400);
-      }
-    });
+    el.keywordRankBtn.addEventListener('click', () => toggleTopMode('keyword'));
   }
 
   function bindViewToggle() {
@@ -1928,33 +1944,10 @@
     }
   }
 
+  // AI rank toggle in the IB row. Toggles Top AI <-> Live.
   function bindAiRankBtn() {
     if (el.aiRankBtn) {
-      el.aiRankBtn.addEventListener('click', async () => {
-        if (seedPromise) return; // already running
-        el.aiRankBtn.disabled = true;
-        // Reset the seed promise so rankAllCombos can run a fresh batch.
-        seedPromise = null;
-        resetRateLimitFlag();
-        // Show the overlay IMMEDIATELY so the user gets instant feedback.
-        setTopListStatus('Running AI ranking…');
-        try {
-          // force=true: rank every scope/subcat combo regardless of whether
-          // today's data already exists.
-          await rankAllCombos(true);
-        } catch (e) {
-          console.warn('Manual rank failed:', e);
-        } finally {
-          el.aiRankBtn.disabled = false;
-          // Auto-switch to Top mode once the run completes.
-          currentMode = 'top';
-          currentRankType = 'ai';
-          updateModeButtonActive();
-          updateRankControls();
-          // displayCurrentSubcat handles the overlay for the load + render.
-          await displayCurrentSubcat();
-        }
-      });
+      el.aiRankBtn.addEventListener('click', () => toggleTopMode('ai'));
     }
   }
 
