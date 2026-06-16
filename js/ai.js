@@ -1,7 +1,7 @@
 const AI = (() => {
   const REQUEST_TIMEOUT_MS = 60000;
-  const XAI_ENDPOINT = 'https://api.x.ai/v1';
-  const XAI_MODEL = 'grok-3-mini';
+  const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/openai';
+  const GEMINI_MODEL = 'gemini-2.5-flash';
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -30,18 +30,18 @@ const AI = (() => {
 
   function getConfig() {
     return {
-      key: XAI_KEY,
-      endpoint: XAI_ENDPOINT.replace(/\/+$/, ''),
-      model: XAI_MODEL
+      key: GEMINI_KEY,
+      endpoint: GEMINI_ENDPOINT.replace(/\/+$/, ''),
+      model: GEMINI_MODEL
     };
   }
 
-  /* ── xAI / OpenAI-compatible API call (non-streaming) ── */
+  /* ── Gemini / OpenAI-compatible API call (non-streaming) ── */
 
   async function complete({ system, user, signal }) {
     const cfg = getConfig();
     console.log('[AI] complete() called, endpoint:', cfg.endpoint, 'model:', cfg.model, 'key length:', cfg.key ? cfg.key.length : 0);
-    if (!cfg.key) throw new Error('AI API key not configured. Add it in Settings → AI Top List.');
+    if (!cfg.key) throw new Error('AI API key not configured.');
     const messages = [
       { role: 'system', content: system },
       { role: 'user', content: user }
@@ -62,7 +62,7 @@ const AI = (() => {
       if (!res.ok) {
         let detail = '';
         try { detail = (await res.text()).slice(0, 300); } catch {}
-        if (res.status === 401) throw new Error('Invalid API key. Check your key in Settings → AI Top List.');
+        if (res.status === 401 || res.status === 403) throw new Error('Invalid API key or quota exhausted.');
         throw new Error('AI API returned HTTP ' + res.status + (detail ? ' — ' + detail : ''));
       }
       const data = await res.json();
