@@ -1858,22 +1858,19 @@
 
       if (!work.length) { clearTopListStatus(); return; }
 
-      // Process in parallel batches of 3 with a small gap so we stay well under
-      // Gemini's free-tier rate limit (15 RPM = 1 call per 4s, so 3 parallel
-      // every ~3s keeps us around 1/s on average).
-      const BATCH = 3;
-      const GAP_MS = 1000;
-      let done = 0;
-      for (let i = 0; i < work.length; i += BATCH) {
-        const slice = work.slice(i, i + BATCH);
-        setTopListStatus('AI ranking ' + (done + 1) + '–' + Math.min(done + slice.length, work.length) + ' / ' + work.length);
-        await Promise.allSettled(slice.map(item =>
-          AI.rankArticles(item.articles, item.scope, item.subcat)
-            .then(() => console.log('[rank] saved', item.scope + '/' + item.subcat))
-            .catch(e => console.warn('Rank failed for ' + item.scope + '/' + item.subcat + ':', e))
-        ));
-        done += slice.length;
-        if (done < work.length) await new Promise(r => setTimeout(r, GAP_MS));
+      // Gemini free tier is 15 RPM = 1 call per 4s. Process sequentially with
+      // a 4.2s gap so we never hit the rate limit. ~18 combos ≈ 75s total.
+      const GAP_MS = 4200;
+      for (let i = 0; i < work.length; i++) {
+        const { scope, subcat, articles } = work[i];
+        setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
+        if (i > 0) await new Promise(r => setTimeout(r, GAP_MS));
+        try {
+          await AI.rankArticles(articles, scope, subcat);
+          console.log('[rank] saved', scope + '/' + subcat);
+        } catch (e) {
+          console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
+        }
       }
       clearTopListStatus();
     })();

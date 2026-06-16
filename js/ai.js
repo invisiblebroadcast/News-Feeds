@@ -52,32 +52,46 @@ const AI = (() => {
       { role: 'system', content: system },
       { role: 'user', content: user }
     ];
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const combined = signal
-      ? { signal: AbortSignal.any?.([signal, controller.signal]) || signal }
-      : { signal: controller.signal };
-    try {
-      const res = await fetch(cfg.endpoint + '/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
-        body: JSON.stringify({ model: cfg.model, messages, temperature: 0.3, max_tokens: 2048 }),
-        ...combined
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) {
-        let detail = '';
-        try { detail = (await res.text()).slice(0, 300); } catch {}
-        if (res.status === 401 || res.status === 403) throw new Error('Invalid API key or quota exhausted.');
-        throw new Error('AI API returned HTTP ' + res.status + (detail ? ' — ' + detail : ''));
+
+    // Retry on 429 (rate limit) with exponential backoff.
+    let attempt = 0;
+    const maxAttempts = 3;
+    while (attempt < maxAttempts) {
+      attempt++;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      const combined = signal
+        ? { signal: AbortSignal.any?.([signal, controller.signal]) || signal }
+        : { signal: controller.signal };
+      try {
+        const res = await fetch(cfg.endpoint + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+          body: JSON.stringify({ model: cfg.model, messages, temperature: 0.3, max_tokens: 2048 }),
+          ...combined
+        });
+        clearTimeout(timeoutId);
+        if (res.status === 429 && attempt < maxAttempts) {
+          const wait = 4000 * attempt; // 4s, 8s
+          console.warn('[AI] 429 rate limited, retrying in', wait, 'ms (attempt', attempt + ')');
+          await sleep(wait);
+          continue;
+        }
+        if (!res.ok) {
+          let detail = '';
+          try { detail = (await res.text()).slice(0, 300); } catch {}
+          if (res.status === 401 || res.status === 403) throw new Error('Invalid API key or quota exhausted.');
+          throw new Error('AI API returned HTTP ' + res.status + (detail ? ' — ' + detail : ''));
+        }
+        const data = await res.json();
+        return data?.choices?.[0]?.message?.content || '';
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') throw new Error('Request timed out after 60s');
+        if (attempt >= maxAttempts) throw e;
       }
-      const data = await res.json();
-      return data?.choices?.[0]?.message?.content || '';
-    } catch (e) {
-      clearTimeout(timeoutId);
-      if (e.name === 'AbortError') throw new Error('Request timed out after 60s');
-      throw e;
     }
+    throw new Error('AI API: max retries exceeded');
   }
 
   /* ── Supabase storage for top-100 lists ── */
