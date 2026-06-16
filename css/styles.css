@@ -2763,45 +2763,45 @@ body.cards-view {
 .article-card:nth-child(9) { animation-delay: 0.18s; }
 .article-card:nth-child(10) { animation-delay: 0.20s; }
 
-@keyframes ai-spin { to { transform: rotate(360deg); } }
+@keyframes processing-spin { to { transform: rotate(360deg); } }
 
-#ai-ranking-overlay {
+#processing-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  display: flex !important;
+  background: rgba(10, 10, 14, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
   pointer-events: none;
 }
-#ai-ranking-overlay.ai-overlay-hidden { display: none !important; }
-#ai-ranking-overlay.ai-overlay-hidden { display: none; }
-#ai-ranking-overlay .ai-overlay-content {
+#processing-overlay.processing-hidden { display: none; }
+#processing-overlay .processing-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  background: rgba(20, 20, 20, 0.85);
-  padding: 32px 48px;
+  gap: 18px;
+  padding: 32px 44px;
+  background: rgba(18, 18, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
-#ai-ranking-overlay .ai-spinner {
-  width: 52px;
-  height: 52px;
-  border: 4px solid rgba(255, 255, 255, 0.2);
+#processing-overlay .processing-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(255, 255, 255, 0.15);
   border-top-color: var(--accent, #4dabf7);
   border-radius: 50%;
-  animation: ai-spin 0.8s linear infinite;
+  animation: processing-spin 0.8s linear infinite;
 }
-#ai-ranking-overlay #ai-ranking-text {
-  font-size: 1.1rem;
+#processing-overlay .processing-text {
+  font-size: 1.05rem;
   font-weight: 600;
   color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.01em;
 }
 

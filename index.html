@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000">
   <meta name="description" content="Global & Local News Aggregator">
   <title>News-Feeds</title>
-  <link rel="stylesheet" href="css/styles.css?v=26">
+  <link rel="stylesheet" href="css/styles.css?v=27">
 </head>
 <body>
 
@@ -133,10 +133,10 @@
       <div class="loading-spinner"></div>
       <p>Loading news feeds&hellip;</p>
     </div>
-    <div id="ai-ranking-overlay" class="ai-overlay-hidden">
-      <div class="ai-overlay-content">
-        <div class="ai-spinner"></div>
-        <div id="ai-ranking-text">AI ranking…</div>
+    <div id="processing-overlay" class="processing-hidden" aria-live="polite">
+      <div class="processing-card">
+        <div class="processing-spinner"></div>
+        <div id="processing-text" class="processing-text">Loading…</div>
       </div>
     </div>
   </main>
@@ -595,13 +595,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=26"></script>
-  <script src="js/supabase-store.js?v=26"></script>
-  <script src="js/feeds.js?v=26"></script>
-  <script src="js/fetcher.js?v=26"></script>
-  <script src="js/translator.js?v=26"></script>
-  <script src="js/gemini-key.js?v=26"></script>
-  <script src="js/ai.js?v=26"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/settings.js?v=27"></script>
+  <script src="js/supabase-store.js?v=27"></script>
+  <script src="js/feeds.js?v=27"></script>
+  <script src="js/fetcher.js?v=27"></script>
+  <script src="js/translator.js?v=27"></script>
+  <script src="js/gemini-key.js?v=27"></script>
+  <script src="js/ai.js?v=27"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>

@@ -1317,6 +1317,9 @@
       const viewDate = settings.topDate || today;
       // Reset the rate-limit modal flag for this top-mode entry.
       resetRateLimitFlag();
+      // Show the processing overlay for the entire top-mode flow: DB fetch
+      // and (if needed) AI ranking.
+      setTopListStatus('Loading rankings…');
 
       const ranked = await AI.loadTopList(viewDate, scope, subcat);
       if (ranked) {
@@ -1325,8 +1328,8 @@
       } else {
         const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
         if (viewDate !== today) {
-          clearTopListStatus();
           setTopListStatus('No ranking for ' + viewDate);
+          setTimeout(clearTopListStatus, 1500);
         } else if (!hasYesterday) {
           setTopListStatus('AI ranking…');
           let rankOk = false;
@@ -1360,8 +1363,8 @@
             return;
           }
         } else {
-          clearTopListStatus();
           setTopListStatus("Today's ranking will be ready at 8 PM IST");
+          setTimeout(clearTopListStatus, 2500);
         }
       }
     }
@@ -1779,7 +1782,7 @@
         seedPromise = null;
         resetRateLimitFlag();
         // Show the overlay IMMEDIATELY so the user gets instant feedback.
-        setTopListStatus('Preparing…');
+        setTopListStatus('Running AI ranking…');
         try {
           // force=true: rank every scope/subcat combo regardless of whether
           // today's data already exists.
@@ -1788,9 +1791,12 @@
           console.warn('Manual rank failed:', e);
         } finally {
           el.aiRankBtn.disabled = false;
-          clearTopListStatus();
-          // If we're in top mode, refresh the view so newly-saved rankings show.
-          if (currentMode === 'top') displayCurrentSubcat();
+          // Auto-switch to Top mode once the run completes.
+          currentMode = 'top';
+          $$('.mode-btn', el.modeToggle).forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+          if (el.topDateBtn) el.topDateBtn.style.display = 'inline-flex';
+          // displayCurrentSubcat handles the overlay for the load + render.
+          await displayCurrentSubcat();
         }
       });
     }
@@ -3062,16 +3068,14 @@
   }
 
   function setTopListStatus(text) {
-    const ov = $('#ai-ranking-overlay');
-    const tx = $('#ai-ranking-text');
-    if (ov) {
-      ov.classList.remove('ai-overlay-hidden');
-    }
-    if (tx) tx.textContent = text || 'AI ranking…';
+    const ov = $('#processing-overlay');
+    const tx = $('#processing-text');
+    if (ov) ov.classList.remove('processing-hidden');
+    if (tx) tx.textContent = text || 'Loading…';
   }
   function clearTopListStatus() {
-    const ov = $('#ai-ranking-overlay');
-    if (ov) ov.classList.add('ai-overlay-hidden');
+    const ov = $('#processing-overlay');
+    if (ov) ov.classList.add('processing-hidden');
   }
 
   // Show the rate-limit modal at most once per "session" (one click or one
