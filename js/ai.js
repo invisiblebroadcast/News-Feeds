@@ -26,6 +26,12 @@ const AI = (() => {
     return d.toISOString().slice(0, 10);
   }
 
+  function yesterdayStr() {
+    const d = new Date();
+    d.setHours(d.getHours() + 5.5 - 24); // IST - 1 day
+    return d.toISOString().slice(0, 10);
+  }
+
   /* ── Config ── */
 
   function getConfig() {
@@ -250,6 +256,7 @@ const AI = (() => {
     stripHtml,
     formatDateShort,
     todayStr,
+    yesterdayStr,
     getConfig,
     complete,
     upsertTopList,

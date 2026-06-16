@@ -1310,54 +1310,54 @@
     // perPage (or 3× perPage in top mode) and offers a Load More button.
     // We do NOT cap here so the user gets the full ranking.
 
-    // AI Top List: load or generate AI ranking when enabled and in top mode
+    // AI Top List: load from DB only. Ranking happens at 8 PM IST (scheduled)
+    // or on-demand only when even yesterday's ranking is missing for the
+    // current scope/subcat (so the user always has something to look at).
     if (currentMode === 'top') {
       const today = AI.todayStr();
+      const yesterday = AI.yesterdayStr();
       const scope = currentScope;
       const subcat = currentSubcat;
       const viewDate = (el.topDate && el.topDate.value) || today;
 
-      // If the seed (one batch covering ALL scope/subcat combos) hasn't
-      // started yet, kick it off now. If it's running, wait for it. This
-      // guarantees the user never triggers a per-category ranking on top of
-      // the seed — the seed produces every combo exactly once, then every
-      // subsequent switch just loads from DB.
-      if (!seedPromise) {
-        rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
-      }
-      if (seedPromise) {
-        setTopListStatus('Preparing AI rankings…');
-        try { await seedPromise; } catch (e) { console.warn('Seed failed:', e); }
+      const ranked = await AI.loadTopList(viewDate, scope, subcat);
+      if (ranked) {
+        articles = ranked;
         clearTopListStatus();
-      }
-
-      if (viewDate === today && await AI.needsRanking(today, scope, subcat)) {
-        setTopListStatus('AI ranking…');
-        try {
-          const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-          let rankInput;
-          if (subcat === 'all') {
-            rankInput = [];
-            for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
-          } else {
-            rankInput = cached.groups[subcat] || [];
-          }
-          rankInput = FeedFetcher.deduplicate(rankInput);
-          rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
-          rankInput = FeedFetcher.sortByDate(rankInput);
-          const ranked = await AI.rankArticles(rankInput, scope, subcat);
-          if (ranked) articles = ranked;
-        } catch (e) {
-          console.warn('AI ranking failed:', e);
-        } finally {
-          clearTopListStatus();
-        }
       } else {
-        const ranked = await AI.loadTopList(viewDate, scope, subcat);
-        if (ranked) { articles = ranked; clearTopListStatus(); }
-        else {
+        // No ranking for viewDate. Decide whether to rank now.
+        // Rank now ONLY if both today and yesterday are missing (user has
+        // nothing to look at). Otherwise wait for the 8 PM scheduled job.
+        const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
+        if (viewDate !== today) {
           clearTopListStatus();
-          if (viewDate !== today) setTopListStatus('No ranking for ' + viewDate);
+          setTopListStatus('No ranking for ' + viewDate);
+        } else if (!hasYesterday) {
+          // First time for this combo — rank now so the page isn't empty.
+          setTopListStatus('AI ranking…');
+          try {
+            const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+            let rankInput;
+            if (subcat === 'all') {
+              rankInput = [];
+              for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
+            } else {
+              rankInput = cached.groups[subcat] || [];
+            }
+            rankInput = FeedFetcher.deduplicate(rankInput);
+            rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
+            rankInput = FeedFetcher.sortByDate(rankInput);
+            const r = await AI.rankArticles(rankInput, scope, subcat);
+            if (r) articles = r;
+          } catch (e) {
+            console.warn('AI ranking failed:', e);
+          } finally {
+            clearTopListStatus();
+          }
+        } else {
+          // Yesterday exists, today doesn't. Wait for 8 PM scheduled run.
+          clearTopListStatus();
+          setTopListStatus("Today's ranking will be ready at 8 PM IST");
         }
       }
     }
@@ -1771,8 +1771,13 @@
       const subs = FeedManager.subcategories();
       const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
       const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const today = AI.todayStr();
+      const yesterday = AI.yesterdayStr();
+      const hour = getISTHour();
+      // 8 PM has passed for today → safe to rank today's combos. Otherwise
+      // only rank combos where yesterday is ALSO missing (first-time use).
+      const pastCutoff = hour >= 20;
 
-      // First pass: count work to do so we can show "X / Y" progress.
       const work = [];
       for (const scope of scopes) {
         const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
@@ -1792,6 +1797,12 @@
         }
 
         for (const subcat of subs) {
+          const [hasToday, hasYesterday] = await Promise.all([
+            AI.loadTopList(today, scope, subcat),
+            AI.loadTopList(yesterday, scope, subcat)
+          ]);
+          if (hasToday) continue;
+          if (!pastCutoff && hasYesterday) continue; // wait for 8 PM
           let articles;
           if (subcat === 'all') {
             articles = [];
@@ -1799,15 +1810,11 @@
           } else {
             articles = groups[subcat] || [];
           }
-          if (!articles.length) continue;
           articles = FeedFetcher.deduplicate(articles);
           articles = FeedFetcher.filterByDate(articles, cutoffStr, null);
           articles = FeedFetcher.sortByDate(articles);
           if (articles.length < 5) continue;
-          const date = AI.todayStr();
-          if (await AI.needsRanking(date, scope, subcat)) {
-            work.push({ scope, subcat, articles, date });
-          }
+          work.push({ scope, subcat, articles, date: today });
         }
       }
 
@@ -3938,15 +3945,6 @@
 
     // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)
     startRankScheduler();
-
-    // Seed: rank all scope/subcat combos once on first load. We give it a
-    // short delay so feeds have a chance to populate, but the seed runs as
-    // a single in-flight promise — every displayCurrentSubcat in top mode
-    // waits for it before deciding to rank, so per-category switches can
-    // never trigger their own ranking on top of the batch.
-    setTimeout(() => {
-      rankAllCombos().catch(e => console.warn('Seed ranking failed:', e));
-    }, 3000);
   }
 
   init();
