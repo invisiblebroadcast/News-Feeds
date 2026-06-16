@@ -439,6 +439,47 @@ const AI = (() => {
 
   /* ── Check if today's ranking exists ── */
 
+  /**
+   * Lightweight per-article trending info (keywords + count) computed from a
+   * full corpus. Used by live mode to surface a "trending number" and by all
+   * modes to populate the "where it's trending" details.
+   *
+   * Mutates each article in `articles`:
+   *   _trendingKeywords: string[]   top 4 trending words in the article's title
+   *   _trendingCount:    number     count of title words that appear in >1 article
+   *
+   * @param {Array} articles    Articles to annotate (e.g. the displayed list).
+   * @param {Array} fullCorpus  All articles in the pool (e.g. flattened cached.groups).
+   */
+  function computeTrendingInfo(articles, fullCorpus) {
+    if (!articles || !articles.length) return;
+    const corpus = fullCorpus && fullCorpus.length ? fullCorpus : articles;
+    const wordFreq = new Map();
+    for (const a of corpus) {
+      for (const w of tokenize(a.title || '')) {
+        wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
+      }
+    }
+    for (const a of articles) {
+      const titleWords = tokenize(a.title || '');
+      const seen = new Set();
+      const trending = [];
+      let count = 0;
+      for (const w of titleWords) {
+        if (seen.has(w)) continue;
+        seen.add(w);
+        const f = wordFreq.get(w) || 0;
+        if (f > 1) {
+          count++;
+          trending.push({ word: w, freq: f });
+        }
+      }
+      trending.sort((x, y) => y.freq - x.freq);
+      a._trendingKeywords = trending.slice(0, 4).map(t => t.word);
+      a._trendingCount = count;
+    }
+  }
+
   return {
     stripHtml,
     formatDateShort,
@@ -450,6 +491,8 @@ const AI = (() => {
     loadTopList,
     getAvailableDates,
     rankArticles,
-    rankByKeywords
+    rankByKeywords,
+    computeTrendingInfo,
+    tokenize
   };
 })();

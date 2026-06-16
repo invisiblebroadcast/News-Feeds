@@ -646,6 +646,14 @@ body.cards-view .app-footer {
   touch-action: manipulation;
   white-space: nowrap;
 }
+.mode-btn-icon {
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.mode-btn-icon svg { display: block; }
 .mode-btn:not(:last-child) {
   border-right: 1px solid var(--border-primary);
 }
@@ -864,6 +872,24 @@ body.cards-view {
 }
 .reels-kw-ranked.visible { display: inline-flex; }
 .reels-kw-ranked .krk-hash {
+  font-size: 0.9rem;
+  font-weight: 800;
+  display: inline-block;
+  animation: ark-pulse 1.6s ease-in-out infinite;
+}
+.reels-live-trending {
+  align-items: center;
+  gap: 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #51cf66;
+  background: rgba(81, 207, 102, 0.12);
+  border: 1px solid rgba(81, 207, 102, 0.35);
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-shadow: 0 0 6px rgba(81, 207, 102, 0.3);
+}
+.reels-live-trending .lrk-arrow {
   font-size: 0.9rem;
   font-weight: 800;
   display: inline-block;
@@ -1662,6 +1688,71 @@ body.cards-view {
   font-weight: 800;
   display: inline-block;
   animation: ark-pulse 1.6s ease-in-out infinite;
+}
+
+/* Live-mode trending kicker (green). Clickable to expand details. */
+.live-trending-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #51cf66;
+  background: rgba(81, 207, 102, 0.12);
+  border: 1px solid rgba(81, 207, 102, 0.4);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  width: fit-content;
+  text-shadow: 0 0 8px rgba(81, 207, 102, 0.3);
+  cursor: pointer;
+  user-select: none;
+}
+.live-trending-kicker:hover { background: rgba(81, 207, 102, 0.2); }
+.live-trending-kicker .lrk-arrow {
+  font-size: 0.95rem;
+  font-weight: 800;
+  display: inline-block;
+  animation: ark-pulse 1.6s ease-in-out infinite;
+}
+
+/* Make AI/keyword kickers also clickable + hover */
+.ai-ranked-kicker,
+.kw-ranked-kicker {
+  cursor: pointer;
+  user-select: none;
+}
+.ai-ranked-kicker:hover { background: rgba(77, 171, 247, 0.2); }
+.kw-ranked-kicker:hover { background: rgba(255, 146, 43, 0.2); }
+
+/* The expandable "where it's trending" details line. */
+.ranked-details {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+  margin-bottom: 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+.ranked-details.expanded {
+  max-height: 80px;
+  opacity: 1;
+  margin-bottom: 8px;
+}
+.ranked-details .rd-loc {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.ranked-details .rd-kw {
+  color: var(--accent);
+  font-weight: 600;
 }
 .flag-badge {
   font-size: 0.62rem;

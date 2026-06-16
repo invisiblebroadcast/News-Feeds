@@ -488,12 +488,42 @@
     const aiBadgeHtml = article._aiBoost
       ? '<span class="ai-badge" title="AI boosted">AI</span>'
       : '';
-    const aiRankedKicker = article._aiRanked
-      ? '<div class="ai-ranked-kicker"><span class="ark-sparkle">✦</span> AI Ranked</div>'
-      : '';
-    const kwRankedKicker = article._kwRanked
-      ? '<div class="kw-ranked-kicker"><span class="krk-hash">#</span> Trending</div>'
-      : '';
+    // One ranked kicker per article (mutually exclusive: AI / keyword / live-trending),
+    // with its expandable "where it's trending" details immediately after it so the
+    // click delegation can toggle the correct sibling.
+    const kwText = (article._trendingKeywords && article._trendingKeywords.length) ? article._trendingKeywords.join(', ') : '—';
+    const locText = escHtml(scopeLabel(currentScope, currentSubcat));
+    let rankedBlock = '';
+    if (article._aiRanked) {
+      const num = article._rank ? '#' + article._rank : '';
+      rankedBlock =
+        '<div class="ai-ranked-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
+          '<span class="ark-sparkle">✦</span> AI Ranked · <span class="rk-num">' + num + '</span>' +
+        '</div>' +
+        '<div class="ranked-details" aria-hidden="true">' +
+          '<span class="rd-loc">' + locText + '</span>' +
+          '<span class="rd-kw">' + escHtml(kwText) + '</span>' +
+        '</div>';
+    } else if (article._kwRanked) {
+      const num = article._rank ? '#' + article._rank : '';
+      rankedBlock =
+        '<div class="kw-ranked-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
+          '<span class="krk-hash">#</span> Trending · <span class="rk-num">' + num + '</span>' +
+        '</div>' +
+        '<div class="ranked-details" aria-hidden="true">' +
+          '<span class="rd-loc">' + locText + '</span>' +
+          '<span class="rd-kw">' + escHtml(kwText) + '</span>' +
+        '</div>';
+    } else if (currentMode === 'live' && article._trendingCount > 0) {
+      rankedBlock =
+        '<div class="live-trending-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
+          '<span class="lrk-arrow">↗</span> Trending · <span class="rk-num">' + article._trendingCount + '</span>' +
+        '</div>' +
+        '<div class="ranked-details" aria-hidden="true">' +
+          '<span class="rd-loc">' + locText + '</span>' +
+          '<span class="rd-kw">' + escHtml(kwText) + '</span>' +
+        '</div>';
+    }
 
     const ad = getArticleData(article.link);
     const flagHtml = ad.flag ? '<span class="flag-badge" style="background:' + (FLAG_COLORS[ad.flag] || 'var(--text-tertiary)') + '">' + ad.flag + '</span>' : '';
@@ -505,8 +535,7 @@
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
         thumbHtml +
         '<div class="article-body">' +
-          aiRankedKicker +
-          kwRankedKicker +
+          rankedBlock +
           '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
           '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
@@ -623,8 +652,8 @@
         '<div class="reels-count-row">' +
           '<span class="reels-count"></span>' +
           '<div class="reels-badges">' +
-            '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI Ranked</span>' +
-            '<span class="reels-kw-ranked"><span class="krk-hash">#</span> Trending</span>' +
+            '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI · <span class="rk-num"></span></span>' +
+            '<span class="reels-kw-ranked"><span class="krk-hash">#</span> Trending · <span class="rk-num"></span></span>' +
             '<span class="reels-mode-badge"></span>' +
           '</div>' +
         '</div>' +
@@ -632,6 +661,7 @@
         '<div class="reels-meta">' +
           '<span class="reels-source"></span>' +
           '<span class="reels-date"></span>' +
+          '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
         '</div>' +
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
@@ -700,9 +730,24 @@
       modeBadge.classList.toggle('mode-live', !isTop);
     }
     const aiRankedEl = cardEl.querySelector('.reels-ai-ranked');
-    if (aiRankedEl) aiRankedEl.classList.toggle('visible', !!article._aiRanked);
+    if (aiRankedEl) {
+      aiRankedEl.classList.toggle('visible', !!article._aiRanked);
+      const n = aiRankedEl.querySelector('.rk-num');
+      if (n) n.textContent = article._rank ? '#' + article._rank : '';
+    }
     const kwRankedEl = cardEl.querySelector('.reels-kw-ranked');
-    if (kwRankedEl) kwRankedEl.classList.toggle('visible', !!article._kwRanked);
+    if (kwRankedEl) {
+      kwRankedEl.classList.toggle('visible', !!article._kwRanked);
+      const n = kwRankedEl.querySelector('.rk-num');
+      if (n) n.textContent = article._rank ? '#' + article._rank : '';
+    }
+    const liveTrendingEl = cardEl.querySelector('.reels-live-trending');
+    if (liveTrendingEl) {
+      const show = currentMode === 'live' && article._trendingCount > 0;
+      liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
+      const n = liveTrendingEl.querySelector('.rk-num');
+      if (n) n.textContent = show ? article._trendingCount : '';
+    }
     const title = cardEl.querySelector('.reels-title');
     if (title) title.textContent = article.title;
     const source = cardEl.querySelector('.reels-source');
@@ -1195,6 +1240,16 @@
   // Sparkle (AI) and date picker → only in top-AI.
   // Hashtag (keyword) → only in top-keyword.
   // Live → none of them.
+  // Human-readable scope + subcategory label for the "where it's trending" details.
+  // e.g. "Global · Technology" / "India · Politics" / "Global · All".
+  function scopeLabel(scope, subcat) {
+    const scopeName = (scope === 'nation')
+      ? (FeedManager.getSelectedNation ? FeedManager.getSelectedNation() : 'Nation')
+      : 'Global';
+    const subName = (subcat && subcat !== 'all') ? (subcat.charAt(0).toUpperCase() + subcat.slice(1)) : 'All';
+    return scopeName + ' · ' + subName;
+  }
+
   function updateRankControls() {
     const inTopAi = currentMode === 'top' && currentRankType === 'ai';
     const inTopKw = currentMode === 'top' && currentRankType === 'keyword';
@@ -1375,7 +1430,10 @@
 
       if (currentRankType === 'keyword') {
         // Keyword ranking: compute on-the-fly from cached articles.
-        // No Supabase, no API call. Instant — no loading overlay needed.
+        // No Supabase, no API call. We still show the loading overlay for
+        // ~500ms so the user gets the "ranking…" feedback with blurred bg.
+        setTopListStatus('Ranking by keywords…');
+        const t0 = Date.now();
         const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
         let rankInput;
         if (subcat === 'all') {
@@ -1393,6 +1451,10 @@
           // Normalize link from url so cards/buttons work, mark as keyword-ranked.
           articles.forEach(a => { a.link = a.link || a.url; a._kwRanked = true; });
         }
+        // Keep the overlay visible long enough to be seen (min 500ms).
+        const elapsed = Date.now() - t0;
+        if (elapsed < 500) await new Promise(res => setTimeout(res, 500 - elapsed));
+        clearTopListStatus();
       } else {
         // AI ranking: load from Supabase, fall back to fresh AI rank.
         const today = AI.todayStr();
@@ -1452,6 +1514,16 @@
         }
       }
     }
+
+    // Compute per-article trending info (keywords + count) from the full
+    // cached corpus, so every card knows how trending it is and can show
+    // the "where" details on click. Used by live mode (trending count) and
+    // by all modes (trending keywords in the toggle).
+    const fullCorpus = [];
+    for (const cat of Object.keys(cached.groups)) {
+      if (Array.isArray(cached.groups[cat])) fullCorpus.push(...cached.groups[cat]);
+    }
+    AI.computeTrendingInfo(articles, fullCorpus);
 
     try {
       await renderTranslated(articles);
@@ -3056,6 +3128,18 @@
   function bindArticleClicks() {
     el.main.addEventListener('click', e => {
       if (e.target.closest('.reels-container')) return;
+      // Ranked-kicker click → toggle "where it's trending" details (smooth).
+      const kicker = e.target.closest('.ranked-kicker[data-toggle-details]');
+      if (kicker) {
+        e.stopPropagation();
+        const details = kicker.nextElementSibling;
+        if (details && details.classList.contains('ranked-details')) {
+          const expanded = details.classList.toggle('expanded');
+          details.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+          kicker.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        }
+        return;
+      }
       const se = e.target.closest('.card-share-btn');
       if (se) {
         e.stopPropagation();
