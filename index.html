@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000">
   <meta name="description" content="Global & Local News Aggregator">
   <title>News-Feeds</title>
-  <link rel="stylesheet" href="css/styles.css?v=21">
+  <link rel="stylesheet" href="css/styles.css?v=22">
 </head>
 <body>
 
@@ -133,8 +133,8 @@
       <div class="loading-spinner"></div>
       <p>Loading news feeds&hellip;</p>
     </div>
-    <div id="ai-ranking-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:50;pointer-events:none;">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--text-primary);">
+    <div id="ai-ranking-overlay" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:999;pointer-events:none;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6);">
         <div class="ai-spinner" style="width:42px;height:42px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--accent);border-radius:50%;animation:ai-spin 0.8s linear infinite;"></div>
         <div id="ai-ranking-text" style="font-size:0.95rem;font-weight:500;">AI ranking…</div>
       </div>
@@ -570,13 +570,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=21"></script>
-  <script src="js/supabase-store.js?v=21"></script>
-  <script src="js/feeds.js?v=21"></script>
-  <script src="js/fetcher.js?v=21"></script>
-  <script src="js/translator.js?v=21"></script>
-  <script src="js/gemini-key.js?v=21"></script>
-  <script src="js/ai.js?v=21"></script>
-  <script src="js/app.js?v=21"></script>
+  <script src="js/settings.js?v=22"></script>
+  <script src="js/supabase-store.js?v=22"></script>
+  <script src="js/feeds.js?v=22"></script>
+  <script src="js/fetcher.js?v=22"></script>
+  <script src="js/translator.js?v=22"></script>
+  <script src="js/gemini-key.js?v=22"></script>
+  <script src="js/ai.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 </body>
 </html>

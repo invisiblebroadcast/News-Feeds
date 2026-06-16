@@ -3045,13 +3045,21 @@
   function setTopListStatus(text) {
     const ov = $('#ai-ranking-overlay');
     const tx = $('#ai-ranking-text');
-    if (ov) ov.style.display = 'flex';
+    if (ov) {
+      ov.style.display = 'flex';
+      console.log('[overlay] shown:', text);
+    } else {
+      console.warn('[overlay] element not found');
+    }
     if (tx) tx.textContent = text || 'AI ranking…';
   }
   function clearTopListStatus() {
     const ov = $('#ai-ranking-overlay');
     const tx = $('#ai-ranking-text');
-    if (ov) ov.style.display = 'none';
+    if (ov) {
+      ov.style.display = 'none';
+      console.log('[overlay] hidden');
+    }
     if (tx) tx.textContent = 'AI ranking…';
   }
 

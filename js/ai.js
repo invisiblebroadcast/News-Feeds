@@ -156,7 +156,8 @@ const AI = (() => {
 
     if (onProgress) onProgress({ step: 'preparing', text: 'Preparing articles…' });
 
-    // Deduplicate by normalized title, take up to 100 candidates
+    // Deduplicate by normalized title, take up to 30 candidates. Smaller batches
+    // get complete responses more reliably from the model.
     const seen = new Set();
     const candidates = [];
     for (const a of articles) {
@@ -164,7 +165,7 @@ const AI = (() => {
       if (!key || seen.has(key)) continue;
       seen.add(key);
       candidates.push(a);
-      if (candidates.length >= 100) break;
+      if (candidates.length >= 30) break;
     }
 
     if (candidates.length < 5) {
@@ -195,15 +196,24 @@ const AI = (() => {
     }
 
     let scores;
+    // Try strict parse first.
     try {
       scores = JSON.parse(text.trim());
-      if (!Array.isArray(scores)) throw new Error('not an array');
     } catch {
+      // Try to find a complete array in the text.
       const m = text.match(/\[[\s\S]*?\]/);
-      if (m) { try { scores = JSON.parse(m[0]); } catch { scores = null; } }
-      else { scores = null; }
+      if (m) { try { scores = JSON.parse(m[0]); } catch { /* fall through */ } }
     }
+    // If we still don't have an array, try extracting individual numbers from a
+    // truncated or malformed response like "[35, 20, 15, 95, 45, ...".
     if (!Array.isArray(scores)) {
+      const nums = text.match(/-?\d+(?:\.\d+)?/g);
+      if (nums && nums.length) {
+        scores = nums.map(n => Number(n)).filter(n => !isNaN(n) && n >= 0 && n <= 100);
+        if (scores.length) console.warn('[AI] parsed', scores.length, 'numbers from truncated response');
+      }
+    }
+    if (!Array.isArray(scores) || !scores.length) {
       console.warn('AI rankArticles: invalid response — text:', text.slice(0, 200));
       if (onProgress) onProgress({ step: 'error', text: 'AI returned invalid format' });
       return null;
