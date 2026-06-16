@@ -12,7 +12,7 @@
  * Bump CACHE_VERSION whenever the app shell changes (HTML/CSS/JS) so
  * the activate step can clean up the old cache and re-fetch.
  */
-const CACHE_VERSION = 'ib-v1';
+const CACHE_VERSION = 'ib-v2';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -32,7 +32,7 @@ const SHELL_ASSETS = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './icons/icon.svg',
-  './icons/social-2000x3000.png'
+  './icons/social-3000x3000.png'
 ];
 
 self.addEventListener('install', event => {

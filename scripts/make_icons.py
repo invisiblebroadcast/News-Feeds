@@ -8,7 +8,7 @@ Output:
   icons/icon-512.png        PWA standard
   icons/icon-maskable-512.png  PWA maskable (extra padding for safe area)
   icons/apple-touch-icon.png  180x180
-  icons/social-2000x3000.png 2:3 social media banner with wordmark
+  icons/social-3000x3000.png 3k square social media icon with wordmark
 """
 import os
 import math
@@ -103,35 +103,37 @@ def main():
     img.save(os.path.join(OUT_DIR, 'apple-touch-icon.png'), 'PNG', optimize=True)
     print('Wrote apple-touch-icon.png')
 
-    # 2000x3000 social media (2:3). Logo on top, wordmark below.
-    social = Image.new('RGB', (2000, 3000), DARK[:3])
+    # 3000x3000 social media (square). Logo centered on top, wordmark below.
+    SIZE = 3000
+    social = Image.new('RGB', (SIZE, SIZE), DARK[:3])
     d = ImageDraw.Draw(social)
-    # Top 2/3 holds the logo, bottom 1/3 the wordmark/tagline.
-    logo_size = 1400
+    # Logo in the top half, centered.
+    logo_size = 1600
     logo = draw_ib_icon(logo_size)
-    logo_x = (2000 - logo_size) // 2
-    logo_y = 300
+    logo_x = (SIZE - logo_size) // 2
+    logo_y = 400
     social.paste(logo, (logo_x, logo_y), logo)
 
-    # Wordmark "Invisible Broadcast" + tagline
-    title_font = get_font(160)
-    sub_font = get_font(70)
+    # Wordmark "Invisible Broadcast" + tagline, centered in the lower half.
+    # Slightly smaller font than the portrait version so the long
+    # wordmark never clips the edges of a 1:1 crop.
+    title_font = get_font(170)
+    sub_font = get_font(85)
     title = 'Invisible Broadcast'
     sub = 'Global & Local News Aggregator'
 
-    # Centered text
     def centered_text(d, text, font, y, fill=WHITE):
         bbox = d.textbbox((0, 0), text, font=font)
         w = bbox[2] - bbox[0]
-        x = (2000 - w) // 2 - bbox[0]
+        x = (SIZE - w) // 2 - bbox[0]
         d.text((x, y), text, font=font, fill=fill)
 
-    centered_text(d, title, title_font, 1900)
-    centered_text(d, sub, sub_font, 2150, fill=(200, 200, 200))
+    centered_text(d, title, title_font, 2300)
+    centered_text(d, sub, sub_font, 2570, fill=(200, 200, 200))
 
     # Save at high quality
-    social.save(os.path.join(OUT_DIR, 'social-2000x3000.png'), 'PNG', optimize=True)
-    print('Wrote social-2000x3000.png')
+    social.save(os.path.join(OUT_DIR, 'social-3000x3000.png'), 'PNG', optimize=True)
+    print('Wrote social-3000x3000.png')
 
 if __name__ == '__main__':
     main()
