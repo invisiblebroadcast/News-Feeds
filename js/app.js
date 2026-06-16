@@ -118,7 +118,7 @@
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
     deleteCommentCancel: $('#delete-comment-cancel'),
-    topDate: $('#top-date')
+    topDateBtn: $('#top-date-btn')
   };
 
   if (!el.modal) return;
@@ -1185,8 +1185,8 @@
       hasFreshBackground = false;
       $$('.mode-btn', toggle).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      if (el.topDate) {
-        el.topDate.style.display = currentMode === 'top' ? 'inline-block' : 'none';
+      if (el.topDateBtn) {
+        el.topDateBtn.style.display = currentMode === 'top' ? 'inline-flex' : 'none';
       }
       updateSortOptions();
       updateStickyHeader();
@@ -1319,7 +1319,8 @@
       const yesterday = AI.yesterdayStr();
       const scope = currentScope;
       const subcat = currentSubcat;
-      const viewDate = (el.topDate && el.topDate.value) || today;
+      const settings = Settings.load();
+      const viewDate = settings.topDate || today;
 
       const ranked = await AI.loadTopList(viewDate, scope, subcat);
       if (ranked) {
@@ -1584,11 +1585,57 @@
   }
 
   function bindTopDate() {
-    if (!el.topDate) return;
-    el.topDate.addEventListener('change', () => {
-      Settings.save({ topDate: el.topDate.value });
-      if (currentMode === 'top') displayCurrentSubcat();
-    });
+    const btn = el.topDateBtn;
+    const modal = $('#top-date-modal');
+    const close = $('#top-date-modal-close');
+    const list = $('#top-date-list');
+    if (!btn || !modal || !list) return;
+
+    async function open() {
+      const settings = Settings.load();
+      const current = settings.topDate || AI.todayStr();
+      // Show available dates for the current scope/subcat, newest first.
+      let dates = [];
+      try { dates = await AI.getAvailableDates(currentScope, currentSubcat); } catch {}
+      if (!dates.length) dates = [AI.todayStr(), AI.yesterdayStr()];
+      list.innerHTML = '';
+      for (const d of dates) {
+        const item = document.createElement('button');
+        item.className = 'btn';
+        item.style.cssText = 'display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px 14px;';
+        const isSelected = d === current;
+        if (isSelected) item.style.background = 'var(--accent)';
+        const label = document.createElement('span');
+        label.textContent = formatDateLabel(d);
+        const tag = document.createElement('span');
+        tag.style.cssText = 'font-size:0.75rem;opacity:0.75;';
+        tag.textContent = d;
+        item.appendChild(label);
+        item.appendChild(tag);
+        item.addEventListener('click', () => {
+          Settings.save({ topDate: d });
+          modal.classList.remove('open');
+          if (currentMode === 'top') displayCurrentSubcat();
+        });
+        list.appendChild(item);
+      }
+      modal.classList.add('open');
+    }
+
+    btn.addEventListener('click', open);
+    if (close) close.addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+  }
+
+  function formatDateLabel(dateStr) {
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      const today = new Date(AI.todayStr() + 'T00:00:00');
+      const diffDays = Math.round((today - d) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Yesterday';
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    } catch { return dateStr; }
   }
 
   // IB row: clicking the logo triggers a background refresh (no view re-render,
@@ -3957,11 +4004,9 @@
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
 
-    // Init top-date picker
-    const settings2 = Settings.load();
-    if (el.topDate) {
-      el.topDate.value = settings2.topDate || AI.todayStr();
-      el.topDate.style.display = currentMode === 'top' ? 'inline-block' : 'none';
+    // Init top-date button (visible in top mode)
+    if (el.topDateBtn) {
+      el.topDateBtn.style.display = currentMode === 'top' ? 'inline-flex' : 'none';
     }
 
     // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)

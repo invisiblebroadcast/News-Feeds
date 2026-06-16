@@ -29,10 +29,15 @@
   <div class="sticky-zone" id="sticky-zone">
     <header class="app-header">
       <div class="app-header-inner">
-        <div class="ib-row-left">
+         <div class="ib-row-left">
           <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds in background" style="cursor:pointer;">
             <span class="logo-icon">IB</span>
           </div>
+          <button class="btn btn-ghost btn-icon" id="top-date-btn" title="Pick a date" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
+            </svg>
+          </button>
           <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
             <button class="btn btn-ghost btn-icon ib-refresh-spinner" id="ib-refresh-spinner" title="Refreshing in background…" disabled>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -104,7 +109,6 @@
             </div>
           </div>
         </div>
-        <input type="date" id="top-date" style="display:none;width:130px;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:4px 6px;color:var(--text-primary);font-size:0.78rem;font-family:var(--font);outline:none;">
         <div class="header-controls-extras" id="header-extras" style="display:none">
           <button class="btn btn-ghost btn-icon" id="date-toggle-btn" title="Date filter">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -483,6 +487,24 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="top-date-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;">
+            <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
+          </svg>
+          Pick a Date
+        </h2>
+        <button class="modal-close" id="top-date-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="setting-desc" style="margin-bottom:12px;">Choose the day to view AI rankings for. Newest first.</p>
+        <div id="top-date-list" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="auth-modal">
     <div class="modal">
       <div class="modal-header">
@@ -576,13 +598,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="js/settings.js?v=18"></script>
-  <script src="js/supabase-store.js?v=18"></script>
-  <script src="js/feeds.js?v=18"></script>
-  <script src="js/fetcher.js?v=18"></script>
-  <script src="js/translator.js?v=18"></script>
-  <script src="js/gemini-key.js?v=18"></script>
-  <script src="js/ai.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/settings.js?v=19"></script>
+  <script src="js/supabase-store.js?v=19"></script>
+  <script src="js/feeds.js?v=19"></script>
+  <script src="js/fetcher.js?v=19"></script>
+  <script src="js/translator.js?v=19"></script>
+  <script src="js/gemini-key.js?v=19"></script>
+  <script src="js/ai.js?v=19"></script>
+  <script src="js/app.js?v=19"></script>
 </body>
 </html>
