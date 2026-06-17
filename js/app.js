@@ -33,10 +33,23 @@
     openModal,
     closeModal,
     pushFrame(id) { pushedFrameStack.push(id); },
+    pushState(state) { pushedStateStack.push(state); },
     dropPushedFrame(id) {
       const idx = pushedFrameStack.lastIndexOf(id);
-      if (idx >= 0) pushedFrameStack.splice(idx, 1);
+      if (idx >= 0) {
+        pushedFrameStack.splice(idx, 1);
+        for (let i = pushedStateStack.length - 1; i >= 0; i--) {
+          if (pushedStateStack[i] && pushedStateStack[i].ibFrame === id) {
+            pushedStateStack.splice(i, 1);
+            break;
+          }
+        }
+      }
     },
+    // True while we are inside the popstate handler. The dashboard
+    // close path uses this to decide whether to call history.back()
+    // (it shouldn't — the popstate is already consuming the state).
+    popIsInFlight() { return popstateBusy; },
     get nextFrameId() { return ++nextFrameId; }
   };
 
@@ -95,6 +108,13 @@
   // frames can stack (reels-view → article modal → comments page) and
   // popstate needs to know the exact topmost frame to close.
   const pushedFrameStack = [];
+  // Parallel stack of the state objects we pushed via history.pushState.
+  // The popstate handler needs to know what state we just LEFT (so it
+  // can dispatch correctly — e.g. close the dashboard when the user
+  // backs out of an ibDashboard state), which is the top of THIS stack.
+  // It is independent of pushedFrameStack because the dashboard
+  // pushes a state without going through beginNewFrame.
+  const pushedStateStack = [];
   // frameId of the currently-active cards/reels view (when the user
   // is in cards view). Lives at the outer scope so the popstate
   // handler can detect "the frame the user just popped was the reels
@@ -109,21 +129,39 @@
 
   // Start a new frame and push a history state. The state object
   // carries a marker so we can ignore popstate events that come from
-  // history changes we didn't make (e.g. external scripts).
+  // history changes we didn't make (e.g. external scripts). We also
+  // record the state object in pushedStateStack so the popstate
+  // handler can read what state we just LEFT.
   function beginNewFrame() {
     const frameId = ++nextFrameId;
+    const state = { ibFrame: frameId };
     pushedFrameStack.push(frameId);
-    try { history.pushState({ ibFrame: frameId }, ''); } catch {}
+    pushedStateStack.push(state);
+    try { history.pushState(state, ''); } catch {}
     return frameId;
   }
 
   // Drop a frame from the pushed-state stack without touching the
   // browser. Used by the popstate handler (after the browser has
   // already consumed the state) and by the reels-view code when
-  // exiting via a button (instead of via popstate).
+  // exiting via a button (instead of via popstate). Also drops the
+  // most-recently-pushed state object so the two stacks stay in
+  // sync — without this, the popstate handler would think the
+  // user is navigating out of the wrong view.
   function dropPushedFrame(frameId) {
     const idx = pushedFrameStack.lastIndexOf(frameId);
-    if (idx >= 0) pushedFrameStack.splice(idx, 1);
+    if (idx >= 0) {
+      pushedFrameStack.splice(idx, 1);
+      // Also drop the corresponding state entry (if any). We match
+      // by frameId so that dropping an unrelated frame doesn't
+      // accidentally clear a state record we still need.
+      for (let i = pushedStateStack.length - 1; i >= 0; i--) {
+        if (pushedStateStack[i] && pushedStateStack[i].ibFrame === frameId) {
+          pushedStateStack.splice(i, 1);
+          break;
+        }
+      }
+    }
   }
 
   function closeFrame(frameId) {
@@ -266,11 +304,20 @@
 
   window.addEventListener('popstate', () => {
     if (popstateBusy) return;
-    // Check the current state marker. The analyze-modal dashboard
-    // pushes its own state object with `ibDashboard: true`. When
-    // the user backs out of the dashboard, we close it without
-    // trying to pop any other frame.
-    if (history.state && history.state.ibDashboard) {
+    // The popstate event tells us "you have just navigated". To
+    // figure out WHAT we navigated away from, we keep a parallel
+    // stack of the state objects we pushed. The TOP of that stack
+    // is the state we just left, and `event.state` is the state
+    // we just popped TO.
+    const leavingState = pushedStateStack.length
+      ? pushedStateStack[pushedStateStack.length - 1]
+      : null;
+    pushedStateStack.pop();
+    if (leavingState && leavingState.ibDashboard) {
+      // The user backed out of the dashboard. Close it without
+      // touching any other frame; the URL/state marker is consumed
+      // by this popstate and we don't want to chain more history
+      // operations.
       if (window.AnalyzeModal && typeof window.AnalyzeModal.closeDashboard === 'function') {
         window.AnalyzeModal.closeDashboard();
       }
@@ -2358,8 +2405,39 @@
     toRemove.forEach(k => localStorage.removeItem(k));
     // Clear sessionStorage too (in case anything is stored there)
     try { sessionStorage.clear(); } catch {}
-    // Force reload from server (bypass cache)
-    window.location.reload();
+
+    // The plain location.reload() on mobile is intercepted by the
+    // service worker and serves the old cached files. We must
+    // explicitly:
+    //   1. Unregister the active service worker (so the next page
+    //      load doesn't get the old asset shell from Cache
+    //      Storage).
+    //   2. Delete every Cache Storage entry (so even the in-flight
+    //      request doesn't fall through to the old cache).
+    //   3. Reload with `?cacheBust=<timestamp>` so the new HTML
+    //      request isn't served from the browser's HTTP cache.
+    // We chain these in a single async function so the user sees
+    // the loading overlay for the whole sequence.
+    (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
+        }
+      } catch (e) {
+        console.warn('Cache cleanup failed (continuing anyway):', e);
+      }
+      // Reload with a cache-bust query string so the HTTP layer
+      // doesn't serve the old HTML.
+      const bust = '_t=' + Date.now();
+      const url = new URL(window.location.href);
+      url.searchParams.set(bust, '');
+      window.location.replace(url.toString());
+    })();
   }
 
   /* ── Top Date Picker (removed) ──
@@ -5105,6 +5183,28 @@
       el.main.innerHTML = '<div class="error-state"><div class="error-icon">\u26A0\uFE0F</div><p>Could not load feed configuration.</p></div>';
       console.error(err);
       return;
+    }
+
+    // First-run subscription initialisation. Previously this only
+    // ran when the user opened the Settings modal (via
+    // renderSubscriptionList), so an incognito user — who never
+    // visits Settings — saw "no articles" on the first run even
+    // though every source is by default enabled. Run the same
+    // logic here, before any feed fetch, so the initial article
+    // load always has the full set of subscriptions.
+    try {
+      const hasInit = localStorage.getItem('newsfeeds_subscriptions_initialized') === '1';
+      const currentSubs = FeedManager.getSubscribedFeeds();
+      if (!hasInit && currentSubs.length === 0) {
+        const allFeeds = FeedManager.getSubscribableFeeds();
+        const allUrls = allFeeds.filter(f => f.hasRss && f.url).map(f => f.url);
+        if (allUrls.length) {
+          FeedManager.saveSubscribedFeeds(allUrls);
+          localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
+        }
+      }
+    } catch (e) {
+      console.warn('Subscription auto-init failed:', e);
     }
 
     currentNation = FeedManager.getSelectedNation();

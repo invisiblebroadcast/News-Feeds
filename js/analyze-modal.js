@@ -205,8 +205,8 @@ const AnalyzeModal = (() => {
     // dashboard. We use a fresh frame (not nested under the
     // analyze-config modal which has already been closed by the
     // time we get here) so a single back press returns to the
-    // main feed. The app's popstate handler will detect the
-    // dashboard marker and call closeDashboard() for us.
+    // main feed. The app's popstate handler reads the state we
+    // pushed and calls closeDashboard() for us.
     try {
       const state = { ibDashboard: true };
       const url = new URL(window.location.href);
@@ -219,27 +219,61 @@ const AnalyzeModal = (() => {
         if (typeof window.appState.pushFrame === 'function') {
           window.appState.pushFrame(dashboardFrameId);
         }
+        if (typeof window.appState.pushState === 'function') {
+          // Record the state object in the parallel stack so the
+          // popstate handler can identify it as the dashboard
+          // transition we just made.
+          window.appState.pushState(state);
+        }
       }
     } catch {}
     document.body.classList.add('modal-open');
   }
+  // Close the dashboard. Two callers can do this:
+  //   - The user clicks the dashboard's back arrow or presses the
+  //     browser back button (popstate fires with our ibDashboard
+  //     state at the top of pushedStateStack; the popstate handler
+  //     calls us).
+  //   - We need to close the dashboard ourselves (e.g. the user
+  //     opened Settings from the empty-tweets hint).
+  //
+  // In the first case history.back() has already been called by the
+  // browser and we must NOT call it again (it would push the user
+  // out of the app). We detect this by checking the state stack:
+  // if the top state is our ibDashboard, the popstate is in flight
+  // and we just hide. Otherwise we have to call history.back()
+  // ourselves to revert the URL change.
   function closeDashboard() {
     const dash = $('#subject-dashboard');
     if (!dash) return;
     dashboardOpen = false;
     dash.classList.remove('sd-open');
     setTimeout(() => { dash.style.display = 'none'; }, 200);
-    // If we pushed a history entry when the dashboard opened, the
-    // back button already consumed it via the popstate handler.
-    // We only need to pop our own frame stack if we left a frame
-    // on the pushedFrameStack (i.e. user used the X button rather
-    // than the browser back). If the stack still has a dashboard
-    // frame at the top, drop it.
-    if (window.appState && typeof window.appState.dropPushedFrame === 'function') {
-      window.appState.dropPushedFrame(dashboardFrameId);
+    if (window.appState) {
+      if (typeof window.appState.dropPushedFrame === 'function') {
+        window.appState.dropPushedFrame(dashboardFrameId);
+      }
+      // If the popstate handler is NOT about to consume the state
+      // (i.e. the user clicked the X button rather than the
+      // browser back), revert the URL/state by calling
+      // history.back(). The handler will then run with the
+      // already-empty stack and re-install the back trap.
+      if (typeof window.appState.popIsInFlight === 'function'
+          && !window.appState.popIsInFlight()) {
+        try { history.back(); } catch {}
+      }
     }
     dashboardFrameId = -1;
     document.body.classList.remove('modal-open');
+    // Clean up the URL subject param if it's still there (e.g.
+    // when the user used the X button rather than the back button).
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('subject')) {
+        url.searchParams.delete('subject');
+        history.replaceState(history.state || { ibTrap: true }, '', url.toString());
+      }
+    } catch {}
   }
 
   // Frame id for the dashboard. Pushed onto the app's history
