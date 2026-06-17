@@ -5,7 +5,7 @@
  *     pre-cached on install and served cache-first. This makes the
  *     install prompt reliable and lets the app launch offline (with
  *     whatever feed list was bundled at install time).
- *   - External requests (RSS, CORS proxies, rss2json, Supabase, Gemini)
+ *   - External requests (RSS, CORS proxies, rss2json, Supabase, Twitter)
  *     are network-only. We don't try to cache feed data because it's
  *     time-sensitive and large. Network failures fall through to the
  *     shell so the user at least sees the UI with the existing cache.
@@ -17,7 +17,7 @@
  * app launch to pick them up immediately, not after the user
  * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v3';
+const CACHE_VERSION = 'ib-v5';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -31,9 +31,13 @@ const SHELL_ASSETS = [
   './js/article-archive.js',
   './js/fetcher.js',
   './js/translator.js',
-  './js/gemini-key.js',
+  './js/subjects.js',
   './js/analyzer.js',
   './js/ai.js',
+  './js/twitter-fetcher.js',
+  './js/scoring-engine.js',
+  './js/analyze-modal.js',
+  './js/filter-modal.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

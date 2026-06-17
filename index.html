@@ -63,17 +63,14 @@
           <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds in background" style="cursor:pointer;">
             <span class="logo-icon">IB</span>
           </div>
-          <button class="btn btn-ghost btn-icon" id="top-date-btn" title="Pick a date" style="display:none">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/>
-            </svg>
-          </button>
-          <button class="btn btn-ghost btn-icon ib-rank-toggle" id="ai-rank-btn" title="Top AI" aria-label="Top AI" aria-pressed="false">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 4 4 1.5-4 1.5L8 12l-1.5-4-4-1.5 4-1.5L8 1z"/><path d="M13 10l.7 1.8 1.8.7-1.8.7L13 15l-.7-1.8-1.8-.7 1.8-.7L13 10z"/></svg>
-          </button>
-          <button class="btn btn-ghost btn-icon ib-rank-toggle" id="keyword-rank-btn" title="Top Keyword" aria-label="Top Keyword" aria-pressed="false">
+          <button class="btn btn-ghost btn-icon ib-rank-toggle" id="trending-btn" title="Trending · Top 25" aria-label="Trending" aria-pressed="false">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
               <line x1="6" y1="2" x2="4" y2="14"/><line x1="12" y1="2" x2="10" y2="14"/><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/>
+            </svg>
+          </button>
+          <button class="btn btn-ghost btn-icon" id="analyze-btn" title="Analyze a person" aria-label="Analyze a person">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="6" y1="14" x2="10" y2="2"/><line x1="3" y1="11" x2="13" y2="11"/><line x1="2" y1="14" x2="4" y2="14"/>
             </svg>
           </button>
           <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
@@ -132,8 +129,27 @@
           </div>
         </div>
         <div class="header-controls-extras" id="header-extras" style="display:none">
-          <button class="btn btn-ghost btn-icon" id="refresh-btn" title="Refresh">
-            &#x21BB;
+          <div class="extras-select-group">
+            <label class="extras-select-label" for="sort-by-extras">Sort</label>
+            <div class="select-wrapper">
+              <select id="sort-by-extras" title="Sort">
+                <option value="date-desc">Date ↓</option>
+                <option value="date-asc">Date ↑</option>
+                <option value="source">Source A–Z</option>
+                <option value="trending">Trending</option>
+              </select>
+            </div>
+          </div>
+          <div class="extras-select-group">
+            <label class="extras-select-label" for="filter-source-extras">Filter</label>
+            <button type="button" class="extras-filter-btn" id="filter-modal-btn" title="Filter by source and date">
+              <span id="filter-active-count">All sources</span>
+            </button>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="translate-btn" title="Translate" aria-label="Translate">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4h7"/><path d="M5.5 4c0 3-2 5.5-3.5 6.5"/><path d="M5.5 4c0 2.5 1.5 5 4 6.5"/><path d="M9 14l2-3 2 3"/><path d="M10 13h2"/>
+            </svg>
           </button>
           <button class="btn btn-ghost btn-icon" id="hard-refresh-btn" title="Hard Refresh (clears cache)">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -148,6 +164,17 @@
         </div>
       </div>
     </header>
+    <!-- Top tabs row: its own sticky strip directly below the header.
+         Global / India / Conflicts share equal width. The lang-select
+         used to live here too; it's been replaced by a translate icon
+         in the options menu. -->
+    <nav class="top-tabs-row" id="top-tabs-row">
+      <ul class="tab-list" id="top-tab-list">
+        <li class="tab-item active" data-scope="global">Global</li>
+        <li class="tab-item" data-scope="nation" data-nation="india">India</li>
+        <li class="tab-item" data-scope="conflicts">Conflicts</li>
+      </ul>
+    </nav>
   </div>
 
   <main class="app-main" id="main-content">
@@ -177,62 +204,9 @@
         </div>
       </div>
     </div>
-    <nav class="tab-bar top-tab-bar" id="top-tab-bar">
-      <div class="lang-select" style="flex-shrink:0;">
-        <select id="lang-select" title="Translate">
-          <option value="en">EN</option>
-          <option value="hi">HI</option><option value="kn">KN</option>
-          <option value="ta">TA</option><option value="te">TE</option>
-          <option value="ml">ML</option><option value="bn">BN</option>
-          <option value="mr">MR</option><option value="gu">GU</option>
-          <option value="pa">PA</option><option value="ur">UR</option>
-          <option value="es">ES</option><option value="fr">FR</option>
-          <option value="ar">AR</option><option value="zh">ZH</option>
-          <option value="ja">JA</option>
-          <option value="de">DE</option>
-          <option value="ru">RU</option>
-          <option value="pt">PT</option>
-        </select>
-      </div>
-      <ul class="tab-list" id="top-tab-list">
-        <li class="tab-item active" data-scope="global">Global</li>
-        <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-      </ul>
-      <div class="tab-bar-right">
-        <button class="btn btn-ghost btn-icon filter-icon-btn" id="filter-btn" title="Filter by Source">
-          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 3h11l-4 5v4l-3 1V8L2 3z"/></svg>
-        </button>
-        <button class="btn btn-ghost btn-icon filter-icon-btn" id="sort-btn" title="Sort">
-          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 2v11M2 5l2-3 2 3M11 13V2M9 10l2 3 2-3"/></svg>
-        </button>
-      </div>
-      <div id="ai-top-status" style="display:none;"></div>
-    </nav>
     <!-- Search row -->
     <div class="bottom-view-row">
       <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
-    </div>
-    <!-- Filter panel — toggleable, hidden by default -->
-    <div class="bottom-tools-row" id="filter-panel" style="display:none">
-      <div class="filters-row">
-        <div class="select-wrapper">
-          <select id="filter-source">
-            <option value="">All Sources</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <!-- Sort panel — toggleable, hidden by default -->
-    <div class="bottom-tools-row" id="sort-panel" style="display:none">
-      <div class="filters-row">
-        <div class="select-wrapper">
-          <select id="sort-by">
-            <option value="date-desc">Date ↓</option>
-            <option value="date-asc">Date ↑</option>
-            <option value="source">Source A–Z</option>
-          </select>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -253,6 +227,16 @@
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
       <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label">Twitter API Token</label>
+          <p class="setting-desc">Required to fetch tweets for the Analyze feature. Free tier at <a href="https://developer.twitter.com/en/portal" target="_blank" rel="noopener">developer.twitter.com</a>. Token stored only in your browser's localStorage.</p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="settings-twitter-token" placeholder="Bearer token (paste here)" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-family:var(--font-mono);font-size:0.82rem;outline:none;">
+            <button class="btn btn-ghost" id="settings-twitter-save" type="button">Save</button>
+            <button class="btn btn-ghost" id="settings-twitter-clear" type="button">Clear</button>
+          </div>
+          <p class="auth-msg" id="settings-twitter-status" style="margin-top:6px;font-size:0.78rem;min-height:1.2em;"></p>
+        </div>
         <div class="setting-group">
           <label class="setting-label" for="settings-language">Translation Language</label>
           <p class="setting-desc">Translate articles to your preferred language.</p>
@@ -523,28 +507,174 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="ai-rate-limit-modal">
+  <div class="modal-overlay" id="filter-modal">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <h2>
+          <span style="margin-right:6px;">&#x1F50D;</span>
+          <span>Filter</span>
+        </h2>
+        <button class="modal-close" id="filter-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="filter-modal-body">
+        <div class="filter-section">
+          <div class="filter-section-label">Date Range <span class="filter-optional">(leave blank for "all time")</span></div>
+          <div class="filter-date-row">
+            <input type="date" id="filter-date-start">
+            <span class="filter-date-sep">&rarr;</span>
+            <input type="date" id="filter-date-end">
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-section-label">
+            <span>Sources</span>
+            <span class="filter-scope-hint" id="filter-scope-hint"></span>
+          </div>
+          <div class="filter-bulk-row">
+            <button type="button" class="filter-bulk-btn" id="filter-select-all">Select all</button>
+            <button type="button" class="filter-bulk-btn" id="filter-select-none">Clear</button>
+          </div>
+          <div class="filter-source-list" id="filter-source-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="filter-modal-reset">Reset</button>
+        <button class="btn" id="filter-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="filter-modal-apply">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="translate-modal">
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-header">
+        <h2>
+          <span style="margin-right:6px;">&#x1F310;</span>
+          <span id="translate-modal-title">Translate</span>
+        </h2>
+        <button class="modal-close" id="translate-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="translate-modal-body" style="padding:8px 0;">
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="analyze-config-modal">
     <div class="modal">
       <div class="modal-header">
         <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;">
-            <circle cx="8" cy="8" r="6.5"/><path d="M12 6l-4 4-2-2"/><path d="M8 14A6 6 0 108 2a6 6 0 000 12z"/>
-          </svg>
-          AI Rate Limited
+          <span style="margin-right:6px;">&#x2696;&#xFE0F;</span>
+          <span id="analyze-config-title">Analyze Subject</span>
         </h2>
-        <button class="modal-close" id="ai-rate-limit-modal-close">&times;</button>
+        <button class="modal-close" id="analyze-config-close">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin:0 0 12px;color:var(--text-primary);font-size:0.95rem;line-height:1.55;">
-          The AI ranking service is rate limited right now. Your request was stopped so it doesn't keep retrying.
-        </p>
-        <p style="margin:0;color:var(--text-secondary);font-size:0.88rem;line-height:1.5;">
-          Please try again in a few minutes. Existing rankings (if any) will load normally.
-        </p>
+        <div class="acf-section">
+          <label class="acf-label" for="acf-subject-input">Subject</label>
+          <input type="text" id="acf-subject-input" placeholder="Person's name — e.g. Narendra Modi" autocomplete="off">
+          <div id="acf-subject-suggest" class="acf-suggest"></div>
+          <p class="acf-hint">Start typing to see registered people. Each row shows the Twitter handle to be used for the analysis.</p>
+        </div>
+        <div class="acf-section">
+          <label class="acf-label">Data Source</label>
+          <div class="acf-source-row">
+            <label class="acf-radio">
+              <input type="radio" name="acf-source" value="twitter" id="acf-source-twitter">
+              <span>Twitter Only</span>
+            </label>
+            <label class="acf-radio">
+              <input type="radio" name="acf-source" value="feeds" id="acf-source-feeds">
+              <span>Feeds Only</span>
+            </label>
+            <label class="acf-radio">
+              <input type="radio" name="acf-source" value="both" id="acf-source-both" checked>
+              <span>Both</span>
+            </label>
+          </div>
+        </div>
+        <div class="acf-section">
+          <label class="acf-label">Date Range <span class="acf-optional">(optional)</span></label>
+          <div class="acf-date-row">
+            <input type="date" id="acf-date-start" placeholder="Start">
+            <span class="acf-date-sep">&rarr;</span>
+            <input type="date" id="acf-date-end" placeholder="End">
+          </div>
+        </div>
+        <div class="acf-section">
+          <label class="acf-label" for="acf-focus-input">Focus Topic <span class="acf-optional">(optional)</span></label>
+          <input type="text" id="acf-focus-input" placeholder="e.g. Climate" autocomplete="off">
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-primary" id="ai-rate-limit-modal-ok">OK</button>
+        <button class="btn" id="analyze-config-cancel">Cancel</button>
+        <button class="btn btn-primary" id="analyze-config-run">&#x1F680; Run Analysis</button>
       </div>
+    </div>
+  </div>
+
+  <div class="subject-dashboard" id="subject-dashboard" style="display:none">
+    <div class="sd-header">
+      <button class="btn btn-ghost btn-icon" id="sd-back" title="Back">&larr;</button>
+      <div class="sd-title">
+        <div class="sd-name" id="sd-name"></div>
+        <div class="sd-handle" id="sd-handle"></div>
+      </div>
+      <div class="sd-status" id="sd-status">Loading…</div>
+      <button class="btn btn-ghost" id="sd-justify-btn" type="button">&#x1F4D6; Read Justification</button>
+    </div>
+    <div class="sd-justification" id="sd-justification" style="display:none;"></div>
+    <div class="sd-body">
+      <aside class="sd-sidebar">
+        <div class="sd-avatar">
+          <div class="sd-avatar-circle" id="sd-avatar-circle"></div>
+        </div>
+        <div class="sd-metrics">
+          <div class="sd-metric sd-metric-hypocrisy" data-metric="hypocrisy">
+            <div class="sd-metric-label">Hypocrisy</div>
+            <div class="sd-metric-value" id="sd-metric-hypocrisy">—</div>
+            <div class="sd-metric-desc">0 = aligned · 100 = contradictory</div>
+          </div>
+          <div class="sd-metric sd-metric-relevance" data-metric="relevance">
+            <div class="sd-metric-label">Relevance</div>
+            <div class="sd-metric-value" id="sd-metric-relevance">—</div>
+            <div class="sd-metric-desc">0 = off-topic · 100 = expert</div>
+          </div>
+          <div class="sd-metric sd-metric-bias" data-metric="bias">
+            <div class="sd-metric-label">Bias</div>
+            <div class="sd-metric-value" id="sd-metric-bias">—</div>
+            <div class="sd-metric-desc">Vocabulary lean on the political spectrum</div>
+          </div>
+          <div class="sd-metric sd-metric-clarity" data-metric="clarity">
+            <div class="sd-metric-label">Factual Clarity</div>
+            <div class="sd-metric-value" id="sd-metric-clarity">—</div>
+            <div class="sd-metric-desc">Source authority covering this subject</div>
+          </div>
+        </div>
+        <div class="sd-wordcloud">
+          <div class="sd-wordcloud-label">Topic Focus</div>
+          <div class="sd-wordcloud-body" id="sd-wordcloud"></div>
+        </div>
+      </aside>
+      <main class="sd-main">
+        <div class="sd-pane">
+          <div class="sd-pane-header">News Articles <span class="sd-pane-count" id="sd-news-count">0</span></div>
+          <div class="sd-pane-body" id="sd-news-list"></div>
+        </div>
+        <div class="sd-pane">
+          <div class="sd-pane-header">Tweets <span class="sd-pane-count" id="sd-tweets-count">0</span></div>
+          <div class="sd-pane-body" id="sd-tweets-list"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="processing-overlay" class="processing-hidden" aria-live="polite">
+    <div class="processing-card">
+      <div class="processing-spinner-wrap">
+        <div class="processing-spinner"></div>
+        <div class="processing-sparkle" aria-hidden="true">&#x2696;&#xFE0F;</div>
+      </div>
+      <div id="processing-text" class="processing-text">Loading…</div>
     </div>
   </div>
 
@@ -658,9 +788,13 @@
   <script src="js/article-archive.js"></script>
   <script src="js/fetcher.js"></script>
   <script src="js/translator.js"></script>
-  <script src="js/gemini-key.js"></script>
+  <script src="js/subjects.js"></script>
   <script src="js/analyzer.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/twitter-fetcher.js"></script>
+  <script src="js/scoring-engine.js"></script>
+  <script src="js/analyze-modal.js"></script>
+  <script src="js/filter-modal.js"></script>
   <script src="js/app.js"></script>
   <script>
     // Register the service worker for PWA install + offline app shell.

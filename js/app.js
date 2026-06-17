@@ -6,20 +6,41 @@
   let currentNation = FeedManager.getSelectedNation();
   let currentSubcat = 'all';
   let currentMode = 'live';
-  let currentRankType = 'ai'; // 'ai' or 'keyword' — only relevant when currentMode === 'top'
+  let currentRankType = 'ai'; // legacy — kept for compatibility; always ignored
   let currentView = 'list';
   let scopeCache = {};
   let isFetching = false;
   let currentArticles = [];
   let loadedCount = 0;
-  // Monotonically increasing token for in-flight mode switches. Each
-  // rAF callback checks against this and bails out if a newer click
-  // superseded it, so rapid Top-AI → Top-Keyword → Live clicks don't
-  // pile up stale renders.
+  // Monotonically increasing token reserved for future race protection
+  // (kept for compatibility — Live is the only mode now).
   let pendingModeSwitch = 0;
 
-  /* ── Modal / "deeper view" history stack ──
+  /* Expose a small slice of state to the analyze-modal module without
+   * un-IIFE-ing the rest of the app. The dashboard needs to walk
+   * every scope cache to collect articles about a subject, and
+   * keeping the cache inside the closure is otherwise unreachable.
    *
+   * `openModal` / `closeModal` are also exposed so analyze-modal.js
+   * (loaded earlier in the script tag chain) can push its own modals
+   * onto the same back-stack as the rest of the app.
+   */
+  window.appState = {
+    get scopeCache() { return scopeCache; },
+    get currentMode() { return currentMode; },
+    get currentScope() { return currentScope; },
+    get currentSubcat() { return currentSubcat; },
+    openModal,
+    closeModal,
+    pushFrame(id) { pushedFrameStack.push(id); },
+    dropPushedFrame(id) {
+      const idx = pushedFrameStack.lastIndexOf(id);
+      if (idx >= 0) pushedFrameStack.splice(idx, 1);
+    },
+    get nextFrameId() { return ++nextFrameId; }
+  };
+
+  /* ── Modal / "deeper view" history stack ──
    * Goal: when the user presses the browser back button (or the
    * mobile swipe-back gesture) while a modal (settings, article,
    * auth, etc.) or full-screen sub-view (comments page) is open, the
@@ -105,12 +126,6 @@
     if (idx >= 0) pushedFrameStack.splice(idx, 1);
   }
 
-  // Close every member (modal OR sub-view) belonging to the given
-  // frame, across both stacks. Hides their UI, runs their onClose
-  // callbacks, and removes them from their stack. Does NOT touch the
-  // pushed-state stack — that's the caller's job (closeModal/
-  // closeSubView decide whether to call history.back(); popstate
-  // already consumed the state).
   function closeFrame(frameId) {
     for (let i = modalStack.length - 1; i >= 0; i--) {
       if (modalStack[i].frameId === frameId) {
@@ -127,6 +142,9 @@
         subViewStack.splice(i, 1);
       }
     }
+    if (modalStack.length === 0) {
+      document.body.classList.remove('modal-open');
+    }
   }
 
   function openModal(name, modalEl, onClose) {
@@ -141,6 +159,12 @@
       modalStack.push({ name, el: modalEl, onClose, frameId: currentFrameId(), isRoot: false });
     }
     modalEl.classList.add('open');
+    // Apply background blur to the rest of the page so the user
+    // can tell a modal is open and the focus is on it. The blur
+    // is removed by closeModal when the stack empties.
+    if (modalStack.length === 1) {
+      document.body.classList.add('modal-open');
+    }
   }
 
   function closeModal(name) {
@@ -149,37 +173,21 @@
     const m = modalStack[idx];
 
     if (m.isRoot) {
-      // Closing the root of a frame: just call history.back() to
-      // consume the pushed state. The popstate handler is the
-      // SINGLE source of truth for closing frames — it will run
-      // closeFrame(m.frameId) for us. This avoids the previous bug
-      // where the popstate handler would pop a different (still-
-      // pushed) frame because we'd already removed the popped one
-      // from pushedFrameStack ourselves.
-      //
-      // But only do this when the frame's state is the TOP of the
-      // history. If another frame was pushed on top of this one
-      // (e.g. user opened article modal, then comments page, then
-      // closed the article modal via X), history.back() would
-      // pop the comments frame instead. In that case we just
-      // close the visual element and let the state stay on the
-      // history; a future back press will clean it up.
       if (pushedFrameStack[pushedFrameStack.length - 1] === m.frameId) {
         try { history.back(); } catch {
-          // If history.back() isn't available (e.g. file:// in some
-          // browsers), just close the visual element.
           closeFrame(m.frameId);
         }
       } else {
         closeFrame(m.frameId);
       }
     } else {
-      // Closing a nested modal: just hide it and remove from the
-      // stack. The frame and pushed state stay intact so the next
-      // back press still closes the root of this frame.
       m.el.classList.remove('open');
       if (m.onClose) try { m.onClose(); } catch {}
       modalStack.splice(idx, 1);
+    }
+    // Remove the body-level blur when no modals are left.
+    if (modalStack.length === 0) {
+      document.body.classList.remove('modal-open');
     }
   }
 
@@ -258,6 +266,16 @@
 
   window.addEventListener('popstate', () => {
     if (popstateBusy) return;
+    // Check the current state marker. The analyze-modal dashboard
+    // pushes its own state object with `ibDashboard: true`. When
+    // the user backs out of the dashboard, we close it without
+    // trying to pop any other frame.
+    if (history.state && history.state.ibDashboard) {
+      if (window.AnalyzeModal && typeof window.AnalyzeModal.closeDashboard === 'function') {
+        window.AnalyzeModal.closeDashboard();
+      }
+      return;
+    }
     if (pushedFrameStack.length === 0) {
       // The user pressed back from the main view (no modals/views
       // open). Re-install the trap so the next back press is a
@@ -324,20 +342,23 @@
     sectionMeta: $('#section-meta'),
     modeToggle: $('#mode-toggle'),
     searchInput: $('#search-input'),
-    langSelect: $('#lang-select'),
     filterSource: $('#filter-source'),
     sortBy: $('#sort-by'),
     searchToggle: $('#search-toggle'),
     filterToggle: $('#filter-btn'),
     sortBtn: $('#sort-btn'),
-    aiRankBtn: $('#ai-rank-btn'),
-    keywordRankBtn: $('#keyword-rank-btn'),
+    sortByExtras: $('#sort-by-extras'),
+    filterSourceExtras: $('#filter-source-extras'),
+    analyzeBtn: $('#analyze-btn'),
+    trendingBtn: $('#trending-btn'),
+    translateBtn: $('#translate-btn'),
+    translateModal: $('#translate-modal'),
+    translateModalBody: $('#translate-modal-body'),
     filterPanel: $('#filter-panel'),
     sortPanel: $('#sort-panel'),
     viewToggle: $('#view-toggle'),
     githubTokenInput: $('#github-token-input'),
     cloudStatus: $('#cloud-status'),
-    refreshBtn: $('#refresh-btn'),
     hardRefreshBtn: $('#hard-refresh-btn'),
     hardRefreshModal: $('#hard-refresh-modal'),
     hardRefreshModalClose: $('#hard-refresh-modal-close'),
@@ -382,7 +403,6 @@
     deleteCommentModal: $('#delete-comment-modal'),
     deleteCommentConfirm: $('#delete-comment-confirm'),
     deleteCommentCancel: $('#delete-comment-cancel'),
-    topDateBtn: $('#top-date-btn'),
     autoDisableFailingSources: $('#auto-disable-failing-sources'),
     feedHealthCount: $('#feed-health-count'),
     reenableAllBtn: $('#reenable-all-btn')
@@ -495,7 +515,7 @@
     catch { return ''; }
   }
 
-  /* ── Top-Level Tabs (Global / Nation) ── */
+  /* ── Top-Level Tabs (Global / Nation / Conflicts) ── */
   function renderTopTabs() {
     const nations = FeedManager.getNations();
     const current = currentNation;
@@ -535,6 +555,8 @@
       loadedCount = 0;
       hasFreshBackground = false;
       liveAllLoaded = false;
+      loadAllState = 'idle';
+      liveAllArticles = null;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       if (scope === 'conflicts') {
@@ -560,26 +582,24 @@
     }
     if (!articles.length) return [];
     articles = FeedFetcher.deduplicate(articles);
-    if (currentMode === 'top') {
-      articles = FeedFetcher.sortByDate(articles);
-      articles = applyDateFilter(articles);
-    } else {
-      articles = FeedFetcher.sortByDate(articles);
-    }
+    articles = FeedFetcher.sortByDate(articles);
     articles = applySearch(articles);
     articles = applyFilters(articles);
-    const sortMode = currentSort || (currentMode === 'top' ? 'date-desc' : 'date-desc');
+    const sortMode = currentSort || 'date-desc';
     articles = applySort(articles, sortMode);
     return articles;
   }
 
+  // Keep the legacy #filterSource select in sync with the
+  // articles currently visible. The user-facing filter is now
+  // the FilterModal (with checkboxes), but we still populate
+  // this select for any code path that reads from it.
   function updateFilterSourceOptions(articles) {
     if (!el.filterSource) return;
-    const current = el.filterSource.value;
     const sources = [...new Set(articles.map(a => a.source).filter(Boolean))].sort();
-    el.filterSource.innerHTML = '<option value="">All Sources</option>' +
+    const html = '<option value="">All Sources</option>' +
       sources.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
-    if (current && sources.includes(current)) el.filterSource.value = current;
+    el.filterSource.innerHTML = html;
   }
 
   function renderSubTabs() {
@@ -610,6 +630,8 @@
       hasFreshBackground = false;
       loadedCount = 0;
       liveAllLoaded = false;
+      loadAllState = 'idle';
+      liveAllArticles = null;
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       displayCurrentSubcat();
@@ -693,8 +715,8 @@
         // Cap the "Load All" view at 500 articles for mobile safety. 500 cards
         // is already a lot to scroll; showing 5,000+ would freeze the page.
         const liveTotalCap = 500;
-        if (liveAllLoaded) {
-          display = articles.slice(0, liveTotalCap);
+        if (liveAllLoaded && liveAllArticles) {
+          display = liveAllArticles.slice(0, liveTotalCap);
         } else {
           // Default live view: exactly ONE article per source, the most recent.
           // This guarantees a manageable initial load no matter how many sources.
@@ -707,19 +729,38 @@
         totalShown = display.length;
       }
 
-      // Build the "Load All" button (live mode only) — placed at the TOP of
-      // the content area so the user can opt in to seeing everything.
+      // Build the "Load All" button (live mode only). Behaviour:
+      //   - State 1 (initial): button reads "Load All Articles" and is
+      //     enabled. Clicking kicks off a background re-fetch with a
+      //     larger cap and flips the button to the loading state.
+      //   - State 2 (loading): button reads "Loading all articles…",
+      //     shows a spinner, and is disabled. The user can still
+      //     scroll the 1-per-source view while the fetch runs.
+      //   - State 3 (loaded): button reads "Show all (N articles)" and
+      //     is enabled. Clicking reveals the full set without a
+      //     second fetch.
       let loadAllHtml = '';
-      if (currentMode === 'live' && !liveAllLoaded && articles.length > display.length) {
+      if (currentMode === 'live' && articles.length > display.length) {
         const remaining = articles.length;
         const showing = totalShown;
-        const cap = 500;
-        const willShow = Math.min(remaining, cap);
+        let btnLabel, btnDisabled = '', btnSpinner = '';
+        if (loadAllState === 'loading') {
+          btnLabel = 'Loading all articles…';
+          btnDisabled = ' disabled';
+          btnSpinner = '<span class="btn-spinner"></span>';
+        } else if (loadAllState === 'loaded' && liveAllArticles) {
+          btnLabel = 'Show all (' + Math.min(liveAllArticles.length, 500) + ' articles)';
+        } else {
+          btnLabel = 'Load All Articles';
+        }
         loadAllHtml = '<div class="load-all-row">' +
           '<div class="load-all-info">' +
             '<strong>Showing ' + showing + ' of ' + remaining + ' articles</strong>' +
+            '<span class="load-all-hint">Newest from each source. Click below to fetch the full list in the background.</span>' +
           '</div>' +
-          '<button class="btn btn-primary" id="load-all-btn">Load All Articles</button>' +
+          '<button class="btn btn-primary" id="load-all-btn"' + btnDisabled + '>' +
+            btnSpinner + ' ' + btnLabel +
+          '</button>' +
         '</div>';
       }
 
@@ -732,15 +773,87 @@
 
       const loadAllBtn = $('#load-all-btn');
       if (loadAllBtn) {
-        loadAllBtn.addEventListener('click', () => {
-          liveAllLoaded = true;
-          renderArticles(currentArticles);
-        });
+        loadAllBtn.addEventListener('click', () => handleLoadAllClick());
       }
     } catch (e) {
       console.error('renderArticles failed:', e);
       showError('Failed to render list view. Try refreshing.');
     }
+  }
+
+  // Load-All state machine. Three values:
+  //   'idle'    → button says "Load All Articles", enabled.
+  //   'loading' → background re-fetch in progress, button disabled
+  //               with spinner + "Loading all articles…".
+  //   'loaded'  → background fetch done, button says "Show all (N)".
+  let loadAllState = 'idle';
+  // Holds the larger article set once the background fetch finishes.
+  // null until then. Read by renderArticles to decide what to display.
+  let liveAllArticles = null;
+
+  // Click handler for the Load All button. Behaviour depends on
+  // the current state:
+  //   - idle:    start the background fetch
+  //   - loading: no-op (button is disabled)
+  //   - loaded:  reveal the cached full set
+  async function handleLoadAllClick() {
+    if (loadAllState === 'loading') return;
+    if (loadAllState === 'loaded') {
+      // Already loaded — just flip the visible flag and re-render.
+      liveAllLoaded = true;
+      renderArticles(currentArticles);
+      return;
+    }
+    // State is 'idle'. Kick off a background re-fetch with a high
+    // per-source cap (100 per source, up to ~10,000 articles total
+    // across all sources). The work is split across animation
+    // frames so the user-visible 1-per-source view never freezes.
+    loadAllState = 'loading';
+    renderArticles(currentArticles);
+    // Run in the next tick so the disabled button paints first.
+    requestAnimationFrame(async () => {
+      try {
+        const key = scopeKey();
+        const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+        if (!feeds.length) {
+          loadAllState = 'idle';
+          renderArticles(currentArticles);
+          return;
+        }
+        // Use a per-source cap of 100, batch 4 at a time.
+        const BATCH = 4;
+        const PER_SOURCE = 100;
+        const allResults = [];
+        for (let i = 0; i < feeds.length; i += BATCH) {
+          const batch = feeds.slice(i, i + BATCH);
+          const settled = await Promise.allSettled(batch.map(f => FeedFetcher.fetchFeed(f, PER_SOURCE)));
+          for (const s of settled) {
+            if (s.status === 'fulfilled') allResults.push(...s.value);
+          }
+          // Yield to the browser so the disabled button can repaint.
+          await new Promise(r => setTimeout(r, 0));
+        }
+        // Build the new full corpus and store it.
+        const groups = {};
+        for (const a of allResults) {
+          a.subcat = a.feedHint || 'politics';
+          if (!groups[a.subcat]) groups[a.subcat] = [];
+          groups[a.subcat].push(a);
+        }
+        let allArticles = [];
+        for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+        liveAllArticles = allArticles;
+        scopeCache[key] = { articles: allArticles, groups };
+        loadAllState = 'loaded';
+      } catch (e) {
+        console.warn('Load-all background fetch failed:', e);
+        loadAllState = 'idle';
+      }
+      // Re-render so the button flips to "Show all (N articles)".
+      // If the user has already navigated away from the live view
+      // this is a harmless no-op.
+      renderArticles(currentArticles);
+    });
   }
 
   // Render the article grid. For lists up to 50 articles we use a single
@@ -789,39 +902,17 @@
         '</div>'
       : '';
 
-    const rankHtml = currentMode === 'top' && article._rank
-      ? '<span class="score-badge" style="color:' + (article._rank <= 3 ? 'var(--accent)' : 'var(--text-tertiary)') + '">#' + article._rank + '</span>'
-      : '';
-    const aiBadgeHtml = article._aiBoost
-      ? '<span class="ai-badge" title="AI boosted">AI</span>'
-      : '';
-    // One ranked kicker per article (mutually exclusive: AI / keyword / live-trending),
-    // with its expandable "where it's trending" details immediately after it so the
-    // click delegation can toggle the correct sibling.
     const kwText = (article._trendingKeywords && article._trendingKeywords.length) ? article._trendingKeywords.join(', ') : '—';
     const locText = escHtml(scopeLabel(currentScope, currentSubcat));
+    // Trending-mode rank badge (#1, #2, ...). Coloured accent for the
+    // top 3, tertiary grey for the rest.
+    const rankHtml = article._rank
+      ? '<span class="score-badge" style="color:' + (article._rank <= 3 ? 'var(--accent)' : 'var(--text-tertiary)') + '">#' + article._rank + '</span>'
+      : '';
+    // Live-trending kicker is kept (purely derived from article text; not
+    // a ranking signal). Click expands "where it's trending" details.
     let rankedBlock = '';
-    if (article._aiRanked) {
-      const num = article._rank ? '#' + article._rank : '';
-      rankedBlock =
-        '<div class="ai-ranked-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
-          '<span class="ark-sparkle">✦</span> AI Ranked · <span class="rk-num">' + num + '</span>' +
-        '</div>' +
-        '<div class="ranked-details" aria-hidden="true">' +
-          '<span class="rd-loc">' + locText + '</span>' +
-          '<span class="rd-kw">' + escHtml(kwText) + '</span>' +
-        '</div>';
-    } else if (article._kwRanked) {
-      const num = article._rank ? '#' + article._rank : '';
-      rankedBlock =
-        '<div class="kw-ranked-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
-          '<span class="krk-hash">#</span> Trending · <span class="rk-num">' + num + '</span>' +
-        '</div>' +
-        '<div class="ranked-details" aria-hidden="true">' +
-          '<span class="rd-loc">' + locText + '</span>' +
-          '<span class="rd-kw">' + escHtml(kwText) + '</span>' +
-        '</div>';
-    } else if (currentMode === 'live' && article._trendingCount > 0) {
+    if (article._trendingCount > 0) {
       rankedBlock =
         '<div class="live-trending-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false">' +
           '<span class="lrk-arrow">↗</span> Trending · <span class="rk-num">' + article._trendingCount + '</span>' +
@@ -837,6 +928,20 @@
     const likeCount = ad.likeCount || 0;
     const dislikeCount = ad.dislikeCount || 0;
     const commentCount = (ad.comments && ad.comments.length) || 0;
+
+    // Subject chip + Analyze button (Milestone 1). Only rendered when
+    // the article was tagged with a registered subject by
+    // `tagArticleWithSubject` in displayCurrentSubcat.
+    const subject = article.subject;
+    const subjectHtml = subject
+      ? '<div class="subject-chip-wrap">' +
+          '<span class="subject-chip" title="About ' + escAttr(subject.display_name) + '">' +
+            '<span class="subject-chip-dot"></span>' +
+            escHtml(subject.display_name) +
+          '</span>' +
+          '<button class="card-analyze-btn" data-article="' + encoded + '" title="Analyze this subject" aria-label="Analyze ' + escAttr(subject.display_name) + '">&#x2696;&#xFE0F;</button>' +
+        '</div>'
+      : '';
 
     // Conflict kicker: when this article is part of a cluster with
     // different reported facts (numbers, scores, etc.), show a warning
@@ -875,13 +980,15 @@
         '<div class="article-body">' +
           rankedBlock +
           conflictBlock +
-          '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
+          '<div class="article-title-row">' +
+            '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
+            subjectHtml +
+          '</div>' +
           '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
           '<div class="article-meta">' +
-            '<span class="source">' + escHtml(article.source) + '</span>' +
+            '<span class="source">' + escHtml(article.source || '') + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
-            aiBadgeHtml +
             flagHtml +
             (article._conflicts && article._conflicts.isConflicting
               ? '<span class="conflict-pill" title="Conflicting reports across sources">⚠ conflicting</span>'
@@ -938,10 +1045,6 @@
   function renderReels(articles) {
     try {
       if (!articles.length) { showEmpty(); return; }
-      if (currentMode === 'top') {
-        articles = articles.slice(0, 25);
-        articles.forEach((a, i) => a._rank = i + 1);
-      }
       currentArticles = articles;
       currentReelIndex = 0;
       showReel();
@@ -994,8 +1097,6 @@
         '<div class="reels-count-row">' +
           '<span class="reels-count"></span>' +
           '<div class="reels-badges">' +
-            '<span class="reels-ai-ranked"><span class="ark-sparkle">✦</span> AI · <span class="rk-num"></span></span>' +
-            '<span class="reels-kw-ranked"><span class="krk-hash">#</span> Trending · <span class="rk-num"></span></span>' +
             '<span class="reels-conflict" style="display:none"><span class="rc-warn">⚠</span> Conflict</span>' +
             '<span class="reels-mode-badge"></span>' +
           '</div>' +
@@ -1071,26 +1172,13 @@
     if (count) count.textContent = (idx + 1) + ' / ' + total;
     const modeBadge = cardEl.querySelector('.reels-mode-badge');
     if (modeBadge) {
-      const isTop = currentMode === 'top';
-      modeBadge.textContent = isTop ? 'TOP' : 'LIVE';
-      modeBadge.classList.toggle('mode-top', isTop);
-      modeBadge.classList.toggle('mode-live', !isTop);
-    }
-    const aiRankedEl = cardEl.querySelector('.reels-ai-ranked');
-    if (aiRankedEl) {
-      aiRankedEl.classList.toggle('visible', !!article._aiRanked);
-      const n = aiRankedEl.querySelector('.rk-num');
-      if (n) n.textContent = article._rank ? '#' + article._rank : '';
-    }
-    const kwRankedEl = cardEl.querySelector('.reels-kw-ranked');
-    if (kwRankedEl) {
-      kwRankedEl.classList.toggle('visible', !!article._kwRanked);
-      const n = kwRankedEl.querySelector('.rk-num');
-      if (n) n.textContent = article._rank ? '#' + article._rank : '';
+      modeBadge.textContent = 'LIVE';
+      modeBadge.classList.toggle('mode-top', false);
+      modeBadge.classList.toggle('mode-live', true);
     }
     const liveTrendingEl = cardEl.querySelector('.reels-live-trending');
     if (liveTrendingEl) {
-      const show = currentMode === 'live' && article._trendingCount > 0;
+      const show = article._trendingCount > 0;
       liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
       const n = liveTrendingEl.querySelector('.rk-num');
       if (n) n.textContent = show ? article._trendingCount : '';
@@ -1679,18 +1767,82 @@
     }
   }
 
-  function bindLangSelect() {
-    if (!el.langSelect) return;
-    el.langSelect.value = Settings.get('language') || 'en';
-    el.langSelect.addEventListener('change', () => {
-      Settings.save({ language: el.langSelect.value });
-      syncSettingsToCloud();
-      const key = scopeKey();
-      const cached = scopeCache[key];
-      if (!cached) return;
-      const articles = getFilteredArticles(currentSubcat, cached);
-      renderTranslated(articles);
+  // Language list shown in the translate modal. The native name is
+  // the value displayed to the user (Hindi speakers see हिन्दी, not
+  // "Hindi"); the `code` is what we save to Settings. The list is
+  // derived from Settings.LANGUAGES when available, with a sensible
+  // fallback so the modal still works if the settings module is
+  // empty.
+  const LANG_LIST = (() => {
+    if (typeof Settings !== 'undefined' && Settings.LANGUAGES) {
+      return Object.entries(Settings.LANGUAGES).map(([code, native]) => ({ code, native }));
+    }
+    return [
+      { code: 'en', native: 'English' },
+      { code: 'hi', native: 'हिन्दी' },
+      { code: 'kn', native: 'ಕನ್ನಡ' },
+      { code: 'ta', native: 'தமிழ்' },
+      { code: 'te', native: 'తెలుగు' },
+      { code: 'ml', native: 'മലയാളം' },
+      { code: 'bn', native: 'বাংলা' },
+      { code: 'mr', native: 'मराठी' },
+      { code: 'gu', native: 'ગુજરાતી' },
+      { code: 'pa', native: 'ਪੰਜਾਬੀ' },
+      { code: 'ur', native: 'اردو' },
+      { code: 'es', native: 'Español' },
+      { code: 'fr', native: 'Français' },
+      { code: 'ar', native: 'العربية' },
+      { code: 'zh', native: '中文' },
+      { code: 'ja', native: '日本語' },
+      { code: 'de', native: 'Deutsch' },
+      { code: 'ru', native: 'Русский' },
+      { code: 'pt', native: 'Português' }
+    ];
+  })();
+
+  // Build the language list inside the translate modal and bind
+  // each row so clicking a language saves the preference and
+  // re-translates the visible articles.
+  function openTranslateModal() {
+    if (!el.translateModalBody) return;
+    const current = Settings.get('language') || 'en';
+    el.translateModalBody.innerHTML = LANG_LIST.map(l => {
+      const active = l.code === current;
+      return '<button type="button" class="tl-row' + (active ? ' tl-row-active' : '') +
+        '" data-lang="' + l.code + '">' +
+        '<span class="tl-native">' + l.native + '</span>' +
+        (active ? '<span class="tl-check">✓</span>' : '') +
+      '</button>';
+    }).join('');
+    openModal('translate', el.translateModal);
+    // Bind clicks
+    el.translateModalBody.querySelectorAll('.tl-row').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.lang;
+        if (!code) return;
+        Settings.save({ language: code });
+        syncSettingsToCloud();
+        closeModal('translate');
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      });
     });
+  }
+
+  function bindTranslate() {
+    if (el.translateBtn) {
+      el.translateBtn.addEventListener('click', openTranslateModal);
+    }
+    if (el.translateModal) {
+      const closeBtn = $('#translate-modal-close');
+      if (closeBtn) closeBtn.addEventListener('click', () => closeModal('translate'));
+      el.translateModal.addEventListener('click', e => {
+        if (e.target === el.translateModal) closeModal('translate');
+      });
+    }
   }
 
   function isGoogleNewsRedirect(url) {
@@ -1698,32 +1850,25 @@
     catch { return false; }
   }
 
+  // Sort options are static (Date ↓, Date ↑, Source A–Z). When the
+  // user is in Trending mode the list is already pre-sorted by the
+  // engine so sort is disabled, but we still keep the value
+  // remembered so switching back to Live resumes the same sort.
   function updateSortOptions() {
     if (!el.sortBy) return;
-    const current = el.sortBy.value;
-    const isTop = currentMode === 'top';
-    el.sortBy.innerHTML = (isTop ? '<option value="score">Score ↓</option><option value="score-asc">Score ↑</option>' : '') +
-      '<option value="date-desc">Date ↓</option>' +
-      '<option value="date-asc">Date ↑</option>' +
-      '<option value="source">Source A–Z</option>';
-    if ([...el.sortBy.options].some(o => o.value === current)) el.sortBy.value = current;
-    else el.sortBy.value = isTop ? 'score' : 'date-desc';
+    if (!el.sortBy.value) el.sortBy.value = currentSort || 'date-desc';
     currentSort = el.sortBy.value;
+    // Keep the extras select in sync if it exists.
+    if (el.sortByExtras && el.sortByExtras.value !== currentSort) {
+      el.sortByExtras.value = currentSort;
+    }
   }
 
-  function updateModeButtonActive() {
-    if (!el.modeToggle) return;
-    $$('.mode-btn', el.modeToggle).forEach(b => {
-      const match = b.dataset.mode === currentMode &&
-        (currentMode !== 'top' || b.dataset.rankType === currentRankType);
-      b.classList.toggle('active', match);
-    });
-  }
+  // updateModeButtonActive highlights the active mode button in any
+  // legacy mode-toggle UI. With only Live + Trending remaining and
+  // the toggle removed, this is a no-op.
+  function updateModeButtonActive() { /* no-op: handled by updateRankControls */ }
 
-  // Show/hide the IB-block rank action buttons + the date picker.
-  // Sparkle (AI) and date picker → only in top-AI.
-  // Hashtag (keyword) → only in top-keyword.
-  // Live → none of them.
   // Human-readable scope + subcategory label for the "where it's trending" details.
   // e.g. "Global · Technology" / "India · Politics" / "Global · All".
   function scopeLabel(scope, subcat) {
@@ -1734,108 +1879,73 @@
     return scopeName + ' · ' + subName;
   }
 
-  // Toggle the Top mode for a given rank type.
-  // Click once  → enter Top (AI or Keyword) and load/rank the articles.
-  // Click again (when already in that mode) → return to Live.
-  // Clicking the other toggle while in one Top mode switches to the other.
-  //
-  // The mode change is split into two phases:
-  //   1. Synchronous UI updates (button states, sticky header, sort
-  //      options) and a "Switching to X…" status overlay — these run
-  //      immediately so the click feels instant.
-  //   2. Heavy work (ranking, conflict detection, render) is deferred
-  //      to the next animation frame. By then the browser has painted
-  //      the overlay and updated the button states, so the user never
-  //      sees a frozen UI.
-  function toggleTopMode(rankType) {
+  // updateRankControls highlights the Trending button when the user
+  // is in the Trending mode (the only non-Live mode that remains).
+  function updateRankControls() {
+    const inTrending = currentMode === 'top' && currentRankType === 'keyword';
+    if (el.trendingBtn) {
+      el.trendingBtn.classList.toggle('active', inTrending);
+      el.trendingBtn.setAttribute('aria-pressed', inTrending ? 'true' : 'false');
+    }
+  }
+
+  // Toggle Trending <-> Live. Trending shows the top 25 articles in
+  // the current scope/subcat, ranked deterministically (TF-IDF ×
+  // recency × buzz × authority). Click the button again to return
+  // to Live.
+  function toggleTrending() {
     const prevMode = currentMode;
-    if (currentMode === 'top' && currentRankType === rankType) {
+    if (currentMode === 'top' && currentRankType === 'keyword') {
       currentMode = 'live';
+      currentRankType = 'ai'; // reset to legacy default
     } else {
       currentMode = 'top';
-      currentRankType = rankType;
+      currentRankType = 'keyword';
     }
     switchModeNonBlocking(prevMode);
   }
 
-  function updateRankControls() {
-    const inTopAi = currentMode === 'top' && currentRankType === 'ai';
-    const inTopKw = currentMode === 'top' && currentRankType === 'keyword';
-    // Both IB-row rank toggles are always visible. The active one is
-    // highlighted in blue (see .ib-rank-toggle.active in styles.css).
-    if (el.aiRankBtn) {
-      el.aiRankBtn.classList.toggle('active', inTopAi);
-      el.aiRankBtn.setAttribute('aria-pressed', inTopAi ? 'true' : 'false');
-    }
-    if (el.keywordRankBtn) {
-      el.keywordRankBtn.classList.toggle('active', inTopKw);
-      el.keywordRankBtn.setAttribute('aria-pressed', inTopKw ? 'true' : 'false');
-    }
-    if (el.topDateBtn) el.topDateBtn.style.display = inTopAi ? 'inline-flex' : 'none';
+  function bindTrendingBtn() {
+    if (!el.trendingBtn) return;
+    el.trendingBtn.addEventListener('click', () => toggleTrending());
   }
 
-  /**
-   * Shared helper used by every click handler that switches the top/live
-   * mode. Updates the synchronous UI bits (button states, header, sort
-   * options) and shows a "Switching to X…" overlay immediately, then
-   * defers the actual ranking + render to the next animation frame.
-   * A token ensures that if the user clicks multiple toggles in rapid
-   * succession, only the latest one runs the heavy work.
-   */
   function switchModeNonBlocking(prevMode) {
     const token = ++pendingModeSwitch;
-
     loadedCount = 0;
     liveAllLoaded = false;
+    loadAllState = 'idle';
+    liveAllArticles = null;
     hasFreshBackground = false;
     updateModeButtonActive();
     updateRankControls();
     updateSortOptions();
     updateStickyHeader();
-
-    // Pick a status message that matches the destination mode.
-    let msg;
-    if (currentMode === 'live') {
-      msg = 'Switching to Live…';
-    } else if (currentRankType === 'ai') {
-      msg = 'Switching to Top AI…';
+    // Show a clear, user-friendly status message immediately. We
+    // also paint the loading state into #main-content right away
+    // so the user can't be left staring at a stale list while
+    // the new one is being computed.
+    if (currentMode === 'top') {
+      setTopListStatus('Computing Trending…');
+      showLoadingInline('Computing Trending…');
     } else {
-      msg = 'Switching to Top Keyword…';
+      setTopListStatus('Loading live news…');
+      showLoadingInline('Loading live news…');
     }
-    setTopListStatus(msg);
-
-    // Schedule the heavy work for the next animation frame. By then
-    // the browser has painted the overlay and the new button states,
-    // so the user gets instant visual feedback. displayCurrentSubcat()
-    // will further update the status to a more specific message
-    // (e.g. "AI ranking…", "Ranking by keywords…") and finally clear it.
     requestAnimationFrame(() => {
-      if (token !== pendingModeSwitch) return; // superseded by a newer click
+      if (token !== pendingModeSwitch) return;
       displayCurrentSubcat();
     });
   }
 
-  function bindModeToggle() {
-    const toggle = el.modeToggle;
-    if (!toggle) return;
-    toggle.addEventListener('click', e => {
-      const btn = e.target.closest('.mode-btn');
-      if (!btn || btn.classList.contains('active')) return;
-      const prevMode = currentMode;
-      currentMode = btn.dataset.mode;
-      // Both "Top AI" and "Top Keyword" set data-mode="top"; disambiguate
-      // with data-rank-type.
-      if (currentMode === 'top') {
-        currentRankType = btn.dataset.rankType || 'ai';
-      }
-      switchModeNonBlocking(prevMode);
-    });
-  }
-
-  // Keyword rank toggle in the IB row. Toggles Top Keyword <-> Live.
-  function bindKeywordRankBtn() {
-    if (!el.keywordRankBtn) return;
-    el.keywordRankBtn.addEventListener('click', () => toggleTopMode('keyword'));
+  // Render an inline loading state into #main-content so the user
+  // has something visible while a heavy operation is in flight.
+  // This is separate from the #processing-overlay (which is the
+  // full-screen modal) and only paints a small spinner + label
+  // into the article area.
+  function showLoadingInline(msg) {
+    if (!el.main) return;
+    el.main.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>' + (msg || 'Loading…') + '</p></div>';
   }
 
   // Track the cards-view (reels) frame so the browser back button
@@ -1933,10 +2043,9 @@
       // stable result once the fetch is done.
       showProgress('Fetching ' + feeds.length + ' sources\u2026');
 
-      // In live mode, cap each source at 100 items to keep "Load All"
-      // meaningful (e.g. 100 sources × 100 = up to 10,000 articles). In top
-      // mode, we want ALL items from every source for proper concept ranking.
-      const perSourceCap = currentMode === 'live' ? 100 : 0;
+      // Cap each source at 100 items to keep "Load All" meaningful
+      // (e.g. 100 sources × 100 = up to 10,000 articles).
+      const perSourceCap = 100;
 
       const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
 
@@ -1991,163 +2100,61 @@
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
-    // For ranking / display, keep all articles in `currentArticles` so the user
-    // can see all the available results. The renderer itself paginates to
-    // perPage (or 3× perPage in top mode) and offers a Load More button.
-    // We do NOT cap here so the user gets the full ranking.
-
-    // AI Top List: load from DB only. Ranking happens at 8 PM IST (scheduled)
-    // or on-demand only when even yesterday's ranking is missing for the
-    // AI Top List: load from DB only. Ranking happens at 8 PM IST (scheduled)
-    // or on-demand only when even yesterday's ranking is missing for the
-    // current scope/subcat (so the user always has something to look at).
-    // If AI ranking fails for any reason, fall back to live mode.
-    if (currentMode === 'top') {
-      const scope = currentScope;
-      const subcat = currentSubcat;
-      resetRateLimitFlag();
-
-      if (currentRankType === 'keyword') {
-        // Keyword ranking: compute on-the-fly from cached articles.
-        // No Supabase, no API call. Uses the ENTIRE cached pool — no date
-        // filter, whatever is in the RSS feeds gets ranked.
-        setTopListStatus('Ranking by keywords…');
-        // Yield immediately so the "Ranking by keywords…" overlay paints
-        // before we start the (synchronous) analyzer work inside
-        // AI.rankByKeywords. The function itself also yields internally.
-        await new Promise(r => setTimeout(r, 0));
-        const t0 = Date.now();
-        let rankInput;
-        if (subcat === 'all') {
-          rankInput = [];
-          for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
-        } else {
-          rankInput = cached.groups[subcat] || [];
+    // Trending mode: rank all articles in the current scope/subcat
+    // with Analyzer.rankByAnalyzer (TF-IDF × recency × buzz ×
+    // authority) and cap at 25. The ranker returns
+    // `[{ article, score }, ...]`; we unwrap to the bare article and
+    // stamp a 1-based `_rank` so the card can show a #N badge.
+    // We cap the input to 2000 articles before ranking so a
+    // runaway cache can't freeze the main thread for tens of
+    // seconds; the ranker still finds the strongest stories because
+    // TF-IDF naturally concentrates on the most-distinctive
+    // articles at the top.
+    if (currentMode === 'top' && currentRankType === 'keyword') {
+      setTopListStatus('Computing Trending…');
+      // Yield to the event loop so the spinner paints before the
+      // (potentially long) ranker starts.
+      await new Promise(r => setTimeout(r, 0));
+      try {
+        const RANK_INPUT_CAP = 2000;
+        const rankInput = articles.length > RANK_INPUT_CAP
+          ? articles.slice(0, RANK_INPUT_CAP)
+          : articles;
+        const ranked = Analyzer.rankByAnalyzer(rankInput, []);
+        if (ranked && ranked.length) {
+          articles = ranked.slice(0, 25).map(r => {
+            r.article._kwRanked = true;
+            return r.article;
+          });
+          articles.forEach((a, i) => { a._rank = i + 1; });
         }
-        rankInput = FeedFetcher.deduplicate(rankInput);
-        rankInput = FeedFetcher.sortByDate(rankInput);
-        const r = await AI.rankByKeywords(rankInput, scope, subcat);
-        if (r && r.length) {
-          articles = r;
-          // Normalize link from url so cards/buttons work, mark as keyword-ranked.
-          articles.forEach(a => { a.link = a.link || a.url; a._kwRanked = true; });
-        }
-        // Keep the overlay visible long enough to be seen (min 500ms).
-        const elapsed = Date.now() - t0;
-        if (elapsed < 500) await new Promise(res => setTimeout(res, 500 - elapsed));
-        clearTopListStatus();
-      } else {
-        // AI ranking: load from Supabase, fall back to fresh AI rank.
-        const today = AI.todayStr();
-        const yesterday = AI.yesterdayStr();
-        const settings = Settings.load();
-        const viewDate = settings.topDate || today;
-        // Show the processing overlay for the entire AI top-mode flow:
-        // DB fetch and (if needed) AI ranking.
-        setTopListStatus('Loading rankings…');
-
-        const ranked = await AI.loadTopList(viewDate, scope, subcat);
-        if (ranked) {
-          articles = ranked;
-          articles.forEach(a => { a.link = a.link || a.url; a._aiRanked = true; });
-          clearTopListStatus();
-        } else {
-          const hasYesterday = await AI.loadTopList(yesterday, scope, subcat);
-          if (viewDate !== today) {
-            setTopListStatus('No ranking for ' + viewDate);
-            setTimeout(clearTopListStatus, 1500);
-          } else if (!hasYesterday) {
-            setTopListStatus('AI ranking…');
-            // Yield so the overlay paints before the (sync) input-prep
-            // steps below run. The actual rankArticles call is a network
-            // round-trip, so it's already non-blocking on its own.
-            await new Promise(r => setTimeout(r, 0));
-            let rankOk = false;
-            try {
-              const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-              let rankInput;
-              if (subcat === 'all') {
-                rankInput = [];
-                for (const cat of Object.keys(cached.groups)) rankInput.push(...cached.groups[cat]);
-              } else {
-                rankInput = cached.groups[subcat] || [];
-              }
-              rankInput = FeedFetcher.deduplicate(rankInput);
-              rankInput = FeedFetcher.filterByDate(rankInput, cutoff.toISOString().slice(0, 10), null);
-              rankInput = FeedFetcher.sortByDate(rankInput);
-              const r = await AI.rankArticles(rankInput, scope, subcat);
-              if (r) { articles = r; articles.forEach(a => { a.link = a.link || a.url; a._aiRanked = true; }); rankOk = true; }
-            } catch (e) {
-              console.warn('AI ranking failed:', e);
-              if (e.message && e.message.includes('rate limited')) showAiRateLimitModal();
-            }
-            if (rankOk) {
-              clearTopListStatus();
-            } else {
-              // AI failed (rate limit / network / quota) — keep top mode
-              // active and fall back to the deterministic analyzer ranking
-              // so the user still gets a meaningful "Top" list. Show a
-              // small banner so they know the AI wasn't used.
-              console.warn('AI ranking unavailable for', scope, subcat, '— using analyzer fallback');
-              try {
-                let fbInput;
-                if (subcat === 'all') {
-                  fbInput = [];
-                  for (const cat of Object.keys(cached.groups)) fbInput.push(...cached.groups[cat]);
-                } else {
-                  fbInput = cached.groups[subcat] || [];
-                }
-                fbInput = FeedFetcher.deduplicate(fbInput);
-                fbInput = FeedFetcher.sortByDate(fbInput);
-                const r = await AI.rankByKeywords(fbInput, scope, subcat);
-                if (r && r.length) {
-                  articles = r;
-                  articles.forEach(a => { a.link = a.link || a.url; a._kwRanked = true; });
-                  showAiOfflineBanner();
-                  clearTopListStatus();
-                } else {
-                  throw new Error('Analyzer fallback also produced no result');
-                }
-              } catch (fbErr) {
-                console.warn('Analyzer fallback failed:', fbErr);
-                setTopListStatus('Ranking failed — switching to Live');
-                currentMode = 'live';
-                updateModeButtonActive();
-                updateRankControls();
-                setTimeout(() => { clearTopListStatus(); displayCurrentSubcat(); }, 1500);
-                return;
-              }
-            }
-          } else {
-            setTopListStatus("Today's ranking will be ready at 8 PM IST");
-            setTimeout(clearTopListStatus, 2500);
-          }
-        }
+      } catch (e) {
+        console.warn('Trending ranking failed:', e);
       }
     }
 
+    // Tag every article with its subject (if any known person is mentioned).
+    // Done before trending so the dashboard can later filter scopeCache
+    // by subject without re-running the detection.
+    for (const a of articles) tagArticleWithSubject(a);
+
     // Compute per-article trending info (keywords + count) from the full
     // cached corpus, so every card knows how trending it is and can show
-    // the "where" details on click. Used by live mode (trending count) and
-    // by all modes (trending keywords in the toggle).
+    // the "where" details on click.
     const fullCorpus = [];
     for (const cat of Object.keys(cached.groups)) {
       if (Array.isArray(cached.groups[cat])) fullCorpus.push(...cached.groups[cat]);
     }
+    for (const a of fullCorpus) tagArticleWithSubject(a);
     AI.computeTrendingInfo(articles, fullCorpus);
 
-    // Yield to the event loop so the browser can paint the "AI ranking…"
-    // / "Ranking by keywords…" / "Switching to Live…" status overlay
-    // (set by the rAF or by the if-block above) before we start the
-    // expensive conflict-detection pass. Without this, the user sees
-    // the overlay flash for a single frame at the end of the work
-    // instead of at the start.
+    // Yield to the event loop so the browser can paint before we start
+    // the (relatively heavy) conflict-detection pass.
     await new Promise(r => setTimeout(r, 0));
 
     // Detect conflicting stories (same event, different facts) within the
     // current article pool. The result is attached to each article as
-    // `._conflicts` so the card / reels view / article modal can surface a
-    // badge and an "Other sources report" panel.
+    // `._conflicts` so the card can surface a badge.
     try {
       const conflictMap = AI.detectConflicts(articles);
       for (const a of articles) {
@@ -2159,8 +2166,7 @@
     }
 
     // One more yield before the render so the conflict badges have a
-    // frame to be visible on their own (in case the user is staring
-    // at the list while it re-renders).
+    // frame to be visible on their own.
     await new Promise(r => setTimeout(r, 0));
 
     try {
@@ -2169,29 +2175,25 @@
       console.error('Error rendering articles:', e);
       showError('Failed to render articles. Try refreshing.');
     } finally {
-      // Always clear the "Switching to…" / "AI ranking…" / "Ranking by
-      // keywords…" overlay when the work is done, no matter which path
-      // we took. Some sub-paths clear it explicitly; the finally is the
-      // safety net for the others (live, errors, early returns).
       clearTopListStatus();
     }
   }
 
   function bindFilterSort() {
-    if (el.filterSource) {
-      el.filterSource.addEventListener('change', () => {
-        currentSourceFilter = el.filterSource.value;
-        const key = scopeKey();
-        const cached = scopeCache[key];
-        if (!cached) return;
-        const articles = getFilteredArticles(currentSubcat, cached);
-        renderTranslated(articles);
-      });
-    }
-    if (el.sortBy) {
+    // The sort select lives in the options menu (#header-extras).
+    // The filter UI was moved out of the bottom-bar dropdown into
+    // a dedicated modal (#filter-modal, see js/filter-modal.js).
+    // The sort change is the only thing wired here; the filter
+    // modal registers its own onApply callback below.
+    const sortEls = [el.sortBy, el.sortByExtras].filter(Boolean);
+
+    for (const sb of sortEls) {
       updateSortOptions();
-      el.sortBy.addEventListener('change', () => {
-        currentSort = el.sortBy.value;
+      sb.addEventListener('change', () => {
+        currentSort = sb.value;
+        for (const other of sortEls) {
+          if (other !== sb) other.value = sb.value;
+        }
         const key = scopeKey();
         const cached = scopeCache[key];
         if (!cached) return;
@@ -2236,14 +2238,33 @@
       (a.pubDate || '').toLowerCase().includes(currentSearch)
     );
   }
-
-  let currentSourceFilter = '';
   let currentSort = '';
 
+  // Apply the user's filter (date range + source set) to the article
+  // pool. Reads the current filter state from the FilterModal
+  // module. Source set is empty = no source filter; date range
+  // empty = no date filter.
   function applyFilters(articles) {
     let result = articles;
-    if (currentSourceFilter) {
-      result = result.filter(a => (a.source || '') === currentSourceFilter);
+    if (window.FilterModal) {
+      const f = FilterModal.getFilter();
+      if (f.date_start) {
+        const t = new Date(f.date_start + 'T00:00:00').getTime();
+        if (!isNaN(t)) result = result.filter(a => {
+          const at = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+          return at && at >= t;
+        });
+      }
+      if (f.date_end) {
+        const t = new Date(f.date_end + 'T23:59:59').getTime();
+        if (!isNaN(t)) result = result.filter(a => {
+          const at = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+          return at && at <= t;
+        });
+      }
+      if (f.sources && f.sources.size > 0) {
+        result = result.filter(a => f.sources.has(a.source));
+      }
     }
     return result;
   }
@@ -2254,14 +2275,21 @@
       case 'date-asc':
         sorted.sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0));
         break;
-      case 'score':
-        sorted.sort((a, b) => (b._score || 0) - (a._score || 0));
-        break;
-      case 'score-asc':
-        sorted.sort((a, b) => (a._score || 0) - (b._score || 0));
-        break;
       case 'source':
         sorted.sort((a, b) => (a.source || '').localeCompare(b.source || ''));
+        break;
+      case 'trending':
+        // Sort by trending keyword count (how many other articles in
+        // the corpus share this article's terms). Falls back to date
+        // if no trending info is present. Same algorithm as the
+        // Trending button, just in-place within the current subcat
+        // instead of global top-25.
+        sorted.sort((a, b) => {
+          const ta = a._trendingCount || 0;
+          const tb = b._trendingCount || 0;
+          if (tb !== ta) return tb - ta;
+          return new Date(b.pubDate || 0) - new Date(a.pubDate || 0);
+        });
         break;
       default:
         sorted.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
@@ -2269,35 +2297,17 @@
     return sorted;
   }
 
-  function applyDateFilter(articles) {
-    if (currentMode === 'top') {
-      // Top mode: only consider articles from the last 10 days
-      const last10d = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-      const to = new Date();
-      return FeedFetcher.filterByDate(articles, last10d.toISOString().slice(0, 10), to.toISOString().slice(0, 10));
-    }
-
-    return articles;
-  }
-
   async function refreshAll() {
+    // The standalone refresh button was removed; the IB logo at the
+    // top-left is now the only place that triggers a full reload.
+    // This function is kept for that path and for any code that
+    // calls it programmatically.
     const key = scopeKey();
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:300';
-    overlay.innerHTML = '<div class="loading-spinner"></div>';
-    document.body.appendChild(overlay);
-    document.querySelectorAll('#refresh-btn').forEach(b => b.classList.add('btn-spin'));
-
-    // Reset sticky state so user has to opt into "Load All" again
     liveAllLoaded = false;
     loadedCount = 0;
     scopeCache[key] = null;
     const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
-    if (!feeds.length) {
-      overlay.remove();
-      document.querySelectorAll('#refresh-btn').forEach(b => b.classList.remove('btn-spin'));
-      return;
-    }
+    if (!feeds.length) return;
     const groups = {};
     const batchSize = 3;
     for (let i = 0; i < feeds.length; i += batchSize) {
@@ -2320,8 +2330,6 @@
     renderSubTabs();
     updateStickyHeader();
     await displayCurrentSubcat();
-    document.querySelectorAll('#refresh-btn').forEach(b => b.classList.remove('btn-spin'));
-    overlay.remove();
   }
 
   /* ── Hard Refresh ── */
@@ -2354,61 +2362,14 @@
     window.location.reload();
   }
 
-  /* ── Top Date Picker ── */
-
-  function bindTopDate() {
-    const btn = el.topDateBtn;
-    const modal = $('#top-date-modal');
-    const close = $('#top-date-modal-close');
-    const list = $('#top-date-list');
-    if (!btn || !modal || !list) return;
-
-    async function open() {
-      const settings = Settings.load();
-      const current = settings.topDate || AI.todayStr();
-      // Show available dates for the current scope/subcat, newest first.
-      let dates = [];
-      try { dates = await AI.getAvailableDates(currentScope, currentSubcat); } catch {}
-      if (!dates.length) dates = [AI.todayStr(), AI.yesterdayStr()];
-      list.innerHTML = '';
-      for (const d of dates) {
-        const item = document.createElement('button');
-        item.className = 'btn';
-        item.style.cssText = 'display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px 14px;';
-        const isSelected = d === current;
-        if (isSelected) item.style.background = 'var(--accent)';
-        const label = document.createElement('span');
-        label.textContent = formatDateLabel(d);
-        const tag = document.createElement('span');
-        tag.style.cssText = 'font-size:0.75rem;opacity:0.75;';
-        tag.textContent = d;
-        item.appendChild(label);
-        item.appendChild(tag);
-        item.addEventListener('click', () => {
-          Settings.save({ topDate: d });
-          modal.classList.remove('open');
-          if (currentMode === 'top') displayCurrentSubcat();
-        });
-        list.appendChild(item);
-      }
-      modal.classList.add('open');
-    }
-
-    btn.addEventListener('click', open);
-    if (close) close.addEventListener('click', () => modal.classList.remove('open'));
-    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-  }
-
-  function formatDateLabel(dateStr) {
-    try {
-      const d = new Date(dateStr + 'T00:00:00');
-      const today = new Date(AI.todayStr() + 'T00:00:00');
-      const diffDays = Math.round((today - d) / (1000 * 60 * 60 * 24));
-      if (diffDays === 0) return 'Today';
-      if (diffDays === 1) return 'Yesterday';
-      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    } catch { return dateStr; }
-  }
+  /* ── Top Date Picker (removed) ──
+   *
+   * The Top AI date picker used to live here. With the AI ranking
+   * flow gone (Milestone 0), this whole section is no longer needed.
+   * The function is kept as a no-op so init()'s bindTopDate() call
+   * doesn't throw if it sneaks back in.
+   */
+  function bindTopDate() { /* no-op: removed with the AI ranking flow */ }
 
   // IB row: clicking the logo triggers a background refresh (no view re-render,
   // no blinking). While loading, a small spinning icon appears next to the
@@ -2462,7 +2423,7 @@
       const subs = FeedManager.subcategoriesForScope(currentScope);
       if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
 
-      const perSourceCap = currentMode === 'live' ? 100 : 0;
+      const perSourceCap = 100;
       const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
 
       const groups = {};
@@ -2487,6 +2448,8 @@
       scopeCache[key] = { articles: allArticles, groups };
       // Reset "Load All" since this is a fresh dataset
       liveAllLoaded = false;
+      loadAllState = 'idle';
+      liveAllArticles = null;
       loadedCount = 0;
       hasFreshBackground = true;
       isBackgroundRefreshing = false;
@@ -2498,19 +2461,17 @@
     }
   }
 
-  // Called when user clicks the "show recent" button. Switches to live mode
-  // and re-renders the visible content with the freshly-fetched articles,
-  // sorted by most recent first.
+  // Called when user clicks the "show recent" button. Re-renders the
+  // visible content with the freshly-fetched articles, sorted by most
+  // recent first. (Live is the only mode; the function name is kept
+  // for the call sites that still wire it up.)
   function applyRecentAndShowLive() {
-    // Switch to live mode
-    currentMode = 'live';
-    updateModeButtonActive();
-    updateRankControls();
     loadedCount = 0;
     liveAllLoaded = false;
+    loadAllState = 'idle';
+    liveAllArticles = null;
     hasFreshBackground = false;
     hideRefreshStatus();
-    // Re-render
     displayCurrentSubcat();
   }
 
@@ -2574,125 +2535,25 @@
     }
   }
 
-  // AI rank toggle in the IB row. Toggles Top AI <-> Live.
-  function bindAiRankBtn() {
-    if (el.aiRankBtn) {
-      el.aiRankBtn.addEventListener('click', () => toggleTopMode('ai'));
-    }
-  }
-
-  /* ── Daily AI Rank Scheduler ── */
-
-  let rankSchedulerTimer = null;
-  let seedPromise = null;
-
-  function getISTHour() {
-    const d = new Date();
-    const ist = d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
-    return parseInt(ist, 10);
-  }
-
-  async function rankAllCombos(force = false) {
-    if (seedPromise) return seedPromise;
-    seedPromise = (async () => {
-      const scopes = ['global', 'nation'];
-      const subs = FeedManager.subcategories();
-      const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      const today = AI.todayStr();
-      const yesterday = AI.yesterdayStr();
-      const hour = getISTHour();
-      // 8 PM has passed for today → safe to rank today's combos. Otherwise
-      // only rank combos where yesterday is ALSO missing (first-time use).
-      const pastCutoff = hour >= 20;
-
-      const work = [];
-      for (const scope of scopes) {
-        const nation = scope === 'nation' ? FeedManager.getSelectedNation() : null;
-        const feeds = FeedManager.getFeeds(scope, nation);
-        if (!feeds.length) continue;
-
-        const groups = {};
-        const results = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, 0)));
-        for (const result of results) {
-          if (result.status !== 'fulfilled') continue;
-          for (const a of result.value) {
-            a.subcat = a.feedHint || 'politics';
-            const cat = a.subcat;
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(a);
-          }
-        }
-
-        for (const subcat of subs) {
-          if (!force) {
-            const [hasToday, hasYesterday] = await Promise.all([
-              AI.loadTopList(today, scope, subcat),
-              AI.loadTopList(yesterday, scope, subcat)
-            ]);
-            if (hasToday) continue;
-            if (!pastCutoff && hasYesterday) continue; // wait for 8 PM
-          }
-          let articles;
-          if (subcat === 'all') {
-            articles = [];
-            for (const cat of Object.keys(groups)) articles.push(...groups[cat]);
-          } else {
-            articles = groups[subcat] || [];
-          }
-          articles = FeedFetcher.deduplicate(articles);
-          articles = FeedFetcher.filterByDate(articles, cutoffStr, null);
-          articles = FeedFetcher.sortByDate(articles);
-          if (articles.length < 5) continue;
-          work.push({ scope, subcat, articles, date: today });
-        }
-      }
-
-      if (!work.length) { clearTopListStatus(); return; }
-
-      // Gemini free tier is 15 RPM = 1 call per 4s. Process sequentially with
-      // a 4.2s gap so we never hit the rate limit. ~18 combos ≈ 75s total.
-      const GAP_MS = 4200;
-      for (let i = 0; i < work.length; i++) {
-        const { scope, subcat, articles } = work[i];
-        setTopListStatus('AI ranking ' + (i + 1) + ' / ' + work.length + ' — ' + scope + '/' + subcat);
-        if (i > 0) await new Promise(r => setTimeout(r, GAP_MS));
-        try {
-          await AI.rankArticles(articles, scope, subcat);
-          console.log('[rank] saved', scope + '/' + subcat);
-        } catch (e) {
-          console.warn('Rank failed for ' + scope + '/' + subcat + ':', e);
-          if (e.message && e.message.includes('rate limited')) {
-            showAiRateLimitModal();
-            // Stop the batch — no point hammering the API while it's limited.
-            break;
-          }
-        }
-      }
-      clearTopListStatus();
-    })();
-    try {
-      await seedPromise;
-    } finally {
-      // Keep the resolved promise around so subsequent calls short-circuit.
-    }
-  }
-
-  function startRankScheduler() {
-    if (rankSchedulerTimer) return;
-    rankSchedulerTimer = setInterval(() => {
-      const hour = getISTHour();
-      if (hour === 20) {
-        rankAllCombos().catch(e => console.warn('Scheduled ranking failed:', e));
-      }
-    }, 60000);
-  }
+  // AI rank toggle in the IB row has been removed. The new analyze
+  // button is bound in `bindAnalyzeBtn` (see analyze-modal.js / app.js init).
 
   /* ── Settings Modal ── */
   function openSettings() {
     const settings = Settings.load();
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
+    // Pre-fill the Twitter token field. We never read the value
+    // back into a variable (only show a masked version) so the
+    // token is never visible in JS memory longer than needed.
+    const tokenField = $('#settings-twitter-token');
+    if (tokenField && window.TwitterFetcher) {
+      const t = TwitterFetcher.getToken();
+      tokenField.value = t || '';
+      tokenField.placeholder = t ? '•••••• (saved — type a new value to replace)' : 'Bearer token (paste here)';
+    }
+    const status = $('#settings-twitter-status');
+    if (status) status.textContent = '';
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -2700,6 +2561,37 @@
     openModal('settings', el.modal, () => {
       if (el.feedValidateMsg) el.feedValidateMsg.textContent = '';
     });
+  }
+
+  function bindTwitterToken() {
+    const save = $('#settings-twitter-save');
+    const clear = $('#settings-twitter-clear');
+    const field = $('#settings-twitter-token');
+    const status = $('#settings-twitter-status');
+    if (save) {
+      save.addEventListener('click', () => {
+        const v = (field?.value || '').trim();
+        if (!v) {
+          if (status) { status.textContent = 'Enter a token first.'; status.style.color = 'var(--accent-red-hover)'; }
+          return;
+        }
+        if (window.TwitterFetcher) {
+          TwitterFetcher.setToken(v);
+          if (status) { status.textContent = '\u2713 Saved. Token will be used on the next Analyze run.'; status.style.color = '#51cf66'; }
+          if (field) {
+            field.value = '';
+            field.placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022 (saved \u2014 type a new value to replace)';
+          }
+        }
+      });
+    }
+    if (clear) {
+      clear.addEventListener('click', () => {
+        if (window.TwitterFetcher) TwitterFetcher.setToken('');
+        if (field) { field.value = ''; field.placeholder = 'Bearer token (paste here)'; }
+        if (status) { status.textContent = 'Token cleared.'; status.style.color = 'var(--text-secondary)'; }
+      });
+    }
   }
 
   // Render the Feed Health section inside the Settings modal. Shows the
@@ -2754,8 +2646,8 @@
     el.modalCancel.addEventListener('click', closeSettings);
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
-    if (el.refreshBtn) el.refreshBtn.addEventListener('click', refreshAll);
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
+    bindTwitterToken();
     // Feed Health controls (auto-disable toggle + re-enable-all button)
     if (el.autoDisableFailingSources) {
       el.autoDisableFailingSources.addEventListener('change', () => {
@@ -2814,23 +2706,27 @@
     if (el.hardRefreshCancel) el.hardRefreshCancel.addEventListener('click', closeHardRefreshModal);
     if (el.hardRefreshConfirm) el.hardRefreshConfirm.addEventListener('click', performHardRefresh);
     if (el.hardRefreshModal) el.hardRefreshModal.addEventListener('click', e => { if (e.target === el.hardRefreshModal) closeHardRefreshModal(); });
-    // Options button toggles the extras row (date, refresh, hard refresh, activity)
+    // Options button toggles the extras row (sort, filter, translate,
+    // hard refresh, activity). The panel stays open until the user
+    // clicks the button again or clicks outside — it used to auto-
+    // hide after 5 seconds, but that was too aggressive when the
+    // user was in the middle of picking a sort/filter.
     const optionsBtn = $('#options-btn');
     const headerExtras = $('#header-extras');
-    let optionsTimeout = null;
     if (optionsBtn && headerExtras) {
-      optionsBtn.addEventListener('click', () => {
+      optionsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const hidden = headerExtras.style.display === 'none' || !headerExtras.style.display;
         headerExtras.style.display = hidden ? 'flex' : 'none';
         optionsBtn.classList.toggle('active', hidden);
-        // Auto-hide after 5 seconds
-        clearTimeout(optionsTimeout);
-        if (hidden) {
-          optionsTimeout = setTimeout(() => {
-            headerExtras.style.display = 'none';
-            optionsBtn.classList.remove('active');
-          }, 5000);
-        }
+      });
+      // Clicking outside the extras row also closes it.
+      document.addEventListener('click', (e) => {
+        if (headerExtras.style.display === 'none') return;
+        if (headerExtras.contains(e.target)) return;
+        if (optionsBtn.contains(e.target)) return;
+        headerExtras.style.display = 'none';
+        optionsBtn.classList.remove('active');
       });
     }
     // Category toggle button shows/hides the sub-tab-bar
@@ -4175,6 +4071,20 @@
   function bindArticleClicks() {
     el.main.addEventListener('click', e => {
       if (e.target.closest('.reels-container')) return;
+      // Per-card ⚖️ Analyze button. Opens the config modal pre-filled
+      // with the article's tagged subject.
+      const analyzeBtn = e.target.closest('.card-analyze-btn');
+      if (analyzeBtn) {
+        e.stopPropagation();
+        const url = decodeURIComponent(analyzeBtn.dataset.article);
+        const article = findArticleByLink(url);
+        if (article && article.subject && window.AnalyzeModal) {
+          AnalyzeModal.openConfig({ subject: article.subject, sourceArticle: article });
+        } else if (window.AnalyzeModal) {
+          AnalyzeModal.openConfig({});
+        }
+        return;
+      }
       // Ranked-kicker click → toggle "where it's trending" details (smooth).
       const kicker = e.target.closest('.ranked-kicker[data-toggle-details]');
       if (kicker) {
@@ -4296,43 +4206,6 @@
   function clearTopListStatus() {
     const ov = $('#processing-overlay');
     if (ov) ov.classList.add('processing-hidden');
-  }
-
-  // Show the rate-limit modal at most once per "session" (one click or one
-  // top-mode entry). The user dismisses it; subsequent 429s during the same
-  // run are silent (logged only).
-  let rateLimitModalShown = false;
-  function showAiRateLimitModal() {
-    if (rateLimitModalShown) return;
-    rateLimitModalShown = true;
-    const m = $('#ai-rate-limit-modal');
-    if (m) m.classList.add('open');
-  }
-  function resetRateLimitFlag() { rateLimitModalShown = false; }
-
-  // Soft inline banner shown when the AI ranking service is unavailable
-  // and we fall back to the deterministic analyzer. One per page load.
-  let aiOfflineBannerShown = false;
-  function showAiOfflineBanner() {
-    if (aiOfflineBannerShown) return;
-    aiOfflineBannerShown = true;
-    if (document.getElementById('ai-offline-banner')) return;
-    const bar = document.createElement('div');
-    bar.id = 'ai-offline-banner';
-    bar.innerHTML =
-      '<span>🤖 <strong>AI ranking offline</strong> — showing deterministic keyword ranking (TF-IDF + recency + buzz).</span>' +
-      '<button id="ai-offline-dismiss" aria-label="Dismiss">×</button>';
-    document.body.appendChild(bar);
-    document.getElementById('ai-offline-dismiss').onclick = () => bar.remove();
-  }
-  function bindAiRateLimitModal() {
-    const m = $('#ai-rate-limit-modal');
-    if (!m) return;
-    const close = $('#ai-rate-limit-modal-close');
-    const ok = $('#ai-rate-limit-modal-ok');
-    if (close) close.addEventListener('click', () => m.classList.remove('open'));
-    if (ok) ok.addEventListener('click', () => m.classList.remove('open'));
-    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
   }
 
   /* ── Auth ── */
@@ -5247,10 +5120,9 @@
     bindTopTabs();
     renderSubTabs();
     bindSubTabs();
-    bindModeToggle();
-    bindKeywordRankBtn();
+    bindTrendingBtn();
     bindViewToggle();
-    bindLangSelect();
+    bindTranslate();
     bindSearch();
     bindFilterSort();
     bindFilterToggles();
@@ -5260,8 +5132,19 @@
     bindFeedControls();
     bindTopDate();
     bindSourcesConfig();
-    bindAiRankBtn();
-    bindAiRateLimitModal();
+    if (window.AnalyzeModal) AnalyzeModal.bindAll();
+    if (window.FilterModal) {
+      FilterModal.setOnApply(() => {
+        // When the user applies a filter, re-render the current
+        // list. The filter state lives in the FilterModal module.
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      });
+      FilterModal.bindAll();
+    }
     await renderContent();
 
     // Start periodic auto-refresh — fetches silently in the background
@@ -5269,13 +5152,6 @@
     // the "show recent" icon to apply the fresh data.
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
-
-    // Init rank controls: top-date picker + IB-block rank buttons.
-    // Both start hidden (live mode is the default).
-    updateRankControls();
-
-    // Start AI rank scheduler (checks IST time every 60s, fires at 8PM)
-    startRankScheduler();
   }
 
   init();

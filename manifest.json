@@ -34,22 +34,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Top AI",
-      "short_name": "Top AI",
-      "description": "Show the AI-ranked top stories for today",
-      "url": "./?mode=top&rank=ai"
-    },
-    {
-      "name": "Top Keyword",
-      "short_name": "Top KW",
-      "description": "Show the deterministic keyword-ranked top stories",
-      "url": "./?mode=top&rank=keyword"
-    },
-    {
-      "name": "Conflicts",
-      "short_name": "Conflicts",
-      "description": "Browse cross-source conflicts in the latest articles",
-      "url": "./?scope=conflicts"
+      "name": "Analyze",
+      "short_name": "Analyze",
+      "description": "Analyse the public statements of a registered person",
+      "url": "./?action=analyze"
     }
   ],
   "prefer_related_applications": false,
