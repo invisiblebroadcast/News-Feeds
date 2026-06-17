@@ -50,9 +50,10 @@ const AnalyzeModal = (() => {
     // Reset radios to default (Both)
     const both = $('#acf-source-both');
     if (both) both.checked = true;
-    // Default date range to the last 7 days (the Twitter free-tier
-    // window). The user can still clear it for "all time" feeds-only
-    // analysis.
+    // Default date range to the last 7 days. Nitter instances
+    // typically cache the last ~50 tweets per user; this gives
+    // a reasonable recent-tweets window. The user can still
+    // clear it for "all time" feeds-only analysis.
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const ds = $('#acf-date-start');
@@ -443,9 +444,11 @@ const AnalyzeModal = (() => {
         'No tweets fetched.' +
         '<br>' +
         '<button type="button" class="btn btn-primary" id="sd-open-settings" style="margin-top:12px;">' +
-        'Open Settings → Twitter API' +
+        'Open Settings' +
         '</button>' +
-        '<p class="sd-empty-hint">Add a free-tier Bearer token from <code>developer.twitter.com</code> and re-run the analysis. Twitter\'s free API only returns tweets from the last 7 days.</p>' +
+        '<p class="sd-empty-hint">All Nitter instances were down or the handle has no recent tweets. ' +
+        'Check <a href="https://nitter.net" target="_blank" rel="noopener">nitter.net</a> directly, ' +
+        'or try again in a few minutes.</p>' +
         '</div>';
       const openSettingsBtn = $('#sd-open-settings');
       if (openSettingsBtn) {
@@ -505,27 +508,26 @@ const AnalyzeModal = (() => {
           setProcessingText('Fetching tweets for @' + config.subject.twitter_handle + '…');
           await tick();
           const opts = { maxResults: 100 };
-          // Enforce Twitter's free-tier limit of 7 days. If the
-          // user asked for a wider range, clamp the start time to
-          // 7 days back and surface a warning so they understand
-          // why older tweets aren't included. The free tier of the
-          // Twitter API v2 search endpoint only returns tweets from
-          // the last 7 days. For longer ranges, the user would need
-          // a paid academic-research or premium API key.
+          // Nitter doesn't support custom date ranges — the instance
+          // returns whatever it has cached for the user. We still
+          // warn if the user asked for a wide range so they
+          // understand why they may not see old tweets: Nitter
+          // instances typically cache the last ~50 tweets per user,
+          // which is weeks-to-months depending on tweet frequency,
+          // not a fixed 7-day window.
           let clamped = false;
           if (config.date_start) {
             const wanted = new Date(config.date_start + 'T00:00:00').getTime();
             const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
             if (!isNaN(wanted) && wanted < sevenDaysAgo) {
-              opts.startTime = new Date(sevenDaysAgo).toISOString();
+              // Nitter may not have the older tweets cached, but
+              // we don't fail the request — we just warn.
               clamped = true;
-            } else {
-              opts.startTime = toIsoDate(config.date_start, false);
             }
           }
           if (config.date_end) opts.endTime = toIsoDate(config.date_end, true);
           if (clamped) {
-            twitterError = 'Twitter free API only covers the last 7 days. Older tweets were skipped — see Settings → Twitter API to learn about paid access.';
+            twitterError = 'Nitter instances typically cache the last ~50 tweets per user, which may not reach back to ' + config.date_start + '. Results will be whatever the instance has.';
           }
           const t = await TwitterFetcher.fetchTweets(config.subject.twitter_handle, opts);
           if (t.ok) {
@@ -533,8 +535,8 @@ const AnalyzeModal = (() => {
             setProcessingText('Analyzing lexicon on ' + tweets.length + ' tweets…');
             await tick();
           } else {
-            twitterError = t.message || t.reason || 'Twitter fetch failed';
-            setProcessingText('Twitter fetch failed: ' + twitterError);
+            twitterError = t.message || t.reason || 'Nitter fetch failed';
+            setProcessingText('Nitter fetch failed: ' + twitterError);
             await tick(800);
           }
         }

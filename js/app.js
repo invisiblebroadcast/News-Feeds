@@ -2949,17 +2949,13 @@
     const settings = Settings.load();
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
-    // Pre-fill the Twitter token field. We never read the value
-    // back into a variable (only show a masked version) so the
-    // token is never visible in JS memory longer than needed.
-    const tokenField = $('#settings-twitter-token');
-    if (tokenField && window.TwitterFetcher) {
-      const t = TwitterFetcher.getToken();
-      tokenField.value = t || '';
-      tokenField.placeholder = t ? '•••••• (saved — type a new value to replace)' : 'Bearer token (paste here)';
+    // Twitter is now Nitter-backed (no auth). Show the user
+    // which instances we rotate through.
+    const nitterHint = $('#settings-nitter-hint');
+    if (nitterHint && window.TwitterFetcher && Array.isArray(TwitterFetcher.NITTER_INSTANCES)) {
+      nitterHint.textContent = 'Rotates through: ' +
+        TwitterFetcher.NITTER_INSTANCES.map(u => u.replace(/^https?:\/\//, '')).join(', ');
     }
-    const status = $('#settings-twitter-status');
-    if (status) status.textContent = '';
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -2969,38 +2965,33 @@
     });
   }
 
-  function bindTwitterToken() {
-    const save = $('#settings-twitter-save');
-    const clear = $('#settings-twitter-clear');
-    const field = $('#settings-twitter-token');
-    const status = $('#settings-twitter-status');
-    if (save) {
-      save.addEventListener('click', () => {
-        const v = (field?.value || '').trim();
-        if (!v) {
-          if (status) { status.textContent = 'Enter a token first.'; status.style.color = 'var(--accent-red-hover)'; }
-          return;
-        }
-        if (window.TwitterFetcher) {
-          TwitterFetcher.setToken(v);
-          if (status) { status.textContent = '\u2713 Saved. Token will be used on the next Analyze run.'; status.style.color = '#51cf66'; }
-          if (field) {
-            field.value = '';
-            field.placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022 (saved \u2014 type a new value to replace)';
+  // Bind the "Clear tweet cache" button. The user can wipe the
+  // localStorage copy of every fetched tweet if an instance
+  // is serving bad data or they want a fresh fetch on the
+  // next Analyze run.
+  function bindNitterControls() {
+    const clearAll = $('#settings-nitter-clear');
+    if (clearAll) {
+      clearAll.addEventListener('click', () => {
+        if (!window.TwitterFetcher || !window.TwitterFetcher.clearCache) return;
+        try {
+          const prefix = window.TwitterFetcher.CACHE_PREFIX;
+          const toRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(prefix)) toRemove.push(k);
           }
+          toRemove.forEach(k => localStorage.removeItem(k));
+          clearAll.textContent = '✓ Cleared (' + toRemove.length + ' handles)';
+          setTimeout(() => { clearAll.textContent = 'Clear tweet cache'; }, 2500);
+        } catch (e) {
+          console.warn('Nitter cache clear failed:', e);
         }
-      });
-    }
-    if (clear) {
-      clear.addEventListener('click', () => {
-        if (window.TwitterFetcher) TwitterFetcher.setToken('');
-        if (field) { field.value = ''; field.placeholder = 'Bearer token (paste here)'; }
-        if (status) { status.textContent = 'Token cleared.'; status.style.color = 'var(--text-secondary)'; }
       });
     }
   }
 
-  // Render the Feed Health section inside the Settings modal. Shows the
+  // Render the Feed Health sectionction inside the Settings modal. Shows the
   // current state of the auto-disable toggle, how many sources are
   // currently disabled, and enables the "Re-enable All" button only
   // when there's something to re-enable. Triggered on open AND on
@@ -3053,7 +3044,7 @@
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
-    bindTwitterToken();
+    bindNitterControls();
     // Feed Health controls (auto-disable toggle + re-enable-all button)
     if (el.autoDisableFailingSources) {
       el.autoDisableFailingSources.addEventListener('change', () => {

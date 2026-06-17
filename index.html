@@ -228,14 +228,12 @@
       </div>
       <div class="modal-body">
         <div class="setting-group">
-          <label class="setting-label">Twitter API Token</label>
-          <p class="setting-desc">Required to fetch tweets for the Analyze feature. Free tier at <a href="https://developer.twitter.com/en/portal" target="_blank" rel="noopener">developer.twitter.com</a>. Token stored only in your browser's localStorage.</p>
+          <label class="setting-label">Tweets (via Nitter)</label>
+          <p class="setting-desc">Tweets for the Analyze feature are fetched from public Nitter instances. No login or API token required. Fetched tweets are cached in your browser for 24 hours. Click the button below to wipe the cache if a Nitter instance is misbehaving.</p>
+          <p class="setting-desc" id="settings-nitter-hint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-tertiary);word-break:break-word;"></p>
           <div style="display:flex;gap:8px;align-items:center;">
-            <input type="password" id="settings-twitter-token" placeholder="Bearer token (paste here)" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text-primary);font-family:var(--font-mono);font-size:0.82rem;outline:none;">
-            <button class="btn btn-ghost" id="settings-twitter-save" type="button">Save</button>
-            <button class="btn btn-ghost" id="settings-twitter-clear" type="button">Clear</button>
+            <button class="btn btn-ghost" id="settings-nitter-clear" type="button">Clear tweet cache</button>
           </div>
-          <p class="auth-msg" id="settings-twitter-status" style="margin-top:6px;font-size:0.78rem;min-height:1.2em;"></p>
         </div>
         <div class="setting-group">
           <label class="setting-label" for="settings-language">Translation Language</label>
