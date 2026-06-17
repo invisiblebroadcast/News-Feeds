@@ -596,6 +596,12 @@
       const scope = tab.dataset.scope;
       const nation = tab.dataset.nation || currentNation;
       if (scope === currentScope && (scope !== 'nation' || nation === currentNation)) return;
+      // Abort any in-flight background fetch for the previous
+      // scope — its results would be dropped on arrival anyway,
+      // and we don't want it competing for the CORS proxy with
+      // the new scope's quick batch.
+      const prevKey = scopeKey();
+      if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
       currentScope = scope;
       currentNation = nation;
       FeedManager.setSelectedNation(nation);
@@ -604,6 +610,7 @@
       liveAllLoaded = false;
       loadAllState = 'idle';
       liveAllArticles = null;
+      lastRenderedCount = 0;
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       if (scope === 'conflicts') {
@@ -673,12 +680,17 @@
       if (!tab) return;
       const sub = tab.dataset.subcat;
       if (sub === currentSubcat) return;
+      // Abort any in-flight background fetch for the previous
+      // subcat — the results would be dropped on arrival.
+      const prevKey = scopeKey();
+      if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
       currentSubcat = sub;
       hasFreshBackground = false;
       loadedCount = 0;
       liveAllLoaded = false;
       loadAllState = 'idle';
       liveAllArticles = null;
+      lastRenderedCount = 0;
       $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       displayCurrentSubcat();
@@ -786,7 +798,24 @@
       //   - State 3 (loaded): button reads "Show all (N articles)" and
       //     is enabled. Clicking reveals the full set without a
       //     second fetch.
-      let loadAllHtml = '';
+      // "Loading more sources…" indicator. Visible only while a
+      // background fetch is in flight for the current scope (the
+      // phased-load backgroundFetchRest or the explicit Load All).
+      // It's a slim strip at the top of the article list so the
+      // user can see progress without their scroll position being
+      // shoved around.
+      let bgHtml = '';
+      const bgAbort = backgroundFetchAbort[key];
+      if (bgAbort && !bgAbort.aborted && articles.length > lastRenderedCount) {
+        const remaining = totalFeedsForKey(key);
+        const loaded = lastRenderedCount;
+        bgHtml = '<div class="bg-fetch-indicator">' +
+          '<span class="btn-spinner"></span>' +
+          'Loading more sources in the background… (' + loaded + ' / ' + remaining + ' articles loaded)' +
+        '</div>';
+      }
+
+      let loadAllHtml = bgHtml;
       if (currentMode === 'live' && articles.length > display.length) {
         const remaining = articles.length;
         const showing = totalShown;
@@ -800,7 +829,7 @@
         } else {
           btnLabel = 'Load All Articles';
         }
-        loadAllHtml = '<div class="load-all-row">' +
+        loadAllHtml = (loadAllHtml || '') + '<div class="load-all-row">' +
           '<div class="load-all-info">' +
             '<strong>Showing ' + showing + ' of ' + remaining + ' articles</strong>' +
             '<span class="load-all-hint">Newest from each source. Click below to fetch the full list in the background.</span>' +
@@ -2061,6 +2090,34 @@
     el.main.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>' + msg + '</p></div>';
   }
 
+  // Phased-load state. The initial fetch used to block on
+  // Promise.allSettled of all ~140 feeds, which made the app
+  // unusable for several minutes on the first run (and again on
+  // every cold start with a cold cache). The new flow is:
+  //   1. Fetch a small "quick batch" of N sources in parallel and
+  //      show them as soon as they all land (typically ~2-3 s).
+  //   2. Fetch the rest of the sources in the BACKGROUND in small
+  //      rolling batches of 5, appending each result into the
+  //      scopeCache and re-rendering so the list grows live.
+  //   3. Show a "Loading N more sources…" indicator at the top of
+  //      the article list while the background fetch is in flight,
+  //      so the user can see progress without the list jumping.
+  // The user is fully interactive (tabs, sort, search, settings,
+  // analyze) from the moment the quick batch paints.
+  const QUICK_BATCH_SIZE = 10;
+  const QUICK_PER_SOURCE_CAP = 25;
+  const REST_BATCH_SIZE = 4;
+  const REST_PER_SOURCE_CAP = 100;
+  // Per-key tracker so a background fetch from a previous scope
+  // doesn't keep mutating the cache after the user has switched
+  // tabs. Aborted via the `aborted` flag below.
+  const backgroundFetchAbort = {};
+  // Last article count we re-rendered for in the current scope.
+  // Used to throttle re-renders so we don't repaint the list on
+  // every single batch (which would be expensive at >200 articles).
+  let lastRenderedCount = 0;
+  const RERENDER_EVERY_N = 10;
+
   async function renderContent() {
     if (isFetching) return;
     const key = scopeKey();
@@ -2072,7 +2129,6 @@
     showLoading();
 
     try {
-
       const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
       if (!feeds.length) {
         showError('No feed sources available. Open Settings to add custom feeds.');
@@ -2080,51 +2136,173 @@
         return;
       }
 
-      const groups = {};
       const subs = FeedManager.subcategoriesForScope(currentScope);
       if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
 
-      // Wait for ALL sources to finish fetching before showing any results.
-      // This prevents the "auto-refresh every few seconds" problem where
-      // articles re-shuffle as each batch completes. The user sees a single
-      // stable result once the fetch is done.
-      showProgress('Fetching ' + feeds.length + ' sources\u2026');
+      // ── PHASE 1: quick batch (15 sources, low cap) ──────────
+      // The user sees these articles in ~2-3 seconds even on a
+      // cold cache. This is the first paint that gets the UI off
+      // the loading spinner.
+      const quickFeeds = feeds.slice(0, QUICK_BATCH_SIZE);
+      const restFeeds = feeds.slice(QUICK_BATCH_SIZE);
 
-      // Cap each source at 100 items to keep "Load All" meaningful
-      // (e.g. 100 sources × 100 = up to 10,000 articles).
-      const perSourceCap = 100;
+      showProgress('Loading quick batch of ' + quickFeeds.length + ' sources\u2026');
 
-      const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
-
-      for (let j = 0; j < allResults.length; j++) {
-        const result = allResults[j];
+      // Don't pin isFetching=true across the whole phased load —
+      // release it after Phase 1 so the user can switch tabs and
+      // trigger a different renderContent without us being stuck.
+      const groups = {};
+      const quickResults = await Promise.allSettled(
+        quickFeeds.map(f => FeedFetcher.fetchFeed(f, QUICK_PER_SOURCE_CAP))
+      );
+      let quickCount = 0;
+      for (let j = 0; j < quickResults.length; j++) {
+        const result = quickResults[j];
         if (result.status === 'fulfilled') {
-          const articles = result.value;
-          for (const a of articles) {
+          for (const a of result.value) {
             a.subcat = a.feedHint || 'politics';
-            const cat = a.subcat;
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(a);
+            if (!groups[a.subcat]) groups[a.subcat] = [];
+            groups[a.subcat].push(a);
+            quickCount++;
           }
         } else {
-          console.warn('Feed failed: ' + feeds[j]?.name, result.reason?.message);
+          console.warn('Quick feed failed: ' + quickFeeds[j]?.name, quickResults[j].reason?.message);
+        }
+      }
+
+      if (quickCount === 0 && restFeeds.length > 0) {
+        // Quick batch had zero hits. Fall back to the full set
+        // (with a higher cap) so the user at least sees *something*.
+        showProgress('Quick batch empty — loading more sources\u2026');
+        for (const f of restFeeds) {
+          const v = await FeedFetcher.fetchFeed(f, REST_PER_SOURCE_CAP).catch(() => []);
+          for (const a of v) {
+            a.subcat = a.feedHint || 'politics';
+            if (!groups[a.subcat]) groups[a.subcat] = [];
+            groups[a.subcat].push(a);
+            quickCount++;
+          }
         }
       }
 
       let allArticles = [];
       for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
       scopeCache[key] = { articles: allArticles, groups };
+      lastRenderedCount = allArticles.length;
+      isFetching = false;
+      // First interactive render — the user can now click tabs,
+      // sort, search, settings, open the analyze modal, etc.
       renderSubTabs();
       updateStickyHeader();
-
-      isFetching = false;
-      // Now display the final result ONCE — no progressive re-rendering.
       displayCurrentSubcat();
+
+      // ── PHASE 2: background fetch the rest ───────────────────
+      // Runs in the background; never blocks the UI. We split into
+      // small batches so the user can keep scrolling and the
+      // re-render stays cheap. The fetch is aborted automatically
+      // when the user navigates to a different scope/subcat.
+      if (restFeeds.length > 0) {
+        const abortFlag = { aborted: false };
+        backgroundFetchAbort[key] = abortFlag;
+        // Defer the background fetch to the next macrotask so the
+        // current paint (the quick batch) gets a chance to settle
+        // first. Without this, the browser may batch the Phase 1
+        // paint and the first Phase 2 batch into the same frame,
+        // and the user never sees a stable "initial" view.
+        setTimeout(() => {
+          if (!abortFlag.aborted) backgroundFetchRest(key, feeds, quickFeeds.length, abortFlag);
+        }, 250);
+      }
     } catch (err) {
       console.error(err);
       showError('Failed to fetch news. Please check your connection.');
       isFetching = false;
     }
+  }
+
+  // Background fetch the rest of the sources in rolling batches.
+  // Each batch appends into scopeCache[key] and triggers a
+  // throttled re-render so the article list grows live.
+  async function backgroundFetchRest(key, allFeeds, startIndex, abortFlag) {
+    const groups = (scopeCache[key] && scopeCache[key].groups) || {};
+    let totalArticles = lastRenderedCount;
+    for (let i = startIndex; i < allFeeds.length; i += REST_BATCH_SIZE) {
+      if (abortFlag.aborted) return;
+      const batch = allFeeds.slice(i, i + REST_BATCH_SIZE);
+      const settled = await Promise.allSettled(
+        batch.map(f => FeedFetcher.fetchFeed(f, REST_PER_SOURCE_CAP))
+      );
+      for (let j = 0; j < settled.length; j++) {
+        const r = settled[j];
+        if (r.status === 'fulfilled') {
+          for (const a of r.value) {
+            a.subcat = a.feedHint || 'politics';
+            if (!groups[a.subcat]) groups[a.subcat] = [];
+            groups[a.subcat].push(a);
+          }
+        } else {
+          console.warn('Background feed failed: ' + batch[j]?.name, r.reason?.message);
+        }
+      }
+      // Rebuild the article list and re-render. We re-render only
+      // when the count has grown by at least RERENDER_EVERY_N
+      // since the last paint — frequent re-renders of a 200+
+      // article list are expensive (chunked render still does a
+      // layout per chunk) and the user can't perceive a difference
+      // between 1 and 9 new articles in the live list.
+      let allArticles = [];
+      for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+      scopeCache[key] = { articles: allArticles, groups };
+      const grown = allArticles.length - lastRenderedCount;
+      const finished = (i + REST_BATCH_SIZE) >= allFeeds.length;
+      if (grown >= RERENDER_EVERY_N || finished) {
+        lastRenderedCount = allArticles.length;
+        // Only re-render if the user is still viewing this scope.
+        // If they've switched away, the abort flag will be set
+        // before our next loop iteration and we'll bail out.
+        if (scopeKey() === key) {
+          renderSubTabs();
+          displayCurrentSubcat();
+        }
+      }
+      // Yield to the browser so the user can interact and the
+      // progress indicator can repaint.
+      await new Promise(r => setTimeout(r, 0));
+    }
+    // Final re-render to make sure the count is exact and the
+    // "Loading more sources…" indicator is removed.
+    if (scopeKey() === key) {
+      lastRenderedCount = scopeCache[key] ? scopeCache[key].articles.length : 0;
+      renderSubTabs();
+      displayCurrentSubcat();
+    }
+    delete backgroundFetchAbort[key];
+  }
+
+  // Mark the in-flight background fetch for a given key as
+  // aborted. Called when the user navigates to a different
+  // scope or subcat while the previous background fetch is still
+  // running.
+  function abortBackgroundFetch(key) {
+    const flag = backgroundFetchAbort[key];
+    if (flag) flag.aborted = true;
+  }
+
+  // The total number of feeds that will eventually be loaded for a
+  // given scope key. Used by the "Loading more sources…" indicator
+  // to show progress (N / total). Cached per-key on first
+  // renderContent so we don't re-query the FeedManager.
+  const totalFeedsByKey = {};
+  function totalFeedsForKey(key) {
+    if (totalFeedsByKey[key]) return totalFeedsByKey[key];
+    // Derive the scope + nation from the key (format: "scope" or "scope_nation").
+    const parts = key.split('_');
+    const scope = parts[0];
+    const nation = parts[1] || null;
+    const feeds = FeedManager.getFeeds(scope, nation);
+    const total = feeds.reduce((s, f) => s + (f && f.url ? 1 : 0), 0);
+    totalFeedsByKey[key] = total;
+    return total;
   }
 
   /* ── (no demo helpers) ── */

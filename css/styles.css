@@ -4605,3 +4605,22 @@ body:not(.modal-open) #main-content {
   font-family: var(--font-mono);
   font-size: 0.72rem;
 }
+
+/* ─── Background fetch indicator ───
+ * Shown at the top of the article list when Phase 2 of the
+ * phased load is still in flight. Slim strip, low-contrast, so
+ * it doesn't compete with the actual articles for attention.
+ */
+.bg-fetch-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 8px 12px 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid #4dabf7;
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
