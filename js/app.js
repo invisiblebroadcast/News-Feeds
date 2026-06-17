@@ -2019,6 +2019,15 @@
     loadAllState = 'idle';
     liveAllArticles = null;
     hasFreshBackground = false;
+    // Skip the O(N²) heavy work (trending + conflict detection)
+    // on the mode-switch render. Without this, the user clicking
+    // Trending → Live freezes for ~2 seconds because conflict
+    // detection runs over 200 articles (5k Jaccard + claim +
+    // numeric pair comparisons). The cost was always there but
+    // it was hidden by the ranking pass on Live → Trending.
+    // The next user interaction (search, sort, filter, like)
+    // re-arms the flag via renderCurrentList / bindSearch.
+    skipHeavyWork = true;
     updateModeButtonActive();
     updateRankControls();
     updateSortOptions();
@@ -2143,8 +2152,12 @@
   // always gets full-quality trending + conflict info, while the
   // older articles get the default (no trending, no conflicts)
   // — the user mostly cares about what they're looking at.
+  // CONFLICT_CORPUS_CAP was originally 200 but that still cost
+  // ~2 seconds on a 5k cache (5k Jaccard + claim + numeric pair
+  // comparisons). 100 is fast enough (~500ms) and covers the
+  // whole visible list in the 1-per-source default view.
   const TRENDING_CORPUS_CAP = 200;
-  const CONFLICT_CORPUS_CAP = 200;
+  const CONFLICT_CORPUS_CAP = 100;
   // When true, displayCurrentSubcat skips the heavy O(N²) work
   // (trending + conflicts) and just renders. The background fetch
   // sets this on its re-render so we don't burn 5+ seconds on
