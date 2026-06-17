@@ -814,9 +814,13 @@
       if (bgAbort && !bgAbort.aborted && articles.length > lastRenderedCount) {
         const remaining = totalFeedsForKey(_curKey);
         const loaded = lastRenderedCount;
+        // The .bg-fetch-text span is the only part the background
+        // fetch updates in place (via updateBgFetchIndicator). The
+        // rest of the indicator stays static so the rest of the
+        // article list never has to repaint while the count ticks up.
         bgHtml = '<div class="bg-fetch-indicator">' +
           '<span class="btn-spinner"></span>' +
-          'Loading more sources in the background… (' + loaded + ' / ' + remaining + ' articles loaded)' +
+          '<span class="bg-fetch-text">Loading more sources in the background… (' + loaded + ' / ' + remaining + ' articles loaded)</span>' +
         '</div>';
       }
 
@@ -2250,11 +2254,18 @@
   }
 
   // Background fetch the rest of the sources in rolling batches.
-  // Each batch appends into scopeCache[key] and triggers a
-  // throttled re-render so the article list grows live.
+  // We DO NOT re-render the article list on every batch. The
+  // previous behaviour (render every ~10 new articles) caused a
+  // visible blink: the entire #main-content was replaced via
+  // innerHTML, which reset the scroll position and showed a
+  // blank frame between the old and new content. The user sees
+  // a "Loading N / M articles…" indicator at the top of the
+  // list whose text we update in place; the article list itself
+  // stays put. After the background fetch finishes, we do ONE
+  // final re-render (with full heavy work enabled) so the user
+  // sees the complete list with accurate trending + conflicts.
   async function backgroundFetchRest(key, allFeeds, startIndex, abortFlag) {
     const groups = (scopeCache[key] && scopeCache[key].groups) || {};
-    let totalArticles = lastRenderedCount;
     for (let i = startIndex; i < allFeeds.length; i += REST_BATCH_SIZE) {
       if (abortFlag.aborted) return;
       const batch = allFeeds.slice(i, i + REST_BATCH_SIZE);
@@ -2273,42 +2284,21 @@
           console.warn('Background feed failed: ' + batch[j]?.name, r.reason?.message);
         }
       }
-      // Rebuild the article list and re-render. We re-render only
-      // when the count has grown by at least RERENDER_EVERY_N
-      // since the last paint — frequent re-renders of a 200+
-      // article list are expensive (chunked render still does a
-      // layout per chunk) and the user can't perceive a difference
-      // between 1 and 9 new articles in the live list.
+      // Merge the new batch into the cache. We don't re-render
+      // the article list — that would blink the screen.
       let allArticles = [];
       for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
       scopeCache[key] = { articles: allArticles, groups };
-      const grown = allArticles.length - lastRenderedCount;
-      const finished = (i + REST_BATCH_SIZE) >= allFeeds.length;
-      if (grown >= RERENDER_EVERY_N || finished) {
-        lastRenderedCount = allArticles.length;
-        // Only re-render if the user is still viewing this scope.
-        // If they've switched away, the abort flag will be set
-        // before our next loop iteration and we'll bail out.
-        if (scopeKey() === key) {
-          // Skip the heavy O(N²) work (trending + conflict
-          // detection) on background re-renders. The next user
-          // interaction (search, tab change, sort) re-runs the
-          // full computation via skipHeavyWork=false in
-          // renderCurrentList / bindSearch. Without this, every
-          // background batch would freeze the tab for several
-          // seconds doing 25M-pair Jaccard comparisons.
-          skipHeavyWork = true;
-          renderSubTabs();
-          displayCurrentSubcat();
-        }
-      }
+      lastRenderedCount = allArticles.length;
+      // Update only the indicator text in place so the user sees
+      // the count grow without the list repainting.
+      updateBgFetchIndicator();
       // Yield to the browser so the user can interact and the
       // progress indicator can repaint.
       await new Promise(r => setTimeout(r, 0));
     }
-    // Final re-render to make sure the count is exact and the
-    // "Loading more sources…" indicator is removed. We DO want
-    // the full heavy work here, so the user sees accurate
+    // Final re-render to make sure the count is exact, the
+    // indicator is removed, and the user sees accurate
     // trending + conflict info on the final state of the
     // background fetch.
     if (scopeKey() === key) {
@@ -2318,6 +2308,18 @@
       displayCurrentSubcat();
     }
     delete backgroundFetchAbort[key];
+  }
+
+  // In-place update of the "Loading more sources…" indicator.
+  // We just rewrite the textContent of the existing element
+  // (created by renderArticles) so the list itself never has
+  // to repaint. If the indicator isn't in the DOM (background
+  // fetch done, or user navigated away) this is a no-op.
+  function updateBgFetchIndicator() {
+    const el = document.querySelector('.bg-fetch-indicator .bg-fetch-text');
+    if (!el) return;
+    const remaining = totalFeedsForKey(scopeKey());
+    el.textContent = 'Loading more sources in the background… (' + lastRenderedCount + ' / ' + remaining + ' articles loaded)';
   }
 
   // Mark the in-flight background fetch for a given key as
