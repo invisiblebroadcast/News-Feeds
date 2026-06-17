@@ -809,9 +809,10 @@
       // user can see progress without their scroll position being
       // shoved around.
       let bgHtml = '';
-      const bgAbort = backgroundFetchAbort[key];
+      const _curKey = scopeKey();
+      const bgAbort = backgroundFetchAbort[_curKey];
       if (bgAbort && !bgAbort.aborted && articles.length > lastRenderedCount) {
-        const remaining = totalFeedsForKey(key);
+        const remaining = totalFeedsForKey(_curKey);
         const loaded = lastRenderedCount;
         bgHtml = '<div class="bg-fetch-indicator">' +
           '<span class="btn-spinner"></span>' +
