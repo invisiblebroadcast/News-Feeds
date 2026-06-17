@@ -1998,6 +1998,20 @@
     el.trendingBtn.addEventListener('click', () => toggleTrending());
   }
 
+  // Minimum visible time for the mode-switch loading screen.
+  // Without this, the Trending → Live switch is so fast (data
+  // is already cached, no ranking pass, no conflict detection
+  // over the full pool) that the loading state paints and
+  // disappears within one frame — the user sees a flicker
+  // rather than a clear "switching" transition. Showing the
+  // loading state for at least 220 ms (a beat + a half) makes
+  // the mode toggle feel deliberate in BOTH directions:
+  // Live → Trending (because the ranking is slow) and
+  // Trending → Live (because we hold the loading state for the
+  // minimum). The user can still see a refresh-action button
+  // or move on; the hold is only on the loading overlay.
+  const MIN_MODE_LOADING_MS = 220;
+
   function switchModeNonBlocking(prevMode) {
     const token = ++pendingModeSwitch;
     loadedCount = 0;
@@ -2020,9 +2034,25 @@
       setTopListStatus('Loading live news…');
       showLoadingInline('Loading live news…');
     }
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     requestAnimationFrame(() => {
       if (token !== pendingModeSwitch) return;
-      displayCurrentSubcat();
+      (async () => {
+        try {
+          await displayCurrentSubcat();
+        } finally {
+          // Hold the loading state for at least MIN_MODE_LOADING_MS
+          // from the moment the user clicked. If the underlying
+          // work (ranking, conflict detection, translation) was
+          // already slow, this is a no-op; if it was fast, this
+          // keeps the loading state visible long enough for the
+          // user to register the transition.
+          const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+          const remaining = Math.max(0, MIN_MODE_LOADING_MS - elapsed);
+          if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+          if (token === pendingModeSwitch) clearTopListStatus();
+        }
+      })();
     });
   }
 
