@@ -573,13 +573,17 @@
     // Conflicts view is a special scope that lists articles in
     // cross-source conflicting clusters. Compute its count up-front so
     // the tab badge stays in sync with what the user will see.
+    // Capped to the most recent CONFLICT_CORPUS_CAP articles per
+    // scope so the badge never takes more than ~1 second to
+    // compute, even on a full 5000-article cache.
     let conflictCount = 0;
     for (const key of Object.keys(scopeCache)) {
       const cached = scopeCache[key];
       if (!cached || !cached.groups) continue;
       const all = [].concat(...Object.values(cached.groups));
       if (!all.length) continue;
-      const map = AI.detectConflicts(all);
+      const recent = all.slice(0, CONFLICT_CORPUS_CAP);
+      const map = AI.detectConflicts(recent);
       for (const c of map.values()) if (c.isConflicting) conflictCount++;
     }
     html += '<li class="tab-item conflicts-tab' + (currentScope === 'conflicts' ? ' active' : '') + '" data-scope="conflicts">' +
@@ -1745,8 +1749,11 @@
       return;
     }
 
-    // 2) Run conflict detection on the aggregated pool.
-    const map = AI.detectConflicts(all);
+    // 2) Run conflict detection on the aggregated pool. Capped
+    //    to the most recent CONFLICT_CORPUS_CAP articles so the
+    //    Conflicts view never takes more than ~1s to render.
+    const recent = all.slice(0, CONFLICT_CORPUS_CAP);
+    const map = AI.detectConflicts(recent);
 
     // 3) Group by cluster (clusterSize + first metric + first subject
     //    is a good enough identity — articles in the same cluster
@@ -2090,6 +2097,27 @@
     el.main.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>' + msg + '</p></div>';
   }
 
+  // Performance caps. The two heavy operations in the rendering
+  // path (computeTrendingInfo and detectConflicts) are both
+  // O(N²)-ish on the article pool. With 5000+ articles in the
+  // cache, running them on the full pool makes every render take
+  // multiple seconds — every keystroke in the search box, every
+  // background-fetch tick, every click on a like button. To keep
+  // the UI responsive we cap the input to the most recent N
+  // articles. The values below were picked so the visible list
+  // always gets full-quality trending + conflict info, while the
+  // older articles get the default (no trending, no conflicts)
+  // — the user mostly cares about what they're looking at.
+  const TRENDING_CORPUS_CAP = 200;
+  const CONFLICT_CORPUS_CAP = 200;
+  // When true, displayCurrentSubcat skips the heavy O(N²) work
+  // (trending + conflicts) and just renders. The background fetch
+  // sets this on its re-render so we don't burn 5+ seconds on
+  // every batch. We re-arm the flag when the user does anything
+  // that needs a fresh computation (tab change, search clear,
+  // sort change, filter change).
+  let skipHeavyWork = false;
+
   // Phased-load state. The initial fetch used to block on
   // Promise.allSettled of all ~140 feeds, which made the app
   // unusable for several minutes on the first run (and again on
@@ -2261,6 +2289,14 @@
         // If they've switched away, the abort flag will be set
         // before our next loop iteration and we'll bail out.
         if (scopeKey() === key) {
+          // Skip the heavy O(N²) work (trending + conflict
+          // detection) on background re-renders. The next user
+          // interaction (search, tab change, sort) re-runs the
+          // full computation via skipHeavyWork=false in
+          // renderCurrentList / bindSearch. Without this, every
+          // background batch would freeze the tab for several
+          // seconds doing 25M-pair Jaccard comparisons.
+          skipHeavyWork = true;
           renderSubTabs();
           displayCurrentSubcat();
         }
@@ -2270,8 +2306,12 @@
       await new Promise(r => setTimeout(r, 0));
     }
     // Final re-render to make sure the count is exact and the
-    // "Loading more sources…" indicator is removed.
+    // "Loading more sources…" indicator is removed. We DO want
+    // the full heavy work here, so the user sees accurate
+    // trending + conflict info on the final state of the
+    // background fetch.
     if (scopeKey() === key) {
+      skipHeavyWork = false;
       lastRenderedCount = scopeCache[key] ? scopeCache[key].articles.length : 0;
       renderSubTabs();
       displayCurrentSubcat();
@@ -2358,40 +2398,62 @@
       }
     }
 
-    // Tag every article with its subject (if any known person is mentioned).
-    // Done before trending so the dashboard can later filter scopeCache
-    // by subject without re-running the detection.
+    // Tag every article with its subject. tagArticleWithSubject
+    // is memoised (it sets _subjectChecked after the first run) so
+    // calling it again on the same article is O(1). This is also
+    // the path that runs on Phase 2 background re-renders — the
+    // newly-arrived articles get tagged (cheap), the existing
+    // articles are skipped (free).
     for (const a of articles) tagArticleWithSubject(a);
 
-    // Compute per-article trending info (keywords + count) from the full
-    // cached corpus, so every card knows how trending it is and can show
-    // the "where" details on click.
-    const fullCorpus = [];
-    for (const cat of Object.keys(cached.groups)) {
-      if (Array.isArray(cached.groups[cat])) fullCorpus.push(...cached.groups[cat]);
-    }
-    for (const a of fullCorpus) tagArticleWithSubject(a);
-    AI.computeTrendingInfo(articles, fullCorpus);
-
-    // Yield to the event loop so the browser can paint before we start
-    // the (relatively heavy) conflict-detection pass.
-    await new Promise(r => setTimeout(r, 0));
-
-    // Detect conflicting stories (same event, different facts) within the
-    // current article pool. The result is attached to each article as
-    // `._conflicts` so the card can surface a badge.
-    try {
-      const conflictMap = AI.detectConflicts(articles);
-      for (const a of articles) {
-        const c = conflictMap.get(a.link);
-        if (c) a._conflicts = c;
+    if (!skipHeavyWork) {
+      // Compute per-article trending info from the most recent
+      // TRENDING_CORPUS_CAP articles in the full corpus. We cap
+      // the input because computeTrendingInfo is O(N×M) and the
+      // oldest articles are basically never going to be on the
+      // user's screen anyway.
+      const fullCorpus = [];
+      for (const cat of Object.keys(cached.groups)) {
+        if (Array.isArray(cached.groups[cat])) fullCorpus.push(...cached.groups[cat]);
       }
-    } catch (e) {
-      console.warn('Conflict detection failed:', e);
+      for (const a of fullCorpus) tagArticleWithSubject(a);
+      // Sort by date desc, then cap. Sorting once is O(N log N) but
+      // is a single pass on small strings — much cheaper than the
+      // O(N×M) trending we used to do.
+      fullCorpus.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+      const trendingCorpus = fullCorpus.slice(0, TRENDING_CORPUS_CAP);
+      AI.computeTrendingInfo(articles, trendingCorpus);
+
+      // Yield to the event loop so the browser can paint before
+      // the (still relatively heavy) conflict-detection pass.
+      await new Promise(r => setTimeout(r, 0));
+
+      // Conflict detection: cap to the most recent
+      // CONFLICT_CORPUS_CAP articles. detectConflicts does
+      // O(N²) Jaccard clustering + claim + numeric extraction, so
+      // passing the full 5000-article pool would freeze the tab
+      // for several seconds. With a 200-article cap, the cost is
+      // bounded at ~40k pair comparisons — fast enough to run
+      // synchronously without a yield.
+      try {
+        const conflictArticles = articles.slice(0, CONFLICT_CORPUS_CAP);
+        const conflictMap = AI.detectConflicts(conflictArticles);
+        for (const a of articles) {
+          const c = conflictMap.get(a.link);
+          if (c) a._conflicts = c;
+        }
+      } catch (e) {
+        console.warn('Conflict detection failed:', e);
+      }
+    } else {
+      // Background re-render: skip the heavy work. The user
+      // gets their new articles immediately; the next user
+      // interaction (search, tab change, sort) will re-run the
+      // full computation.
     }
 
-    // One more yield before the render so the conflict badges have a
-    // frame to be visible on their own.
+    // One more yield before the render so the conflict badges
+    // have a frame to be visible on their own.
     await new Promise(r => setTimeout(r, 0));
 
     try {
@@ -2400,6 +2462,10 @@
       console.error('Error rendering articles:', e);
       showError('Failed to render articles. Try refreshing.');
     } finally {
+      // Always re-arm the flag. The skip only applies to a
+      // SINGLE render — the next one (e.g. when the user types
+      // in search) re-runs everything.
+      skipHeavyWork = false;
       clearTopListStatus();
     }
   }
@@ -2444,13 +2510,41 @@
 
   function bindSearch() {
     if (!el.searchInput) return;
+    // Debounce so a fast typist doesn't fire a re-render (and
+    // the O(N²) conflict detection it triggers) on every key.
+    // 120 ms is short enough to feel instant and long enough to
+    // collapse bursts of keystrokes into a single render.
+    let searchTimer = null;
     el.searchInput.addEventListener('input', () => {
       currentSearch = el.searchInput.value.trim().toLowerCase();
-      const key = scopeKey();
-      const cached = scopeCache[key];
-      if (!cached) return;
-      const articles = getFilteredArticles(currentSubcat, cached);
-      renderTranslated(articles);
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchTimer = null;
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        // Re-arm the heavy-work flag so the next render runs
+        // conflict detection against the search-filtered pool.
+        // (Otherwise the background-fetch skip would persist and
+        // the user would see stale data after typing.)
+        skipHeavyWork = false;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      }, 120);
+    });
+    // Clear the debounce on Enter / Escape so the user gets
+    // immediate feedback for those keys.
+    el.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+        currentSearch = el.searchInput.value.trim().toLowerCase();
+        skipHeavyWork = false;
+        const key = scopeKey();
+        const cached = scopeCache[key];
+        if (!cached) return;
+        const articles = getFilteredArticles(currentSubcat, cached);
+        renderTranslated(articles);
+      }
     });
   }
 
@@ -3763,16 +3857,22 @@
     const cached = scopeCache[key];
     if (!cached) return;
     const articles = getFilteredArticles(currentSubcat, cached);
-    // Re-run conflict detection on the filtered list so cards keep their
-    // badges after search / source filter / sort changes.
-    try {
-      const conflictMap = AI.detectConflicts(articles);
-      for (const a of articles) {
-        const c = conflictMap.get(a.link);
-        if (c) a._conflicts = c;
-        else delete a._conflicts;
-      }
-    } catch (e) { /* keep stale badges silently */ }
+    // Re-arm heavy work for user-initiated re-renders (like /
+    // dislike / sort / filter). The cap below is the most
+    // important perf knob: detectConflicts is O(N²) and would
+    // otherwise freeze the tab for seconds on every click.
+    skipHeavyWork = false;
+    if (Array.isArray(articles) && articles.length) {
+      try {
+        const conflictArticles = articles.slice(0, CONFLICT_CORPUS_CAP);
+        const conflictMap = AI.detectConflicts(conflictArticles);
+        for (const a of articles) {
+          const c = conflictMap.get(a.link);
+          if (c) a._conflicts = c;
+          else delete a._conflicts;
+        }
+      } catch (e) { /* keep stale badges silently */ }
+    }
     renderTranslated(articles);
   }
 

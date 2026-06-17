@@ -189,11 +189,21 @@ function detectSubjectInText(text) {
 
 /* Attach a `subject` property to the article if a registered person
  * is mentioned in its title or summary. Returns the subject or null.
+ *
+ * Memoised: once an article has been tagged (i.e. we've run the
+ * detection against it), subsequent calls are O(1). The article
+ * gets a `_subjectChecked` flag so we don't re-do the regex sweep
+ * every time displayCurrentSubcat runs. This is a big deal when
+ * the background-fetch re-render fires every 10 new articles:
+ * the 4990 existing articles skip the work, only the 10 new
+ * ones are checked.
  */
 function tagArticleWithSubject(article) {
   if (!article) return null;
+  if (article._subjectChecked) return article.subject || null;
   const text = ((article.title || '') + ' ' + (article.summary || ''));
   const subject = detectSubjectInText(text);
   if (subject) article.subject = subject;
+  article._subjectChecked = true;
   return subject;
 }
