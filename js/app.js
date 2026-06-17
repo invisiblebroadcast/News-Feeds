@@ -747,7 +747,10 @@
     updateStickyHeader('0 articles');
   }
 
-  // Track whether the user has chosen to "load all" in live mode.
+  // Set to true after the user clicks "Load All Articles" and
+  // the background fetch completes. The view then auto-expands
+  // to show all articles; the button disappears. There's no
+  // separate "show all" affordance.
   let liveAllLoaded = false;
 
   // In live mode, show only the most recent article from each source in the
@@ -825,7 +828,13 @@
       }
 
       let loadAllHtml = bgHtml;
-      if (currentMode === 'live' && articles.length > display.length) {
+      // Load-All button (live mode only). Two states: idle (says
+      // "Load All Articles") and loading (disabled with a
+      // spinner + "Loading all articles…"). When the background
+      // fetch finishes, the view auto-expands to show all
+      // articles — the button disappears entirely, so the user
+      // never sees a "Show all (N articles)" follow-up state.
+      if (currentMode === 'live' && articles.length > display.length && !liveAllLoaded) {
         const remaining = articles.length;
         const showing = totalShown;
         let btnLabel, btnDisabled = '', btnSpinner = '';
@@ -833,8 +842,6 @@
           btnLabel = 'Loading all articles…';
           btnDisabled = ' disabled';
           btnSpinner = '<span class="btn-spinner"></span>';
-        } else if (loadAllState === 'loaded' && liveAllArticles) {
-          btnLabel = 'Show all (' + Math.min(liveAllArticles.length, 500) + ' articles)';
         } else {
           btnLabel = 'Load All Articles';
         }
@@ -866,29 +873,25 @@
     }
   }
 
-  // Load-All state machine. Three values:
+  // Load-All state machine. Two values:
   //   'idle'    → button says "Load All Articles", enabled.
   //   'loading' → background re-fetch in progress, button disabled
-  //               with spinner + "Loading all articles…".
-  //   'loaded'  → background fetch done, button says "Show all (N)".
+  //               with spinner + "Loading all articles…". When the
+  //               fetch finishes, the view auto-expands to show
+  //               every article and the button disappears.
+  // There is no 'loaded' state — clicking the button is a
+  // single-action transition. The user never sees a "Show all
+  // (N articles)" follow-up button.
   let loadAllState = 'idle';
   // Holds the larger article set once the background fetch finishes.
   // null until then. Read by renderArticles to decide what to display.
   let liveAllArticles = null;
 
-  // Click handler for the Load All button. Behaviour depends on
-  // the current state:
+  // Click handler for the Load All button. Two states:
   //   - idle:    start the background fetch
   //   - loading: no-op (button is disabled)
-  //   - loaded:  reveal the cached full set
   async function handleLoadAllClick() {
     if (loadAllState === 'loading') return;
-    if (loadAllState === 'loaded') {
-      // Already loaded — just flip the visible flag and re-render.
-      liveAllLoaded = true;
-      renderArticles(currentArticles);
-      return;
-    }
     // State is 'idle'. Kick off a background re-fetch with a high
     // per-source cap (100 per source, up to ~10,000 articles total
     // across all sources). The work is split across animation
@@ -929,14 +932,21 @@
         for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
         liveAllArticles = allArticles;
         scopeCache[key] = { articles: allArticles, groups };
-        loadAllState = 'loaded';
+        // Auto-expand to the full set. The user clicked "Load
+        // All Articles" once; they don't need to click again to
+        // see them. The button disappears (because of the
+        // !liveAllLoaded guard in the renderArticles row
+        // builder) so there's no "Show all (500 articles)"
+        // follow-up state anywhere.
+        liveAllLoaded = true;
+        loadAllState = 'idle';
       } catch (e) {
         console.warn('Load-all background fetch failed:', e);
         loadAllState = 'idle';
       }
-      // Re-render so the button flips to "Show all (N articles)".
-      // If the user has already navigated away from the live view
-      // this is a harmless no-op.
+      // Re-render so the view flips to the full set and the
+      // button disappears. If the user has already navigated
+      // away from the live view this is a harmless no-op.
       renderArticles(currentArticles);
     });
   }
