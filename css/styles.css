@@ -4792,6 +4792,13 @@ body:not(.modal-open) #main-content {
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.2;
+  /* Long parliament names like "Maharashtra Vidhan Sabha" or
+     "Jammu & Kashmir" used to overflow the pill card and push
+     the subtitle out of the rounded border. Wrap mid-word as a
+     last resort so nothing gets clipped. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 .cat-pill-sub {
   font-size: 0.72rem;
@@ -4825,6 +4832,12 @@ body:not(.modal-open) #main-content {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  /* "Vidhan Parishad (State Legislative Councils — 6 states)"
+     used to overflow the modal on narrow viewports. Wrap so
+     the parenthetical breaks onto a new line cleanly. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 .cat-parliament-sub {
   font-weight: 400;

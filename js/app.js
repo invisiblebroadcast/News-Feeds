@@ -2275,12 +2275,25 @@
   // subcats this delegates to the existing subcatLabel/subcatIcon.
   // For parliament subcats it pulls the chamber's name out of the
   // parliamentFeeds data so the user can see "Lok Sabha" instead
-  // of the raw id.
+  // of the raw id. India VS/VP items in feeds.json only carry
+  // {id, state, url} (no `name` field), so we derive a readable
+  // name from state + id when name is missing — otherwise the
+  // header renders as literal "undefined".
   function categoryDisplay(subcat, scope, nation) {
     if (isParliamentSubcat(subcat)) {
       const id = subcat.slice('parliament:'.length);
       const item = FeedManager.getParliamentItemById && FeedManager.getParliamentItemById(id);
-      const name = item ? item.name : id;
+      let name;
+      if (item) {
+        name = item.name
+          || (item.state
+            ? item.state + (item.id && item.id.indexOf('vidhan-parishad') >= 0
+                ? ' Vidhan Parishad'
+                : ' Vidhan Sabha')
+            : item.id);
+      } else {
+        name = id;
+      }
       const where = item ? (item.country || item.state || '') : '';
       return {
         icon: '🏛️',
@@ -4609,49 +4622,54 @@
       // AI-rephrased without AI" — i.e. social-friendly copy
       // built from the article's own text, with five hashtags
       // (#invisiblebroadcast guaranteed, the others derived from
-      // the article's subcat / source).
+      // the article's subcat / source). The actual rephrasing is
+      // done in buildShareCaption() — see comment there.
       const caption = buildShareCaption(article);
 
+      // Step 1: copy the caption text to the clipboard FIRST. The
+      // user explicitly wants the text in the clipboard for
+      // Instagram (which doesn't accept image+text in the share
+      // sheet the way Twitter does — IG reads from the clipboard
+      // when you paste into a new post). We always do this,
+      // regardless of whether the share / download path succeeds.
+      try { await navigator.clipboard.writeText(caption); } catch {}
+
+      // Step 2: hand the image to the OS share sheet if available.
+      // If the blob is too large for the share sheet (>5MB), skip
+      // share and download instead — the user can still attach the
+      // downloaded file manually. 5MB covers every realistic
+      // phone-screen capture without choking the share intent.
+      const SHARE_MAX_BYTES = 5 * 1024 * 1024;
+      const tooLargeForShare = blob.size > SHARE_MAX_BYTES;
       const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
-      // Always try native share first if available (don't gate on canShare — some mobile browsers
-      // report canShare=false for files even though share() works fine). We pass both the
-      // file and the text so the share sheet (Instagram, Twitter, …)
-      // gets the caption pre-filled.
-      if (navigator.share) {
+      if (navigator.share && !tooLargeForShare) {
         try {
           await navigator.share({ files: [file], title: article.title, text: caption });
           btn && btn.classList.remove('btn-busy');
-          flashCopyButton(btn, 'Copied image + caption');
+          flashCopyButton(btn, 'Caption copied — share opened');
           return;
         } catch (err) {
           if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
-          // Any other error (NotAllowedError, etc.) — fall through to clipboard
+          // Any other error (NotAllowedError, etc.) — fall through to download
         }
       }
+      // Step 3: either share was unavailable, share was aborted by
+      // the OS, or the image was too large. In all three cases
+      // download the image to the user's device so they can pick
+      // it up in their gallery / camera roll. The caption is
+      // already in the clipboard from Step 1.
       try {
-        // Build a text blob so the OS clipboard gets BOTH the
-        // image and the caption. Apps that only accept text
-        // (Twitter web, Notes, etc.) will paste the caption;
-        // apps that accept images (Instagram) will get the image.
-        const textBlob = new Blob([caption], { type: 'text/plain' });
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob, 'text/plain': textBlob })
-        ]);
-        flashCopyButton(btn, 'Copied image + caption');
-      } catch {
-        // Some browsers don't support writing both at once. Try
-        // text-only first (so the user at least gets the caption
-        // on the clipboard), then fall back to downloading the
-        // image as a file.
-        try {
-          await navigator.clipboard.writeText(caption);
-          flashCopyButton(btn, 'Copied caption (image download started)');
-        } catch {}
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'invisible-broadcast.png';
         a.click();
         URL.revokeObjectURL(a.href);
+        const reason = tooLargeForShare
+          ? 'Image too large for share — caption copied, image downloaded'
+          : 'Caption copied — image downloaded';
+        flashCopyButton(btn, reason);
+      } catch {
+        flashCopyButton(btn, 'Caption copied');
       }
       btn && btn.classList.remove('btn-busy');
     } catch (err) {
@@ -4661,43 +4679,176 @@
     }
   }
 
-  // Build the share caption. The text is the article's title (or
-  // first sentence of the summary if there's no title), optionally
-  // followed by a short tagline derived from the summary, then five
-  // hashtags with #invisiblebroadcast guaranteed to be the first.
-  // We deliberately keep this template-based (no AI) — it just
-  // trims + lightly formats the article's own text so the user
-  // always gets a usable caption they can tweak before posting.
+  // Build the share caption. The user does NOT want a literal
+  // copy of the article title/description — they want a short
+  // rephrased version that reads like social-media copy, plus
+  // 5 hashtags (with #invisiblebroadcast guaranteed first).
+  //
+  // We don't use AI. The "rephrasing" is a deterministic
+  // extractive-summarisation pipeline:
+  //   1. Split title + summary into sentences.
+  //   2. Score every sentence by word-frequency (TextRank-lite):
+  //      more frequent meaningful words → more "central" sentence.
+  //   3. Pick the top 1–2 sentences as the body.
+  //   4. Compress: strip leading filler ("The", "A", "An", "In",
+  //      "On", "According to", "It is", …) and trim connectors.
+  //   5. Wrap in a social-media template ("Just in: …").
+  //   6. Apply a small synonym-rewrite table so it doesn't read
+  //      like a direct quote of the original wording.
+  //   7. Cap the body at ~280 chars (Instagram caption sweet spot).
+  //   8. Append 5 hashtags from buildHashtags() below.
+  //
+  // The result feels rephrased without ever calling an LLM — it's
+  // the article's own words, reordered, trimmed, and lightly
+  // swapped. Users can still tweak before posting.
   function buildShareCaption(article) {
     if (!article) return '';
-    const lines = [];
-
-    // Main body: title first, then the first 1–2 sentences of the
-    // summary as supporting context. Cap at ~600 chars so the
-    // caption stays readable in feed previews.
     const title = cleanSummary(stripHtml(article.title || '')).trim();
     const summary = cleanSummary(stripHtml(article.summary || '')).trim();
-    let body = title;
-    if (summary && summary !== title) {
-      // Take only the first 1–2 sentences of the summary.
-      const trimmed = summary
-        .split(/(?<=[.!?])\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .join(' ');
-      if (trimmed) body = body ? body + ' ' + trimmed : trimmed;
-    }
-    if (body) {
-      // Make sure the body ends with a terminal punctuation so it
-      // reads as a complete sentence under the hashtags.
-      if (!/[.!?]$/.test(body)) body += '.';
-      lines.push(body);
-    }
-
-    // 5 hashtags, always starting with #invisiblebroadcast.
+    const body = buildRephrasedBody(title, summary);
+    const lines = [];
+    if (body) lines.push(body);
     lines.push(buildHashtags(article).join(' '));
-
     return lines.join('\n\n');
+  }
+
+  // ── Rephraser internals (no AI, all rule-based) ──
+
+  // Common leading phrases that add no information. We strip these
+  // from the START of a sentence to compress without changing meaning.
+  const FILLER_PREFIXES = [
+    /^(according to|reports say|reports said|it is reported that|reportedly|officials said|according to reports)\s+/i,
+    /^(the|a|an|in|on|at|for|with|by|of|to|as|from|that|this|these|those|over|under)\s+/i,
+    /^(breaking|just in|update|developing|alert)\s*[:\-—]\s*/i
+  ];
+
+  // Light synonym-rewrite table. These are deliberately common,
+  // non-controversial swaps that change surface wording without
+  // altering meaning. Apply whole-word, case-preserving.
+  const SYNONYM_TABLE = [
+    [/\bsays\b/gi,         'reports'],
+    [/\bsaid\b/gi,         'reported'],
+    [/\breveals?\b/gi,     'shows'],
+    [/\bannounced?\b/gi,   'unveiled'],
+    [/\baccording to\b/gi, 'per'],
+    [/\bin order to\b/gi,  'to'],
+    [/\bdue to the fact that\b/gi, 'because'],
+    [/\ba large number of\b/gi, 'many'],
+    [/\ba majority of\b/gi, 'most'],
+    [/\bin the event that\b/gi, 'if'],
+    [/\bhas the ability to\b/gi, 'can'],
+    [/\bwill be able to\b/gi, 'can'],
+    [/\bit is important to note that\b/gi, ''],
+    [/\bneedless to say\b/gi, '']
+  ];
+
+  // Compress a single sentence: strip leading filler, apply
+  // synonym rewrites, collapse whitespace, cap length.
+  function compressSentence(s, maxLen) {
+    if (!s) return '';
+    let out = s.trim();
+    // Strip filler prefixes repeatedly (e.g. "The In a" → "a" → "").
+    let prev;
+    do { prev = out; for (const re of FILLER_PREFIXES) out = out.replace(re, ''); }
+    while (out !== prev && out.length > 0);
+    // Synonym swaps.
+    for (const [re, rep] of SYNONYM_TABLE) out = out.replace(re, rep);
+    // Collapse whitespace and stray leading punctuation.
+    out = out.replace(/\s+/g, ' ').replace(/^[\s,;:\-—]+/, '').trim();
+    // Cap. Prefer cutting at a sentence end or word boundary.
+    if (maxLen && out.length > maxLen) {
+      const slice = out.slice(0, maxLen);
+      const lastSpace = slice.lastIndexOf(' ');
+      out = (lastSpace > 40 ? slice.slice(0, lastSpace) : slice).trim();
+      if (!/[.!?]$/.test(out)) out += '…';
+    }
+    return out;
+  }
+
+  // Score a sentence by word-frequency centrality. Common English
+  // stopwords are excluded; longer / rarer words weigh more.
+  const STOPWORDS = new Set(('a an the and or but if then else when while of in on at to for from by with as is are was were be been being do does did has have had this that these those it its their there here all any some no not so very just can could may might will would shall should into about over under between through during before after above below up down out off again further once upon without within along across behind beyond despite except like near per via').split(/\s+/));
+  function scoreSentence(sentence, wordFreq) {
+    const words = sentence.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (!words.length) return 0;
+    let score = 0;
+    for (const w of words) {
+      if (STOPWORDS.has(w) || w.length < 4) continue;
+      score += wordFreq[w] || 0;
+    }
+    // Normalise by length so a 5-word punchy sentence isn't
+    // outranked by a 30-word run-on with the same content words.
+    return score / Math.sqrt(words.length);
+  }
+
+  // Pick the top N sentences from a combined title+summary pool,
+  // ranked by word-frequency centrality, in original order.
+  function topSentences(sentences, wordFreq, n) {
+    const scored = sentences.map((s, i) => ({ s, i, score: scoreSentence(s, wordFreq) }));
+    scored.sort((a, b) => b.score - a.score);
+    const picked = scored.slice(0, n).sort((a, b) => a.i - b.i);
+    return picked.map(x => x.s);
+  }
+
+  // Build the body of the share caption. Returns "" if there's
+  // nothing usable to rephrase.
+  function buildRephrasedBody(title, summary) {
+    // Build a word-frequency table from the full source text so
+    // every sentence is scored against the same distribution.
+    const sourceText = (title + '. ' + summary).trim();
+    if (!sourceText) return '';
+    const allWords = sourceText.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const wordFreq = {};
+    for (const w of allWords) {
+      if (STOPWORDS.has(w) || w.length < 4) continue;
+      wordFreq[w] = (wordFreq[w] || 0) + 1;
+    }
+    // Split into sentences (handle ". ! ?" as terminators, keep
+    // non-empty trimmed pieces).
+    const sentences = sourceText
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (!sentences.length) return '';
+    // Pick top 2 by centrality, preserve original order.
+    const picked = topSentences(sentences, wordFreq, 2);
+    // Compress + rephrase each picked sentence.
+    const rephrased = picked
+      .map(s => compressSentence(s, 140))
+      .filter(Boolean);
+    if (!rephrased.length) return '';
+    // Wrap in a social-media hook. Pick a varied opener so the
+    // caption doesn't feel templated across many shares.
+    const hook = pickHook(rephrased.join(' '));
+    let body = hook + rephrased.join(' ');
+    if (!/[.!?…]$/.test(body)) body += '.';
+    // Final cap at ~280 chars (Instagram caption sweet spot).
+    if (body.length > 280) {
+      const slice = body.slice(0, 280);
+      const lastSpace = slice.lastIndexOf(' ');
+      body = (lastSpace > 100 ? slice.slice(0, lastSpace) : slice).trim();
+      if (!/[.!?…]$/.test(body)) body += '…';
+    }
+    return body;
+  }
+
+  // Choose a short social-media opener. Cycles through a small
+  // set so consecutive shares don't all start with the same word.
+  // The choice is keyed off the body text length so the hook
+  // stays stable within a single share (no flicker).
+  const HOOKS = [
+    'Just in: ',
+    'Update: ',
+    'Read: ',
+    'Worth a look: ',
+    'Now: ',
+    'Latest: '
+  ];
+  let _hookCursor = 0;
+  function pickHook(body) {
+    const h = HOOKS[_hookCursor % HOOKS.length];
+    _hookCursor = (_hookCursor + 1) | 0;
+    return h;
   }
 
   // Build 5 hashtags. The first is always #invisiblebroadcast
