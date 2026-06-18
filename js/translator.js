@@ -77,3 +77,6 @@ const Translator = (() => {
 
   return { translate, translateArticle, translateArticles, getLangName };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.Translator = Translator;

@@ -15,6 +15,15 @@
   // Monotonically increasing token reserved for future race protection
   // (kept for compatibility — Live is the only mode now).
   let pendingModeSwitch = 0;
+  // Token used by bindViewToggle to guard against rapid double-clicks
+  // on the cards/list toggle. The first click increments the token
+  // and schedules a setTimeout; if a second click fires before that
+  // timer resolves, the second click increments the token again and
+  // the first click's render is dropped (its finally-block sees the
+  // mismatched token and skips clearTopListStatus). This keeps the
+  // processing overlay from getting "stuck" when the user mashes
+  // the toggle.
+  let pendingViewSwitch = 0;
 
   /* Expose a small slice of state to the analyze-modal module without
    * un-IIFE-ing the rest of the app. The dashboard needs to walk
@@ -29,6 +38,7 @@
     get scopeCache() { return scopeCache; },
     get currentMode() { return currentMode; },
     get currentScope() { return currentScope; },
+    get currentNation() { return currentNation; },
     get currentSubcat() { return currentSubcat; },
     openModal,
     closeModal,
@@ -351,8 +361,12 @@
 
   const el = {
     topTabs: $('#top-tab-list'),
-    subTabs: $('#sub-tab-list'),
-    subBar: $('#sub-tab-bar'),
+    // The old sub-tab-list / sub-tab-bar elements have been removed
+    // from the DOM (replaced by the Categories modal). Older
+    // cached copies of this script can still call into them, so
+    // we always set them to null and null-guard every read.
+    subTabs: null,
+    subBar: null,
     main: $('#main-content'),
     settingsBtn: $('#settings-btn'),
     modal: $('#settings-modal'),
@@ -609,6 +623,10 @@
       currentScope = scope;
       currentNation = nation;
       FeedManager.setSelectedNation(nation);
+      // Switching scope almost always invalidates a parliament
+      // subcat (Lok Sabha is not a valid view in the Global tab).
+      // Drop back to 'all' so the new scope's categories show.
+      if (isParliamentSubcat(currentSubcat)) currentSubcat = 'all';
       loadedCount = 0;
       hasFreshBackground = false;
       liveAllLoaded = false;
@@ -661,47 +679,58 @@
   }
 
   function renderSubTabs() {
-    if (currentScope === 'conflicts') {
-      el.subTabs.innerHTML = '';
-      el.subBar.style.display = 'none';
-      return;
-    }
-    const subs = FeedManager.subcategoriesForScope(currentScope);
-    const cacheKey = scopeKey();
-    const cached = scopeCache[cacheKey];
-    el.subTabs.innerHTML = subs.map(s =>
-      '<li class="tab-item' + (s === currentSubcat ? ' active' : '') + '" data-subcat="' + s + '">' +
-      FeedManager.subcatIcon(s) + ' ' + FeedManager.subcatLabel(s, currentScope) +
-      (cached ? '<span class="tab-count">' + getFilteredArticles(s, cached).length + '</span>' : '') +
-      '</li>'
-      ).join('');
-    // sub-tab-bar stays hidden — user clicks ☰ to show it
+    // The old horizontal category tab strip has been replaced by
+    // the Categories modal (see js/categories-modal.js). The DOM
+    // element is gone, so this is a no-op kept for callers that
+    // haven't been updated yet.
   }
 
   function bindSubTabs() {
-    el.subTabs.addEventListener('click', e => {
-      const tab = e.target.closest('.tab-item');
-      if (!tab) return;
-      const sub = tab.dataset.subcat;
-      if (sub === currentSubcat) return;
-      // Abort any in-flight background fetch for the previous
-      // subcat — the results would be dropped on arrival.
-      const prevKey = scopeKey();
-      if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
-      currentSubcat = sub;
-      hasFreshBackground = false;
-      loadedCount = 0;
-      liveAllLoaded = false;
-      loadAllState = 'idle';
-      liveAllArticles = null;
-      lastRenderedCount = 0;
-      $$('.tab-item', el.subTabs).forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      displayCurrentSubcat();
-      // Hide the sub-tab-bar after selection
-      el.subBar.style.display = 'none';
-      const catToggle = $('#cat-toggle-btn');
-      if (catToggle) catToggle.classList.remove('active');
+    // The old horizontal category tab strip has been replaced by
+    // the Categories modal (see js/categories-modal.js). The element
+    // is no longer in the DOM, but this function is still called
+    // from init() — so it's a safe no-op.
+  }
+
+  // Switch the active subcat and refresh the view. Called by the
+  // CategoriesModal when the user picks a category (or a
+  // parliament item). Aborts any in-flight fetch for the old
+  // subcat and starts a fresh render.
+  function selectCategory(sub) {
+    if (sub == null || sub === currentSubcat) {
+      // Even on a no-op, re-render so the section title / hint
+      // text reflects the current selection — the modal can
+      // re-open after a scope change and the title should always
+      // be in sync.
+      if (sub != null && sub === currentSubcat) {
+        updateStickyHeader();
+      }
+      return;
+    }
+    const prevKey = scopeKey();
+    if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
+    currentSubcat = sub;
+    hasFreshBackground = false;
+    loadedCount = 0;
+    liveAllLoaded = false;
+    loadAllState = 'idle';
+    liveAllArticles = null;
+    lastRenderedCount = 0;
+    updateStickyHeader();
+    // Show a loading state right away so the user doesn't see a
+    // frozen/empty list while displayCurrentSubcat re-renders.
+    // (Trending + conflict detection can take a few seconds on
+    // a large cache.) The loading screen is replaced by the
+    // real render when displayCurrentSubcat resolves.
+    showLoadingInline(isParliamentSubcat(sub)
+      ? 'Loading parliament feed…'
+      : 'Loading articles…');
+    // Yield to the event loop so the spinner paints before the
+    // (potentially long) render kicks off.
+    requestAnimationFrame(() => {
+      displayCurrentSubcat().catch(err => {
+        console.warn('displayCurrentSubcat failed:', err);
+      });
     });
   }
 
@@ -714,11 +743,10 @@
       if (el.sectionMeta) el.sectionMeta.innerHTML = '';
       return;
     }
-    const scopeLabel = currentScope === 'global' ? 'Global' : (FeedManager.getNations()[currentNation] || currentNation);
-    const subLabel = FeedManager.subcatLabel(currentSubcat, currentScope);
+    const disp = categoryDisplay(currentSubcat, currentScope, currentNation);
     if (el.sectionTitle) {
-      el.sectionTitle.innerHTML = FeedManager.subcatIcon(currentSubcat) + ' ' + subLabel +
-        '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + scopeLabel + '</span>';
+      el.sectionTitle.innerHTML = disp.icon + ' ' + disp.label +
+        '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + disp.scopeLabel + '</span>';
     }
     if (el.sectionMeta) {
       el.sectionMeta.innerHTML = '';
@@ -902,7 +930,7 @@
     requestAnimationFrame(async () => {
       try {
         const key = scopeKey();
-        const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+        const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
         if (!feeds.length) {
           loadAllState = 'idle';
           renderArticles(currentArticles);
@@ -1625,6 +1653,7 @@
   async function fetchArticleHtml(url) {
     if (isGoogleNewsRedirect(url)) return null;
     const fetchProxies = [
+      { url: 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=', encode: true },
       { url: 'https://corsproxy.io/?url=', encode: true },
       { url: 'https://api.allorigins.win/raw?url=', encode: true },
       { url: 'https://r.jina.ai/', encode: true }
@@ -2091,6 +2120,20 @@
   // The frameId itself is declared at the outer scope (reelsFrameId)
   // so the popstate handler can read it.
 
+  // Minimum visible time for the view-switch loading screen.
+  // Without this, the cards ↔ list switch on a warm cache is so
+  // fast (no fetch, no ranking pass, no conflict detection re-run
+  // because skipHeavyWork persists across view toggles) that the
+  // loading state would paint and disappear within a single frame
+  // — the user sees a flicker rather than a clear "switching"
+  // transition. Same rationale as MIN_MODE_LOADING_MS above:
+  // 220 ms (a beat + a half) makes the toggle feel deliberate.
+  // The heavy work (trending + conflicts) on a cold cache will
+  // naturally take longer than this, so the hold is a no-op
+  // there — it only kicks in when the underlying work was faster
+  // than the minimum.
+  const MIN_VIEW_LOADING_MS = 220;
+
   function bindViewToggle() {
     document.addEventListener('click', e => {
       const btn = e.target.closest('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn');
@@ -2103,8 +2146,59 @@
         if (b.dataset.view === currentView) b.classList.add('active');
       });
       document.body.classList.toggle('cards-view', currentView === 'reels');
-      displayCurrentSubcat();
+      // Show the FULL-SCREEN processing overlay (same one used by
+      // switchModeNonBlocking) — it has z-index 9999 and a backdrop
+      // blur, so the user can't miss it. The earlier inline
+      // loading-state div in #main-content was being collapsed
+      // into the same paint as the new render when the toggle was
+      // fast (warm cache, skipHeavyWork=true), so the spinner
+      // never actually appeared on screen. The processing overlay
+      // sits OUTSIDE #main-content so it survives the innerHTML
+      // swap in el.main below.
+      const overlayMsg = newView === 'reels'
+        ? 'Loading cards view…'
+        : 'Loading list view…';
+      setTopListStatus(overlayMsg);
+      // Also paint the inline loading state for the case where
+      // the user is in cards view and exits via this handler —
+      // el.main.innerHTML is the reels container, which gets
+      // replaced below. The processing overlay is the primary
+      // indicator; this is a belt-and-suspenders fallback that
+      // also keeps #main-content from flashing old content.
+      showLoadingInline(overlayMsg);
       sizeReelsContainer();
+
+      // Schedule the actual render. We use a token to guard
+      // against rapid double-clicks (the user mashes the toggle,
+      // the second click fires before the first render resolves).
+      // The render itself is deferred to the next macrotask so
+      // the browser actually paints the processing overlay before
+      // displayCurrentSubcat starts clobbering el.main.innerHTML.
+      // We hold the overlay for at least MIN_VIEW_LOADING_MS from
+      // the moment the user clicked so even a fast warm-cache
+      // toggle shows a deliberate transition (otherwise the
+      // overlay would flash and disappear in <16ms and the user
+      // would still see nothing).
+      const token = ++pendingViewSwitch;
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      setTimeout(() => {
+        if (token !== pendingViewSwitch) return;
+        const renderStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        displayCurrentSubcat().catch(err => {
+          console.warn('displayCurrentSubcat failed:', err);
+        }).finally(() => {
+          // Hold the overlay for at least MIN_VIEW_LOADING_MS from
+          // the moment the user clicked. If the underlying work
+          // was already slow (cold cache, ranking pass), this is
+          // a no-op. If it was fast (warm cache, skipHeavyWork),
+          // this is what makes the transition feel intentional.
+          const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+          const remaining = Math.max(0, MIN_VIEW_LOADING_MS - elapsed);
+          setTimeout(() => {
+            if (token === pendingViewSwitch) clearTopListStatus();
+          }, remaining);
+        });
+      }, 0);
 
       // Manage the back-stack entry for reels. Entering reels pushes
       // a fresh frame; leaving it (back to list) consumes the frame.
@@ -2124,8 +2218,12 @@
 
   // Exit reels view (e.g. via back button or Escape) without going
   // through the click handler. Updates the back-stack so the next
-  // back press doesn't keep trying to close an already-gone reels
-  // frame.
+  // back press doesn't keep trying to close an already-closed reels
+  // frame. Goes through the SAME processing-overlay + minimum-hold
+  // path as the click handler so the user sees a loading screen
+  // on the cards→list transition even when they exit via the
+  // browser back button (which is the most common cards→list
+  // gesture on mobile).
   function exitReelsFromBack() {
     if (currentView !== 'reels') return;
     currentView = 'list';
@@ -2139,12 +2237,64 @@
     }
     reelsFrameId = -1;
     updateStickyHeader();
-    displayCurrentSubcat();
+    setTopListStatus('Loading list view…');
+    showLoadingInline('Loading list view…');
+    const token = ++pendingViewSwitch;
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    setTimeout(() => {
+      if (token !== pendingViewSwitch) return;
+      displayCurrentSubcat().catch(err => {
+        console.warn('displayCurrentSubcat failed:', err);
+      }).finally(() => {
+        const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+        const remaining = Math.max(0, MIN_VIEW_LOADING_MS - elapsed);
+        setTimeout(() => {
+          if (token === pendingViewSwitch) clearTopListStatus();
+        }, remaining);
+      });
+    }, 0);
   }
 
   /* ── Fetch & Refresh ── */
   function scopeKey() {
-    return currentScope + '_' + (currentScope === 'nation' ? currentNation : '');
+    // Parliament subcats need their own cache so we don't
+    // re-fetch the entire news pool for every chamber the user
+    // visits. Suffix the key with the subcat for parliament ones.
+    let key = currentScope + '_' + (currentScope === 'nation' ? currentNation : '');
+    if (typeof currentSubcat === 'string' && currentSubcat.indexOf('parliament:') === 0) {
+      key += '__' + currentSubcat;
+    }
+    return key;
+  }
+
+  // True when the current subcat is a single-parliament-feed view
+  // (Lok Sabha, Rajya Sabha, a state Vidhan Sabha, etc.).
+  function isParliamentSubcat(subcat) {
+    return typeof subcat === 'string' && subcat.indexOf('parliament:') === 0;
+  }
+
+  // Display title + icon for the section header. For ordinary
+  // subcats this delegates to the existing subcatLabel/subcatIcon.
+  // For parliament subcats it pulls the chamber's name out of the
+  // parliamentFeeds data so the user can see "Lok Sabha" instead
+  // of the raw id.
+  function categoryDisplay(subcat, scope, nation) {
+    if (isParliamentSubcat(subcat)) {
+      const id = subcat.slice('parliament:'.length);
+      const item = FeedManager.getParliamentItemById && FeedManager.getParliamentItemById(id);
+      const name = item ? item.name : id;
+      const where = item ? (item.country || item.state || '') : '';
+      return {
+        icon: '🏛️',
+        label: name,
+        scopeLabel: where ? (FeedManager.getNations()[where] || where) : (scope === 'global' ? 'Global' : (FeedManager.getNations()[nation] || nation))
+      };
+    }
+    return {
+      icon: FeedManager.subcatIcon(subcat),
+      label: FeedManager.subcatLabel(subcat, scope),
+      scopeLabel: scope === 'global' ? 'Global' : (FeedManager.getNations()[nation] || nation)
+    };
   }
 
   function showProgress(msg) {
@@ -2215,7 +2365,7 @@
     showLoading();
 
     try {
-      const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+      const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
       if (!feeds.length) {
         showError('No feed sources available. Open Settings to add custom feeds.');
         isFetching = false;
@@ -2223,7 +2373,12 @@
       }
 
       const subs = FeedManager.subcategoriesForScope(currentScope);
-      if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
+      // Parliament subcats are not part of the news subcat list
+      // (and never should be) — keep them. Only snap back to
+      // 'all' if the current subcat is genuinely unknown.
+      if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
+        currentSubcat = 'all';
+      }
 
       // ── PHASE 1: quick batch (15 sources, low cap) ──────────
       // The user sees these articles in ~2-3 seconds even on a
@@ -2391,11 +2546,17 @@
   const totalFeedsByKey = {};
   function totalFeedsForKey(key) {
     if (totalFeedsByKey[key]) return totalFeedsByKey[key];
-    // Derive the scope + nation from the key (format: "scope" or "scope_nation").
-    const parts = key.split('_');
+    // Derive the scope + nation + subcat from the key.
+    // Format: "scope_nation" (e.g. "nation_india") OR
+    //         "scope" (e.g. "global") OR
+    //         "scope_nation__parliament:<id>" (parliament subcat).
+    const scopeEnd = key.indexOf('__');
+    const main = scopeEnd >= 0 ? key.slice(0, scopeEnd) : key;
+    const subcat = scopeEnd >= 0 ? key.slice(scopeEnd + 2) : null;
+    const parts = main.split('_');
     const scope = parts[0];
     const nation = parts[1] || null;
-    const feeds = FeedManager.getFeeds(scope, nation);
+    const feeds = FeedManager.getFeedsForSubcat(scope, nation, subcat);
     const total = feeds.reduce((s, f) => s + (f && f.url ? 1 : 0), 0);
     totalFeedsByKey[key] = total;
     return total;
@@ -2681,7 +2842,7 @@
     liveAllLoaded = false;
     loadedCount = 0;
     scopeCache[key] = null;
-    const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+    const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
     if (!feeds.length) return;
     const groups = {};
     const batchSize = 3;
@@ -2819,7 +2980,7 @@
     showRefreshSpinner();
 
     try {
-      const feeds = FeedManager.getFeeds(currentScope, currentScope === 'nation' ? currentNation : null);
+      const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
       if (!feeds.length) {
         isBackgroundRefreshing = false;
         hideRefreshStatus();
@@ -2827,7 +2988,12 @@
       }
 
       const subs = FeedManager.subcategoriesForScope(currentScope);
-      if (!subs.includes(currentSubcat)) currentSubcat = subs[0];
+      // Parliament subcats are not part of the news subcat list
+      // (and never should be) — keep them. Only snap back to
+      // 'all' if the current subcat is genuinely unknown.
+      if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
+        currentSubcat = 'all';
+      }
 
       const perSourceCap = 100;
       const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
@@ -3091,11 +3257,31 @@
       });
     }
     bindIBRow();
+    // The "collapse" button is now a search toggle — it shows or
+    // hides the search input row in the bottom bar. The whole
+    // bottom bar still auto-collapses (via the .collapsed class)
+    // when the user opens a modal, and re-opens when the modal
+    // closes. The button id is kept as #collapse-btn for
+    // backwards compat with anything that targets it by id.
     const collapseBtn = $('#collapse-btn');
-    const bottomBar = $('#bottom-bar');
-    if (collapseBtn && bottomBar) {
+    const searchRow = $('#search-row');
+    const searchInput = el.searchInput;
+    if (collapseBtn && searchRow) {
       collapseBtn.addEventListener('click', () => {
-        bottomBar.classList.toggle('collapsed');
+        const willShow = searchRow.hasAttribute('hidden');
+        if (willShow) {
+          searchRow.removeAttribute('hidden');
+          collapseBtn.classList.add('active');
+          collapseBtn.setAttribute('aria-pressed', 'true');
+          // Focus the input on the next tick so the show animation
+          // (if any) gets a frame to paint first.
+          if (searchInput) requestAnimationFrame(() => searchInput.focus());
+        } else {
+          searchRow.setAttribute('hidden', '');
+          collapseBtn.classList.remove('active');
+          collapseBtn.setAttribute('aria-pressed', 'false');
+          if (searchInput) searchInput.blur();
+        }
         sizeReelsContainer();
       });
     }
@@ -3126,14 +3312,27 @@
         optionsBtn.classList.remove('active');
       });
     }
-    // Category toggle button shows/hides the sub-tab-bar
+    // Category toggle button opens the new two-tab Categories modal
+    // (News Feeds + Parliament Statements). The old sub-tab-bar is
+    // gone — the picker lives inside the modal instead. The
+    // Conflicts view has no categories, so the button is a no-op
+    // there (the conflicts view has its own analysis UI).
     const catToggleBtn = $('#cat-toggle-btn');
-    const subTabBar = $('#sub-tab-bar');
-    if (catToggleBtn && subTabBar) {
+    if (catToggleBtn) {
       catToggleBtn.addEventListener('click', () => {
-        const hidden = subTabBar.style.display === 'none' || !subTabBar.style.display;
-        subTabBar.style.display = hidden ? 'block' : 'none';
-        catToggleBtn.classList.toggle('active', hidden);
+        if (currentScope === 'conflicts') return;
+        if (window.CategoriesModal) CategoriesModal.openModal();
+      });
+    }
+    // Also make the section title itself act as a category opener.
+    // Power users tend to aim for the title, not the tiny icon.
+    // The Conflicts view doesn't have categories, so the title
+    // stays non-interactive there.
+    if (el.sectionTitle) {
+      el.sectionTitle.style.cursor = 'pointer';
+      el.sectionTitle.addEventListener('click', () => {
+        if (currentScope === 'conflicts') return;
+        if (window.CategoriesModal) CategoriesModal.openModal();
       });
     }
   }
@@ -3952,6 +4151,7 @@
     }
 
     const fetchProxies = [
+      { url: 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=', encode: true },
       { url: 'https://corsproxy.io/?url=', encode: true },
       { url: 'https://api.allorigins.win/raw?url=', encode: true },
       { url: 'https://r.jina.ai/', encode: true }
@@ -3987,7 +4187,7 @@
 
     // Iframe fallback — proxies don't support CORS, load via iframe
     if (content) {
-      content.innerHTML = '<iframe style="width:100%;height:100%;border:none;background:#fff;" src="https://corsproxy.io/?url=' + encodeURIComponent(url) + '" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>';
+      content.innerHTML = '<iframe style="width:100%;height:100%;border:none;background:#fff;" src="https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=' + encodeURIComponent(url) + '" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>';
       content.style.display = 'block';
       const iframe = content.querySelector('iframe');
       iframe.onload = function() {
@@ -4032,7 +4232,7 @@
 
   async function fetchOGImage(articleUrl) {
     try {
-      const proxy = 'https://api.allorigins.win/raw?url=';
+      const proxy = 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=';
       const resp = await fetch(proxy + encodeURIComponent(articleUrl));
       if (!resp.ok) return null;
       const html = await resp.text();
@@ -4100,6 +4300,7 @@
       u => 'https://wsrv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
       u => 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
       // Fallbacks: generic CORS proxies (may rate-limit or go down)
+      u => 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=' + encodeURIComponent(u),
       u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
       u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
     ];
@@ -4409,13 +4610,24 @@
       const blob = await new Promise(r => c.toBlob(r, 'image/png'));
       if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
 
+      // Build the Instagram-style caption. The user asked for a
+      // caption that's "the exact same as the title/summary, but
+      // AI-rephrased without AI" — i.e. social-friendly copy
+      // built from the article's own text, with five hashtags
+      // (#invisiblebroadcast guaranteed, the others derived from
+      // the article's subcat / source).
+      const caption = buildShareCaption(article);
+
       const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
       // Always try native share first if available (don't gate on canShare — some mobile browsers
-      // report canShare=false for files even though share() works fine)
+      // report canShare=false for files even though share() works fine). We pass both the
+      // file and the text so the share sheet (Instagram, Twitter, …)
+      // gets the caption pre-filled.
       if (navigator.share) {
         try {
-          await navigator.share({ files: [file], title: article.title });
+          await navigator.share({ files: [file], title: article.title, text: caption });
           btn && btn.classList.remove('btn-busy');
+          flashCopyButton(btn, 'Copied image + caption');
           return;
         } catch (err) {
           if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
@@ -4423,8 +4635,24 @@
         }
       }
       try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        // Build a text blob so the OS clipboard gets BOTH the
+        // image and the caption. Apps that only accept text
+        // (Twitter web, Notes, etc.) will paste the caption;
+        // apps that accept images (Instagram) will get the image.
+        const textBlob = new Blob([caption], { type: 'text/plain' });
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob, 'text/plain': textBlob })
+        ]);
+        flashCopyButton(btn, 'Copied image + caption');
       } catch {
+        // Some browsers don't support writing both at once. Try
+        // text-only first (so the user at least gets the caption
+        // on the clipboard), then fall back to downloading the
+        // image as a file.
+        try {
+          await navigator.clipboard.writeText(caption);
+          flashCopyButton(btn, 'Copied caption (image download started)');
+        } catch {}
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'invisible-broadcast.png';
@@ -4437,6 +4665,116 @@
       console.warn('Image share failed:', err.message);
       handleShare(article.link, article.title, article.source);
     }
+  }
+
+  // Build the share caption. The text is the article's title (or
+  // first sentence of the summary if there's no title), optionally
+  // followed by a short tagline derived from the summary, then five
+  // hashtags with #invisiblebroadcast guaranteed to be the first.
+  // We deliberately keep this template-based (no AI) — it just
+  // trims + lightly formats the article's own text so the user
+  // always gets a usable caption they can tweak before posting.
+  function buildShareCaption(article) {
+    if (!article) return '';
+    const lines = [];
+
+    // Main body: title first, then the first 1–2 sentences of the
+    // summary as supporting context. Cap at ~600 chars so the
+    // caption stays readable in feed previews.
+    const title = cleanSummary(stripHtml(article.title || '')).trim();
+    const summary = cleanSummary(stripHtml(article.summary || '')).trim();
+    let body = title;
+    if (summary && summary !== title) {
+      // Take only the first 1–2 sentences of the summary.
+      const trimmed = summary
+        .split(/(?<=[.!?])\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(' ');
+      if (trimmed) body = body ? body + ' ' + trimmed : trimmed;
+    }
+    if (body) {
+      // Make sure the body ends with a terminal punctuation so it
+      // reads as a complete sentence under the hashtags.
+      if (!/[.!?]$/.test(body)) body += '.';
+      lines.push(body);
+    }
+
+    // 5 hashtags, always starting with #invisiblebroadcast.
+    lines.push(buildHashtags(article).join(' '));
+
+    return lines.join('\n\n');
+  }
+
+  // Build 5 hashtags. The first is always #invisiblebroadcast
+  // (the user's brand). The remaining four are derived from
+  // the article's subcat, source, and a couple of evergreen
+  // news tags. The function de-duplicates and trims to 5.
+  function buildHashtags(article) {
+    const tags = ['#invisiblebroadcast'];
+    const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (subcat) tags.push('#' + subcat);
+    const source = (article.source || '').toString().toLowerCase();
+    if (source) {
+      // Use the first word of the source name as a tag (so
+      // "The Hindu — News" becomes #thehindu). Strip common
+      // prefixes and punctuation.
+      const cleaned = source
+        .replace(/^the\s+/, '')
+        .split(/[\s\-—–|]+/)[0]
+        .replace(/[^a-z0-9]/g, '');
+      if (cleaned && cleaned !== subcat) tags.push('#' + cleaned);
+    }
+    tags.push('#news');
+    tags.push('#today');
+    // De-dupe while preserving order, then cap at 5.
+    const seen = new Set();
+    const out = [];
+    for (const t of tags) {
+      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
+      if (out.length === 5) break;
+    }
+    // If we still don't have 5, pad with evergreen tags.
+    const pad = ['#breaking', '#worldnews', '#headlines', '#dailynews', '#update'];
+    for (const p of pad) {
+      if (out.length === 5) break;
+      if (!seen.has(p)) { seen.add(p); out.push(p); }
+    }
+    return out.slice(0, 5);
+  }
+
+  // Brief "blinking" feedback after a successful copy. We
+  // temporarily swap the button's text/title so the user gets a
+  // visible confirmation. The previous label is restored after
+  // 1.6s.
+  function flashCopyButton(btn, msg) {
+    if (!btn) return;
+    try {
+      const prevLabel = btn.getAttribute('aria-label') || btn.textContent;
+      const prevTitle = btn.getAttribute('title') || '';
+      btn.setAttribute('data-prev-label', prevLabel);
+      btn.setAttribute('data-prev-title', prevTitle);
+      btn.setAttribute('aria-label', msg);
+      btn.setAttribute('title', msg);
+      btn.classList.add('btn-copied');
+      // Build a small "copied!" pill that floats above the button.
+      let pill = btn.querySelector('.copy-pill');
+      if (!pill) {
+        pill = document.createElement('span');
+        pill.className = 'copy-pill';
+        btn.appendChild(pill);
+      }
+      pill.textContent = msg;
+      pill.classList.add('copy-pill-show');
+      setTimeout(() => {
+        pill.classList.remove('copy-pill-show');
+        btn.classList.remove('btn-copied');
+        const pl = btn.getAttribute('data-prev-label');
+        const pt = btn.getAttribute('data-prev-title');
+        if (pl != null) btn.setAttribute('aria-label', pl);
+        if (pt != null) btn.setAttribute('title', pt);
+      }, 1600);
+    } catch {}
   }
 
   function roundRect(ctx, x, y, w, h, r) {
@@ -5569,6 +5907,14 @@
         renderTranslated(articles);
       });
       FilterModal.bindAll();
+    }
+    if (window.CategoriesModal) {
+      // The modal calls this with a subcat id when the user
+      // picks a category or a parliament item. Same identifier
+      // scheme as the old tab strip ('all', 'politics', …,
+      // 'parliament:<id>').
+      CategoriesModal.setOnSelect(sub => selectCategory(sub));
+      CategoriesModal.bindAll();
     }
     await renderContent();
 

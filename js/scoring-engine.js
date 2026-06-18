@@ -478,3 +478,6 @@ const ScoringEngine = (() => {
     RIGHT_WORDS
   };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.ScoringEngine = ScoringEngine;

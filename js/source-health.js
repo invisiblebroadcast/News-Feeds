@@ -216,3 +216,6 @@ const SourceHealth = (() => {
     onChange
   };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.SourceHealth = SourceHealth;

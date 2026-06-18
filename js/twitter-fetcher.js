@@ -26,7 +26,7 @@
  * the most reliable one first to fail fast.
  */
 const TwitterFetcher = (() => {
-  const CORS_PROXY = 'https://corsproxy.io/?url=';
+  const CORS_PROXY = 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=';
   const CACHE_PREFIX = 'twitter_cache_';
   const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -269,3 +269,6 @@ const TwitterFetcher = (() => {
     NITTER_INSTANCES
   };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.TwitterFetcher = TwitterFetcher;

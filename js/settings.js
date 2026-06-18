@@ -71,3 +71,6 @@ const Settings = (() => {
 
   return { load, save, get, set, reset, LANGUAGES };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.Settings = Settings;

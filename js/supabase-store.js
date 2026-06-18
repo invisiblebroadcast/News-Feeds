@@ -90,3 +90,6 @@ const SupabaseStore = (() => {
 
   return { load, get, set, getAll, getClient };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.SupabaseStore = SupabaseStore;

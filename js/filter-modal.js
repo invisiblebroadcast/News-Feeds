@@ -199,6 +199,12 @@ const FilterModal = (() => {
   function getFilter() { return currentFilter; }
 
   // Helpers (duplicated for self-containment).
+  // app.js's $ / $$ are local to its own IIFE, so they're not
+  // visible here. Define our own — the original bindAll() crashed
+  // with "ReferenceError: $ is not defined" the moment app.js
+  // called FilterModal.bindAll() during init().
+  function $(s, c) { return (c || document).querySelector(s); }
+  function $$(s, c) { return [...(c || document).querySelectorAll(s)]; }
   function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -211,3 +217,6 @@ const FilterModal = (() => {
     updateActiveCount
   };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.FilterModal = FilterModal;

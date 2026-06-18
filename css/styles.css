@@ -337,16 +337,23 @@ img { max-width: 100%; height: auto; }
   font-size: 0.72rem;
   padding: 4px 8px;
 }
+/* The bottom-bar used to have a "collapse everything" mode that
+   hid the search row + top-tab-bar together. Now the search is
+   toggled individually via the [hidden] attribute on #search-row,
+   so the .collapsed rules below are only kept for the section
+   header visibility when the bottom-bar is given the .collapsed
+   class programmatically (e.g. by a future "minimize" gesture). */
 .bottom-bar.collapsed .top-tab-bar,
-.bottom-bar.collapsed .bottom-view-row,
 .bottom-bar.collapsed .bottom-tools-row {
   display: none !important;
 }
 #collapse-btn svg {
   transition: transform 0.2s ease;
 }
-.bottom-bar.collapsed #collapse-btn svg {
-  transform: rotate(180deg);
+#collapse-btn.active {
+  background: var(--accent-dim);
+  color: #fff;
+  border-color: var(--accent);
 }
 .bottom-bar .top-tab-bar,
 .bottom-bar .sub-tab-bar {
@@ -373,11 +380,17 @@ img { max-width: 100%; height: auto; }
   align-items: center;
   justify-content: stretch;
   gap: 8px;
-  padding: 6px 12px 8px;
+  padding: 6px 12px 10px;
   width: 100%;
   max-width: var(--max-width);
   margin: 0 auto;
 }
+/* The search row is hidden by default via the [hidden] attribute
+   and shown by toggling it. The browser-native [hidden] rule is
+   `display: none`, but a few older browsers needed an explicit
+   fallback. This also covers the case where the [hidden] attribute
+   is removed but we want a smooth show transition. */
+#search-row[hidden] { display: none !important; }
 .bottom-view-row #search-input {
   min-width: 0;
   width: 100%;
@@ -1574,6 +1587,56 @@ body.cards-view {
   font-size: 0.9rem;
 }
 
+/* ─── Copy-button "blinking" feedback ───
+ *
+ * When the user copies an article image + caption, the share
+ * button briefly flashes a small "Copied" pill above it so the
+ * user knows the action succeeded. The pill is absolutely
+ * positioned inside the button (which is `position: relative`)
+ * so it floats above the icon without disturbing the layout. */
+.btn-copied {
+  background: var(--accent-dim) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+  animation: btn-copy-pulse 0.6s ease;
+}
+@keyframes btn-copy-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 41, 41, 0.6); }
+  60%  { box-shadow: 0 0 0 10px rgba(255, 41, 41, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 41, 41, 0); }
+}
+.copy-pill {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 50;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.copy-pill::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--accent);
+}
+.copy-pill-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .error-state {
   text-align: center;
   padding: 60px 20px;
@@ -2112,10 +2175,15 @@ body.cards-view {
   opacity: 0;
   visibility: hidden;
   transition: all var(--transition);
+  /* Default to "off" so the dimmed area doesn't steal clicks
+     from elements behind the overlay. The .open override below
+     re-enables clicks for the visible modal. */
+  pointer-events: none;
 }
 .modal-overlay.open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .modal {
@@ -4623,4 +4691,239 @@ body:not(.modal-open) #main-content {
   border-radius: var(--radius);
   font-size: 0.78rem;
   color: var(--text-secondary);
+}
+
+/* ─── Categories Modal ───
+ *
+ * Two tabs at the top: News Feeds + Parliament Statements.
+ * Each tab renders its own pane with a clean grid of pill
+ * buttons. The "back" arrow on the international parliament
+ * sub-views re-opens the 3-list picker.
+ */
+.cat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: -8px 0 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+.cat-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  border-radius: calc(var(--radius-lg) - 4px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  text-align: center;
+}
+.cat-tab:hover { color: var(--text-primary); }
+.cat-tab.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+
+.cat-pane { display: none; pointer-events: auto; }
+.cat-pane.active { display: block; }
+
+.cat-pane-hint {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.cat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-height: 56px;
+  /* Be defensive: nothing in a parent should ever be able to
+     swallow clicks on a category button. */
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.cat-pill:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+}
+.cat-pill.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: #fff;
+}
+.cat-pill-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.cat-pill-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cat-pill-sub {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  line-height: 1.3;
+}
+.cat-pill.active .cat-pill-sub { color: rgba(255,255,255,0.8); }
+
+.cat-pill-all { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 10px; }
+.cat-pill-all .cat-pill-label { font-size: 0.95rem; }
+.cat-pill-all .cat-pill-sub { margin-left: auto; }
+
+.cat-pill-parliament.cat-pill-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-primary);
+}
+.cat-pill-parliament.cat-pill-disabled:hover {
+  transform: none;
+  border-color: var(--border-primary);
+  background: var(--bg-primary);
+}
+
+.cat-parliament-section { margin-bottom: 18px; }
+.cat-parliament-section:last-child { margin-bottom: 0; }
+.cat-parliament-title {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.cat-parliament-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+.cat-parliament-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+}
+
+#cat-parliament-content {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.cat-empty {
+  padding: 12px;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.cat-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+.cat-back-btn:hover { border-color: var(--accent); }
+
+.cat-intl-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.cat-intl-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition);
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+.cat-intl-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+  transform: translateX(2px);
+}
+.cat-intl-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.cat-intl-card-sub {
+  grid-column: 1;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.cat-intl-card-arrow {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.2rem;
+  color: var(--accent);
+  align-self: center;
+}
+
+@media (max-width: 600px) {
+  .cat-grid { grid-template-columns: 1fr 1fr; }
+  .cat-parliament-grid { grid-template-columns: 1fr; }
+  .cat-pill-all { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; }
+  .cat-pill-all .cat-pill-sub { margin-left: 0; }
 }

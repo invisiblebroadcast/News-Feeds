@@ -17,7 +17,7 @@
  * app launch to pick them up immediately, not after the user
  * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v13';
+const CACHE_VERSION = 'ib-v16';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -38,6 +38,7 @@ const SHELL_ASSETS = [
   './js/scoring-engine.js',
   './js/analyze-modal.js',
   './js/filter-modal.js',
+  './js/categories-modal.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

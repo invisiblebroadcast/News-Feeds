@@ -250,3 +250,6 @@ const ArticleArchive = (() => {
 
   return { ingest, flush, flushNow, init, stats };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.ArticleArchive = ArticleArchive;

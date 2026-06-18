@@ -168,11 +168,94 @@ const FeedManager = (() => {
     }
   }
 
+  /* ── Parliament feeds ──
+   *
+   * The parliamentFeeds section of feeds.json holds RSS feeds for
+   * legislative bodies. They are organized by:
+   *   - india.central      → Lok Sabha, Rajya Sabha
+   *   - india.vidhan-sabha → 28 states + 3 UTs that have legislatures
+   *   - india.vidhan-parishad → 6 states with a Legislative Council
+   *   - international.{top,all,g7-brics} → curated country lists
+   *
+   * Every entry has { id, name, url, ... }. The url may be empty
+   * when the chamber does not publish an RSS feed; the modal
+   * renders those buttons in a disabled state so the user knows
+   * the option exists but is not currently fetchable.
+   */
+  function getParliamentFeeds() {
+    return feedData?.parliamentFeeds || null;
+  }
+
+  // Resolve a single parliament item by its id. Returns the raw
+  // record (with id, name, url, country/state, chamber…) or null
+  // when the id is unknown.
+  function getParliamentItemById(id) {
+    if (!id || !feedData?.parliamentFeeds) return null;
+    const pf = feedData.parliamentFeeds;
+    const buckets = [
+      pf.india?.central,
+      pf.india?.['vidhan-sabha'],
+      pf.india?.['vidhan-parishad'],
+      pf.international?.top,
+      pf.international?.all,
+      pf.international?.['g7-brics']
+    ];
+    for (const arr of buckets) {
+      if (!Array.isArray(arr)) continue;
+      for (const item of arr) {
+        if (item && item.id === id) return item;
+      }
+    }
+    return null;
+  }
+
+  // Build a feed object compatible with FeedFetcher.fetchFeed()
+  // from a raw parliament item. The hint is set to a unique
+  // "parliament:<id>" string so each parliament feed is its own
+  // subcat group in the article cache and can be filtered
+  // independently.
+  function parliamentItemToFeed(item) {
+    if (!item || !item.url) return null;
+    return {
+      name: item.name + (item.country ? ' — ' + item.country : (item.state ? ' — ' + item.state : '')),
+      url: item.url,
+      hint: 'parliament:' + item.id,
+      lang: 'en',
+      _parliament: true
+    };
+  }
+
+  // Resolve the active feed list for the current scope + subcat.
+  // For ordinary subcats ('all' / 'politics' / …) this is the
+  // same as getFeeds(scope, nation). For parliament subcats
+  // (subcat starts with 'parliament:') this returns the single
+  // matching parliament feed so we don't waste bandwidth on the
+  // rest of the scope.
+  function getFeedsForSubcat(scope, nation, subcat) {
+    if (typeof subcat === 'string' && subcat.indexOf('parliament:') === 0) {
+      const id = subcat.slice('parliament:'.length);
+      const item = getParliamentItemById(id);
+      if (!item) return [];
+      const feed = parliamentItemToFeed(item);
+      return feed ? [feed] : [];
+    }
+    return getFeeds(scope, nation);
+  }
+
   return {
     load, subcategories, subcategoriesForScope, subcatLabel, subcatIcon,
     getNations, defaultNation, getSelectedNation, setSelectedNation,
     getFeeds, getFeedsBySubcat,
     getCustomFeeds, addCustomFeed, removeCustomFeed, validateFeed,
-    getSubscribableFeeds, getSubscribedFeeds, saveSubscribedFeeds, isSubscribed, toggleSubscription
+    getSubscribableFeeds, getSubscribedFeeds, saveSubscribedFeeds, isSubscribed, toggleSubscription,
+    getParliamentFeeds, getParliamentItemById, parliamentItemToFeed, getFeedsForSubcat
   };
 })();
+
+// Expose on window. Top-level `const` in a script lives in the
+// global scope but is NOT a property of `window` in browsers, so
+// any code that does `if (window.FeedManager) FeedManager.x()` would
+// silently no-op. The bare name `FeedManager` still works (it was
+// already in the global scope) — this just makes the `window.`
+// form work too. Same pattern as AnalyzeModal.
+window.FeedManager = FeedManager;

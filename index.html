@@ -184,28 +184,29 @@
     </div>
   </main>
 
-  <div class="bottom-bar collapsed" id="bottom-bar">
-    <nav class="tab-bar sub-tab-bar" id="sub-tab-bar" style="display:none">
-      <ul class="tab-list" id="sub-tab-list">
-        <li class="tab-item active">All</li>
-      </ul>
-    </nav>
+  <div class="bottom-bar" id="bottom-bar">
     <div class="section-header" id="section-header">
       <div class="section-header-top">
         <span class="section-meta" id="section-meta"></span>
         <div class="section-header-right">
           <h2 id="section-title"></h2>
-          <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Toggle Categories">
+          <button class="btn btn-ghost btn-icon" id="cat-toggle-btn" title="Open Categories">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
           </button>
-          <button class="btn btn-ghost btn-icon" id="collapse-btn" title="Collapse / Expand">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 8,11 13,6"/></svg>
+          <button class="btn btn-ghost btn-icon" id="collapse-btn" title="Toggle Search" aria-pressed="false">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7" cy="7" r="4.5"/>
+              <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+            </svg>
           </button>
         </div>
       </div>
     </div>
-    <!-- Search row -->
-    <div class="bottom-view-row">
+    <!-- Search row (hidden by default; toggled by the search button
+         in the section header). Wrapped in its own class so we can
+         hide it with display:none without affecting the section
+         header above. -->
+    <div class="bottom-view-row" id="search-row" hidden>
       <input type="text" id="search-input" placeholder="Search articles…" style="flex:1;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:16px;padding:5px 12px;color:var(--text-primary);font-size:0.8rem;font-family:var(--font);outline:none;">
     </div>
   </div>
@@ -543,6 +544,34 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="categories-modal">
+    <div class="modal modal-categories" style="max-width:640px;">
+      <div class="modal-header">
+        <h2>
+          <span style="margin-right:6px;">&#x1F4C2;</span>
+          <span>Categories</span>
+        </h2>
+        <button class="modal-close" id="categories-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="categories-modal-body">
+        <div class="cat-tabs" id="cat-tabs" role="tablist">
+          <button class="cat-tab active" data-cat-tab="news" role="tab" aria-selected="true">&#x1F4F0; News Feeds</button>
+          <button class="cat-tab" data-cat-tab="parliament" role="tab" aria-selected="false">&#x1F3DB;&#xFE0F; Parliament Statements</button>
+        </div>
+
+        <div class="cat-pane active" id="cat-pane-news" role="tabpanel">
+          <p class="cat-pane-hint" id="cat-pane-news-hint">Pick a category to filter the news in this scope.</p>
+          <div class="cat-grid" id="cat-news-grid"></div>
+        </div>
+
+        <div class="cat-pane" id="cat-pane-parliament" role="tabpanel">
+          <p class="cat-pane-hint" id="cat-pane-parliament-hint">Browse official statements, questions, and debates from legislatures around the world.</p>
+          <div id="cat-parliament-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="translate-modal">
     <div class="modal" style="max-width:380px;">
       <div class="modal-header">
@@ -793,6 +822,7 @@
   <script src="js/scoring-engine.js"></script>
   <script src="js/analyze-modal.js"></script>
   <script src="js/filter-modal.js"></script>
+  <script src="js/categories-modal.js"></script>
   <script src="js/app.js"></script>
   <script>
     // Register the service worker for PWA install + offline app shell.

@@ -969,3 +969,6 @@ const Analyzer = (() => {
     rankByAnalyzer
   };
 })();
+
+// Expose on window — see js/feeds.js for the rationale.
+window.Analyzer = Analyzer;
