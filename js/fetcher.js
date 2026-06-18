@@ -1,22 +1,6 @@
 const FeedFetcher = (() => {
   const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json?rss_url=';
-  // Primary CORS proxy (raw XML passthrough, no item cap, no
-  // API key required). Tries in order; first one that returns a
-  // non-error response wins. We keep several because:
-  //   - corsproxy.io started rejecting free-tier users with
-  //     "Server-side requests are not allowed on your plan"
-  //     for ALL URLs, which broke every fetch.
-  //   - Some proxies are geo-blocked or rate-limited
-  //     intermittently, so a single hard dependency is fragile.
-  //   - Parliament feeds in particular seem to be blocked by
-  //     some proxies' abuse filters, so a fallback chain
-  //     dramatically increases the chance of getting a response.
-  const CORS_PROXIES = [
-    'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=',
-    'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?url=',
-    'https://api.codetabs.com/v1/proxy?quest='
-  ];
+  const CORS_PROXY = 'https://corsproxy.io/?url=';
   // Generous timeout because some feeds publish thousands of items in 10 days
   // and the proxy has to fetch + transfer the entire XML payload.
   const FETCH_TIMEOUT = 30000;
@@ -159,50 +143,18 @@ const FeedFetcher = (() => {
   }
 
   async function proxyFetch(feed) {
-    // Try each CORS proxy in order. A proxy "fails" if it returns
-    // a non-OK status, returns what looks like a JSON error payload
-    // (corsproxy.io used to return {"error":"..."} with 200 OK),
-    // or the response body doesn't parse as XML. We move on to
-    // the next proxy in the chain instead of giving up — this
-    // is what made every feed silently fail when corsproxy.io
-    // started rejecting free-tier users.
-    const encoded = encodeURIComponent(feed.url);
-    let lastErr = null;
-    for (const proxyBase of CORS_PROXIES) {
-      const proxyUrl = proxyBase + encoded;
-      try {
-        const res = await fetchWithTimeout(proxyUrl);
-        if (!res.ok) { lastErr = new Error(`Proxy HTTP ${res.status} (${proxyBase})`); continue; }
-        const xmlText = await res.text();
-        // Reject JSON error payloads (corsproxy.io's free-tier
-        // rejection comes back as `{"error":"..."}` with 200 OK).
-        const trimmed = xmlText.trimStart();
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-          lastErr = new Error('Proxy returned JSON, not XML: ' + trimmed.slice(0, 120));
-          continue;
-        }
-        // Reject anything that doesn't look like XML. A real RSS
-        // feed starts with `<?xml` or `<rss` (RSS 2.0) or
-        // `<feed` (Atom). HTML 404 pages from broken CDNs will
-        // fail this check and fall through to the next proxy.
-        if (!/^\s*(<\?xml|<rss|<feed)/i.test(trimmed)) {
-          lastErr = new Error('Proxy returned non-XML payload: ' + trimmed.slice(0, 120));
-          continue;
-        }
-        // Quick parse to count items before we build full article objects.
-        try {
-          const parser = new DOMParser();
-          const xml = parser.parseFromString(xmlText, 'text/xml');
-          const itemCount = xml.querySelectorAll('item').length;
-          console.log(`[FeedFetcher] ${feed.name}: ${itemCount} items in RSS XML via ${proxyBase} (${(xmlText.length / 1024).toFixed(1)} KB)`);
-        } catch {}
-        return parseRssXml(xmlText, feed);
-      } catch (err) {
-        lastErr = err;
-        // Try the next proxy
-      }
-    }
-    throw lastErr || new Error('All CORS proxies failed for ' + feed.url);
+    const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url);
+    const res = await fetchWithTimeout(proxyUrl);
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const xmlText = await res.text();
+    // Quick parse to count items before we build full article objects.
+    try {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, 'text/xml');
+      const itemCount = xml.querySelectorAll('item').length;
+      console.log(`[FeedFetcher] ${feed.name}: ${itemCount} items in RSS XML (${(xmlText.length / 1024).toFixed(1)} KB)`);
+    } catch {}
+    return parseRssXml(xmlText, feed);
   }
 
   // Some RSS feeds (WordPress-style, BlogEngine, etc.) support pagination via
@@ -269,16 +221,10 @@ const FeedFetcher = (() => {
       afterFetch(feed, items);
       return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
     } catch (proxyErr) {
-      // Fall back to rss2json if all CORS proxies fail (network,
-      // 503, free-tier rejection, etc.). Note: rss2json's free tier
-      // caps at ~10 items by default; passing `count=100` requires
-      // a paid API key and silently fails the whole request for
-      // free users, so we deliberately leave it off. The
-      // perSourceCap below is the only cap we need anyway — the
-      // calling code already slices the result down to what it
-      // actually wants.
+      // Fall back to rss2json if the proxy fails (network, 503, etc.)
       const encodedUrl = encodeURIComponent(feed.url);
-      const rss2jsonUrl = RSS2JSON_API + encodedUrl;
+      // rss2json free tier caps at 100 items, but it's a good fallback
+      const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
 
       try {
         const res = await fetchWithTimeout(rss2jsonUrl);

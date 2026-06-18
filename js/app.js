@@ -1653,9 +1653,7 @@
   async function fetchArticleHtml(url) {
     if (isGoogleNewsRedirect(url)) return null;
     const fetchProxies = [
-      { url: 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=', encode: true },
       { url: 'https://corsproxy.io/?url=', encode: true },
-      { url: 'https://api.allorigins.win/raw?url=', encode: true },
       { url: 'https://r.jina.ai/', encode: true }
     ];
     for (const proxy of fetchProxies) {
@@ -4151,9 +4149,7 @@
     }
 
     const fetchProxies = [
-      { url: 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=', encode: true },
       { url: 'https://corsproxy.io/?url=', encode: true },
-      { url: 'https://api.allorigins.win/raw?url=', encode: true },
       { url: 'https://r.jina.ai/', encode: true }
     ];
 
@@ -4187,7 +4183,7 @@
 
     // Iframe fallback — proxies don't support CORS, load via iframe
     if (content) {
-      content.innerHTML = '<iframe style="width:100%;height:100%;border:none;background:#fff;" src="https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=' + encodeURIComponent(url) + '" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>';
+      content.innerHTML = '<iframe style="width:100%;height:100%;border:none;background:#fff;" src="https://corsproxy.io/?url=' + encodeURIComponent(url) + '" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>';
       content.style.display = 'block';
       const iframe = content.querySelector('iframe');
       iframe.onload = function() {
@@ -4232,7 +4228,7 @@
 
   async function fetchOGImage(articleUrl) {
     try {
-      const proxy = 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=';
+      const proxy = 'https://corsproxy.io/?url=';
       const resp = await fetch(proxy + encodeURIComponent(articleUrl));
       if (!resp.ok) return null;
       const html = await resp.text();
@@ -4299,10 +4295,8 @@
       // proper CORS + image transformation. These are the most reliable.
       u => 'https://wsrv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
       u => 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&output=jpg',
-      // Fallbacks: generic CORS proxies (may rate-limit or go down)
-      u => 'https://news-feeds-cors-proxy.invisiblebroadcast.workers.dev/?url=' + encodeURIComponent(u),
-      u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
-      u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+      // Fallback: generic CORS proxy
+      u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
     ];
     // Timeout helper: use AbortSignal.timeout when available, else wrap
     // fetch in a manual timeout via Promise.race.
