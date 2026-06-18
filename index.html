@@ -572,6 +572,51 @@
     </div>
   </div>
 
+  <!-- ── Transformers.js download dialog ──
+       Shown once on initial load (after the app is usable) to
+       ask the user before downloading the ~25MB AI model. The
+       app works fully without it — this only adds article
+       importance/benefit scores and a smarter trending ranking. -->
+  <div class="modal-overlay" id="transformers-dialog" style="display:none;">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>
+          <span style="margin-right:6px;">&#x1F9E0;</span>
+          <span>Enhanced Analysis</span>
+        </h2>
+      </div>
+      <div class="modal-body">
+        <p>Download a small AI model for smarter article analysis?</p>
+        <ul class="tf-benefits">
+          <li><strong>Importance &amp; benefit scores</strong> on every article</li>
+          <li><strong>Smarter trending</strong> ranking (not just TF-IDF)</li>
+          <li>All scoring happens <strong>in your browser</strong></li>
+        </ul>
+        <p class="tf-note">
+          <strong>~25&nbsp;MB</strong> one-time download, then cached.
+          No server, no data leaves your device.
+        </p>
+        <div id="transformers-error" class="tf-error" style="display:none;"></div>
+        <div class="tf-actions">
+          <button class="btn btn-ghost" id="transformers-skip">Skip for now</button>
+          <button class="btn btn-primary" id="transformers-download">Download</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download progress strip — pinned to the top of the viewport
+       while the model is downloading. Auto-dismisses on completion. -->
+  <div id="transformers-progress" class="tf-progress" style="display:none;" aria-live="polite">
+    <div class="tf-progress-inner">
+      <div class="tf-progress-row">
+        <span id="transformers-progress-label" class="tf-progress-label">Downloading AI model&hellip;</span>
+        <span id="transformers-progress-percent" class="tf-progress-percent">0%</span>
+      </div>
+      <div class="tf-progress-bar"><div class="tf-progress-fill" id="transformers-progress-fill"></div></div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="translate-modal">
     <div class="modal" style="max-width:380px;">
       <div class="modal-header">
@@ -823,6 +868,7 @@
   <script src="js/analyze-modal.js"></script>
   <script src="js/filter-modal.js"></script>
   <script src="js/categories-modal.js"></script>
+  <script src="js/transformers.js"></script>
   <script src="js/app.js"></script>
   <script>
     // Register the service worker for PWA install + offline app shell.

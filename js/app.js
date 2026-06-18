@@ -576,6 +576,273 @@
     catch { return ''; }
   }
 
+  // ── Transformers.js integration ──
+  // Article importance + benefit scores. Populated by scoreArticles()
+  // once the user accepts the model download. Until then, the score
+  // pills simply don't render. The scores themselves are stored on
+  // each article as `_tx = { importance, benefit, category }`.
+
+  // Render the two score pills for an article. Returns "" if the
+  // article hasn't been scored yet. The pill colours are bucketed
+  // (high ≥ 7, medium ≥ 4, else low) so the card stays scannable.
+  function scorePillsHtml(article) {
+    if (!article || !article._tx) return '';
+    const { importance, benefit } = article._tx;
+    if (typeof importance !== 'number' || typeof benefit !== 'number') return '';
+    const impCls = importance >= 7 ? 'score-high' : (importance >= 4 ? 'score-medium' : 'score-low');
+    const benCls = benefit >= 7 ? 'score-high' : (benefit >= 4 ? 'score-medium' : 'score-low');
+    return '<span class="article-scores">' +
+      '<span class="score-pill ' + impCls + '" title="Importance: ' + importance.toFixed(1) + '/10">&#x1F4CA; ' + importance.toFixed(1) + '</span>' +
+      '<span class="score-pill ' + benCls + '" title="Benefit: ' + benefit.toFixed(1) + '/10">&#x1F4A1; ' + benefit.toFixed(1) + '</span>' +
+    '</span>';
+  }
+
+  // Score a batch of articles with the Transformers.js zero-shot
+  // pipeline. Two separate classification calls per article:
+  //   - importance: "important breaking news" vs "routine news
+  //     update" vs "opinion or analysis" → mapped to 0–10
+  //   - benefit:    "actionable advice" vs "factual news report"
+  //     vs "entertainment or lifestyle" → mapped to 0–10
+  // We run zero-shot for the full batch in two parallel-ish calls
+  // (the pipeline internally batches through ONNX). Each article
+  // gets `_tx = { importance, benefit, category, scoredAt }` so
+  // downstream ranking can weight by importance.
+  async function scoreArticles(articles) {
+    if (!window.Transformers || !Transformers.isReady()) return 0;
+    if (!Array.isArray(articles) || !articles.length) return 0;
+    // Only score articles that don't already have a fresh score.
+    // Cache key: source + title — same article in a different
+    // subcat reuses the same score.
+    const todo = articles.filter(a => {
+      if (!a || a._tx) return false;
+      const t = (a.title || '').trim();
+      return t.length > 0;
+    });
+    if (!todo.length) return 0;
+
+    // Build the text inputs the classifier will see. The pipeline
+    // prepends "hypothesis: This text is about <label>." for each
+    // candidate, so a tight 256-char snippet is plenty.
+    const texts = todo.map(a => {
+      const title = cleanSummary(stripHtml(a.title || '')).trim();
+      const summary = cleanSummary(stripHtml(a.summary || '')).trim();
+      return ((title ? title + '. ' : '') + summary).slice(0, 256);
+    });
+
+    try {
+      const [impResults, benResults] = await Promise.all([
+        Transformers.classifyBatch(texts, [
+          'important breaking news',
+          'routine news update',
+          'opinion or analysis'
+        ]),
+        Transformers.classifyBatch(texts, [
+          'actionable advice or tips',
+          'factual news report',
+          'entertainment or lifestyle'
+        ])
+      ]);
+
+      const now = Date.now();
+      for (let i = 0; i < todo.length; i++) {
+        const a = todo[i];
+        const imp = impResults[i];
+        const ben = benResults[i];
+        if (!imp || !ben) continue;
+        // Score = P(top-label) * 10 if it's the "good" label, else
+        // a lower mapping so the 0–10 scale still feels meaningful.
+        // The exact mapping matters less than the ranking order it
+        // produces, which is what downstream code uses.
+        const impScore = imp.labels[0] === 'important breaking news'
+          ? imp.scores[0] * 10
+          : (1 - imp.scores[0]) * 5;
+        const benScore = ben.labels[0] === 'actionable advice or tips'
+          ? ben.scores[0] * 10
+          : ben.scores[0] * 5;
+        a._tx = {
+          importance: Math.round(impScore * 10) / 10,
+          benefit: Math.round(benScore * 10) / 10,
+          category: imp.labels[0],
+          scoredAt: now
+        };
+      }
+      return todo.length;
+    } catch (err) {
+      console.warn('[Transformers] scoreArticles failed:', err);
+      return 0;
+    }
+  }
+
+  // Show / hide the download dialog and progress strip.
+  function showTransformersDialog() {
+    const dlg = $('#transformers-dialog');
+    if (!dlg) return;
+    const errBox = $('#transformers-error');
+    if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+    if (window.appState && window.appState.openModal) {
+      window.appState.openModal('transformers', dlg);
+    } else {
+      dlg.classList.add('open');
+      document.body.classList.add('modal-open');
+    }
+  }
+  function hideTransformersDialog() {
+    const dlg = $('#transformers-dialog');
+    if (!dlg) return;
+    if (window.appState && window.appState.closeModal) {
+      window.appState.closeModal('transformers');
+    } else {
+      dlg.classList.remove('open');
+      document.body.classList.remove('modal-open');
+    }
+  }
+  function showTransformersProgress(label) {
+    const bar = $('#transformers-progress');
+    if (!bar) return;
+    bar.style.display = 'block';
+    const lbl = $('#transformers-progress-label');
+    if (lbl) lbl.textContent = label || 'Downloading AI model…';
+    const pct = $('#transformers-progress-percent');
+    if (pct) pct.textContent = '0%';
+    const fill = $('#transformers-progress-fill');
+    if (fill) fill.style.width = '0%';
+  }
+  function updateTransformersProgress(p, file) {
+    const pct = $('#transformers-progress-percent');
+    if (pct) pct.textContent = Math.round(p) + '%';
+    const fill = $('#transformers-progress-fill');
+    if (fill) fill.style.width = Math.round(p) + '%';
+    if (file) {
+      const lbl = $('#transformers-progress-label');
+      if (lbl) lbl.textContent = 'Downloading ' + file + '…';
+    }
+  }
+  function showTransformersError(msg) {
+    const errBox = $('#transformers-error');
+    if (!errBox) return;
+    errBox.textContent = 'Couldn\u2019t download: ' + msg + '. You can try again from the menu.';
+    errBox.style.display = 'block';
+  }
+  function hideTransformersProgress() {
+    const bar = $('#transformers-progress');
+    if (!bar) return;
+    // Brief success flash, then fade. We use a CSS class for the
+    // transition; setting display:none immediately would skip it.
+    bar.style.transition = 'opacity 0.4s';
+    bar.style.opacity = '0';
+    setTimeout(() => {
+      bar.style.display = 'none';
+      bar.style.opacity = '1';
+      bar.style.transition = '';
+    }, 500);
+  }
+
+  // Wire up the download / skip buttons + progress listener. Called
+  // once at startup. Safe to call multiple times — listeners are
+  // idempotent (we null them out after binding).
+  let _transformersBound = false;
+  function bindTransformersUI() {
+    if (_transformersBound) return;
+    _transformersBound = true;
+    const dl = $('#transformers-download');
+    const sk = $('#transformers-skip');
+    if (dl) dl.addEventListener('click', () => startTransformersDownload());
+    if (sk) sk.addEventListener('click', () => {
+      try { localStorage.setItem('ib_transformers_skipped', '1'); } catch {}
+      hideTransformersDialog();
+    });
+    if (window.Transformers) {
+      Transformers.onProgress((evt) => {
+        if (evt.type === 'progress') {
+          updateTransformersProgress(evt.progress, evt.file);
+        } else if (evt.type === 'failed') {
+          hideTransformersProgress();
+          showTransformersError(evt.error || 'unknown error');
+        } else if (evt.type === 'ready') {
+          updateTransformersProgress(100, 'ready');
+          setTimeout(() => hideTransformersProgress(), 800);
+          hideTransformersDialog();
+        }
+      });
+    }
+  }
+
+  // Kick off the model download + initial scoring. Called when
+  // the user clicks "Download" in the dialog, or when the app
+  // decides to auto-prompt (initial load, after first render).
+  async function startTransformersDownload() {
+    if (!window.Transformers) {
+      showTransformersError('Transformers module not loaded');
+      return;
+    }
+    // Hide the dialog, show the progress strip. The app keeps
+    // working with the existing TF-IDF methods while the model
+    // downloads in a Web Worker.
+    hideTransformersDialog();
+    showTransformersProgress('Downloading AI model…');
+    const ok = await Transformers.load();
+    if (!ok) {
+      // Error already shown by the progress listener.
+      return;
+    }
+    // Score the articles already in the current scope's cache so
+    // the user sees the badges on the next render. We don't force
+    // a re-render here — the next user interaction (scroll, search,
+    // subcat switch) will pick up the scores naturally. The badges
+    // also appear immediately if the current view re-renders for
+    // any other reason.
+    try {
+      const key = scopeKey();
+      const cached = scopeCache[key];
+      if (cached && Array.isArray(cached.articles)) {
+        const n = await scoreArticles(cached.articles);
+        console.log('[Transformers] scored', n, 'articles in', key);
+        if (n > 0) {
+          // Force a re-render so the new badges appear.
+          displayCurrentSubcat().catch(err => console.warn('re-render failed:', err));
+        }
+      }
+    } catch (err) {
+      console.warn('[Transformers] initial scoring failed:', err);
+    }
+    // Mark the install so we don't prompt again on the same device.
+    try { localStorage.setItem('ib_transformers_accepted', Date.now().toString()); } catch {}
+  }
+
+  // Re-score articles in the current cache when the user navigates
+  // to a new subcat (articles not yet scored get scored in the
+  // background; ones already scored are reused).
+  async function rescoreCurrentScope() {
+    if (!window.Transformers || !Transformers.isReady()) return;
+    try {
+      const key = scopeKey();
+      const cached = scopeCache[key];
+      if (cached && Array.isArray(cached.articles)) {
+        const n = await scoreArticles(cached.articles);
+        if (n > 0) {
+          // Re-render so the badges appear.
+          displayCurrentSubcat().catch(() => {});
+        }
+      }
+    } catch {}
+  }
+
+  // Show the initial download prompt if the user hasn't accepted
+  // or skipped it yet. Called after the first render so the user
+  // actually has something to look at while they decide.
+  function maybePromptTransformers() {
+    if (!window.Transformers) return;
+    if (Transformers.isReady() || Transformers.isLoading()) return;
+    let accepted = false, skipped = false;
+    try {
+      accepted = !!localStorage.getItem('ib_transformers_accepted');
+      skipped = !!localStorage.getItem('ib_transformers_skipped');
+    } catch {}
+    if (accepted || skipped) return;
+    // Small delay so the prompt doesn't fight with the first paint.
+    setTimeout(showTransformersDialog, 1500);
+  }
+
   /* ── Top-Level Tabs (Global / Nation / Conflicts) ── */
   function renderTopTabs() {
     const nations = FeedManager.getNations();
@@ -1113,6 +1380,7 @@
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
             flagHtml +
+            scorePillsHtml(article) +
             (article._conflicts && article._conflicts.isConflicting
               ? '<span class="conflict-pill" title="Conflicting reports across sources">⚠ conflicting</span>'
               : '') +
@@ -2592,6 +2860,19 @@
     }
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
+
+    // If Transformers.js is loaded, score any unscored articles
+    // in this view in the background. The Web Worker keeps the UI
+    // responsive; we re-render once scores land so the badges
+    // appear without the user having to interact.
+    if (window.Transformers && Transformers.isReady()) {
+      const unscored = articles.filter(a => !a._tx);
+      if (unscored.length) {
+        scoreArticles(unscored).then(n => {
+          if (n > 0) displayCurrentSubcat().catch(() => {});
+        }).catch(() => {});
+      }
+    }
 
     // Trending mode: rank all articles in the current scope/subcat
     // with Analyzer.rankByAnalyzer (TF-IDF × recency × buzz ×
@@ -6068,6 +6349,13 @@
     // the "show recent" icon to apply the fresh data.
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
+
+    // Transformers.js — wire the download dialog + progress strip.
+    // We don't auto-download; the user has to opt in. The first
+    // article render already happened by this point, so the user
+    // sees a working app before being asked to add the AI layer.
+    bindTransformersUI();
+    maybePromptTransformers();
   }
 
   init();

@@ -112,6 +112,15 @@ const AI = (() => {
     const trending = new Set();
     for (const [t, c] of counts) if (c >= 2) trending.add(t);
 
+    // How many of the candidate articles have Transformer scores?
+    // If most do, we weight `_trendingCount` by `importance` so an
+    // important story rising across many sources ranks above a
+    // viral-but-trivial one. If none have scores, fall back to
+    // the raw count (the previous behaviour).
+    let scored = 0;
+    for (const a of articles) if (a && a._tx && typeof a._tx.importance === 'number') scored++;
+    const useImportance = scored >= Math.max(1, Math.floor(articles.length * 0.5));
+
     for (const a of articles) {
       const tokens = tokenize((a.title || '') + ' ' + (a.summary || ''));
       const matches = new Set();
@@ -132,6 +141,19 @@ const AI = (() => {
         if (shared) { c++; seen.add(b.link); }
       }
       a._trendingCount = c;
+      // When Transformer scores are available, surface a combined
+      // _trendingScore so rankByAnalyzer() (and any future sorter)
+      // can promote important trending stories over viral filler.
+      // Formula: 70% normalised count + 30% importance/10.
+      // Counts typically range 0–50; clamp the log to keep one
+      // mega-viral story from drowning everything else.
+      if (useImportance) {
+        const norm = Math.log1p(c) / Math.log1p(20);
+        const imp = (a._tx && typeof a._tx.importance === 'number') ? a._tx.importance / 10 : 0.5;
+        a._trendingScore = Math.min(1, norm * 0.7 + imp * 0.3);
+      } else {
+        a._trendingScore = Math.log1p(c) / Math.log1p(20);
+      }
     }
   }
 
