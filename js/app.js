@@ -576,388 +576,32 @@
     catch { return ''; }
   }
 
-  // ── Transformers.js integration ──
-  // Article importance + benefit scores. Populated by scoreArticles()
-  // once the user accepts the model download. Until then, the score
-  // pills simply don't render. The scores themselves are stored on
-  // each article as `_tx = { importance, benefit, category }`.
-
-  // Render the two score pills for an article. Returns "" if the
-  // article hasn't been scored yet. The pill colours are bucketed
-  // (high ≥ 7, medium ≥ 4, else low) so the card stays scannable.
+  // ── AI scoring (placeholder) ──
+  // We previously had a Transformers.js integration that downloaded
+  // a ~25MB NLI model and ran zero-shot classification in the
+  // browser for importance/benefit scores. It was removed because
+  // the ONNX WASM runtime's per-function execution timeout made it
+  // unreliable on phones, and the z-index:10000 download bar was
+  // occasionally blocking clicks after the model loaded.
+  //
+  // For now, articles get the existing TF-IDF trending + Jaccard
+  // conflict detection from ai.js / analyzer.js, which is plenty
+  // for the current view. The scorePillsHtml() call in the article
+  // card is now a no-op (returns '') — no DOM, no click-blocking.
+  // To re-enable AI scoring later, replace this stub with a TF.js
+  // pipeline (window.tf is already loaded) or a backend API.
   function scorePillsHtml(article) {
-    if (!article || !article._tx) return '';
-    const { importance, benefit } = article._tx;
-    if (typeof importance !== 'number' || typeof benefit !== 'number') return '';
-    const impCls = importance >= 7 ? 'score-high' : (importance >= 4 ? 'score-medium' : 'score-low');
-    const benCls = benefit >= 7 ? 'score-high' : (benefit >= 4 ? 'score-medium' : 'score-low');
-    return '<span class="article-scores">' +
-      '<span class="score-pill ' + impCls + '" title="Importance: ' + importance.toFixed(1) + '/10">&#x1F4CA; ' + importance.toFixed(1) + '</span>' +
-      '<span class="score-pill ' + benCls + '" title="Benefit: ' + benefit.toFixed(1) + '/10">&#x1F4A1; ' + benefit.toFixed(1) + '</span>' +
-    '</span>';
+    return '';
   }
 
-  // Score a batch of articles with the Transformers.js zero-shot
-  // pipeline. Two separate classification calls per article:
-  //   - importance: "important breaking news" vs "routine news
-  //     update" vs "opinion or analysis" → mapped to 0–10
-  //   - benefit:    "actionable advice" vs "factual news report"
-  //     vs "entertainment or lifestyle" → mapped to 0–10
-  // We run zero-shot for the full batch in two parallel-ish calls
-  // (the pipeline internally batches through ONNX). Each article
-  // gets `_tx = { importance, benefit, category, scoredAt }` so
-  // downstream ranking can weight by importance.
+  // scoreArticles is kept as a no-op so callers in
+  // displayCurrentSubcat() and startTransformersDownload() don't
+  // need to be touched. It returns 0 (nothing scored), and any
+  // fire-and-forget callers ignore the return.
   async function scoreArticles(articles) {
-    if (!window.Transformers || !Transformers.isReady()) return 0;
-    if (!Array.isArray(articles) || !articles.length) return 0;
-    // Only score articles that don't already have a fresh score.
-    // Cache key: source + title — same article in a different
-    // subcat reuses the same score.
-    const todo = articles.filter(a => {
-      if (!a || a._tx) return false;
-      const t = (a.title || '').trim();
-      return t.length > 0;
-    });
-    if (!todo.length) return 0;
-
-    // Build the text inputs the classifier will see. The pipeline
-    // prepends "hypothesis: This text is about <label>." for each
-    // candidate, so a tight 256-char snippet is plenty.
-    const texts = todo.map(a => {
-      const title = cleanSummary(stripHtml(a.title || '')).trim();
-      const summary = cleanSummary(stripHtml(a.summary || '')).trim();
-      return ((title ? title + '. ' : '') + summary).slice(0, 256);
-    });
-
-    // CHUNK SIZE: the ONNX runtime runs inference as a single
-    // WASM call. Browsers cap WASM execution at ~10-15s per
-    // function; a single batch of 200+ articles blows past that
-    // and the browser kills the script with
-    // "Script terminated by timeout" → "Refusing to execute
-    // function from global in which script is disabled" for
-    // every subsequent inference. Chunking into 8 at a time
-    // keeps each WASM call well under the timeout and lets the
-    // UI re-render between chunks so score badges appear
-    // progressively instead of all at once at the end.
-    const CHUNK = 8;
-    const CHUNK_PAUSE_MS = 30;  // tiny yield so the UI can paint
-
-    const LABELS_IMPORTANCE = [
-      'important breaking news',
-      'routine news update',
-      'opinion or analysis'
-    ];
-    const LABELS_BENEFIT = [
-      'actionable advice or tips',
-      'factual news report',
-      'entertainment or lifestyle'
-    ];
-
-    let scored = 0;
-    try {
-      for (let off = 0; off < texts.length; off += CHUNK) {
-        const end = Math.min(off + CHUNK, texts.length);
-        const chunkTexts = texts.slice(off, end);
-        const chunkArticles = todo.slice(off, end);
-
-        // Two zero-shot calls per chunk (importance + benefit).
-        // Run them in parallel — the ONNX runtime internally
-        // serialises WASM calls anyway, so we don't gain
-        // anything by sequencing, and Promise.all keeps the
-        // code simple.
-        const [impResults, benResults] = await Promise.all([
-          Transformers.classifyBatch(chunkTexts, LABELS_IMPORTANCE),
-          Transformers.classifyBatch(chunkTexts, LABELS_BENEFIT)
-        ]);
-
-        const now = Date.now();
-        for (let i = 0; i < chunkArticles.length; i++) {
-          const a = chunkArticles[i];
-          const imp = impResults[i];
-          const ben = benResults[i];
-          if (!imp || !ben) continue;
-          // Score = P(top-label) * 10 if it's the "good" label,
-          // else a lower mapping so the 0–10 scale still feels
-          // meaningful. The exact mapping matters less than the
-          // ranking order it produces, which is what downstream
-          // code uses.
-          const impScore = imp.labels[0] === 'important breaking news'
-            ? imp.scores[0] * 10
-            : (1 - imp.scores[0]) * 5;
-          const benScore = ben.labels[0] === 'actionable advice or tips'
-            ? ben.scores[0] * 10
-            : ben.scores[0] * 5;
-          a._tx = {
-            importance: Math.round(impScore * 10) / 10,
-            benefit: Math.round(benScore * 10) / 10,
-            category: imp.labels[0],
-            scoredAt: now
-          };
-          scored++;
-        }
-
-        // Yield to the event loop so the browser can paint the
-        // newly-scored badges before we hit the ONNX runtime
-        // again. Without this, the UI shows a blank bar for
-        // the entire inference duration and the user has no
-        // feedback that scoring is in progress.
-        if (end < texts.length) {
-          await new Promise(r => setTimeout(r, CHUNK_PAUSE_MS));
-        }
-      }
-      return scored;
-    } catch (err) {
-      console.warn('[Transformers] scoreArticles failed at', scored, '/', todo.length, ':', err);
-      // Return whatever we managed to score so the badges that
-      // DID make it through still render. If the WASM script was
-      // killed mid-batch the next scoreArticles call will retry
-      // the unscored subset from the filter at the top of this
-      // function.
-      return scored;
-    }
+    return 0;
   }
 
-  // Show / hide the download dialog and progress strip.
-  function showTransformersDialog() {
-    const dlg = $('#transformers-dialog');
-    if (!dlg) return;
-    const errBox = $('#transformers-error');
-    if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
-    if (window.appState && window.appState.openModal) {
-      window.appState.openModal('transformers', dlg);
-    } else {
-      dlg.classList.add('open');
-      document.body.classList.add('modal-open');
-    }
-  }
-  function hideTransformersDialog() {
-    const dlg = $('#transformers-dialog');
-    if (!dlg) return;
-    if (window.appState && window.appState.closeModal) {
-      window.appState.closeModal('transformers');
-    } else {
-      dlg.classList.remove('open');
-      document.body.classList.remove('modal-open');
-    }
-  }
-  function showTransformersProgress(label) {
-    const bar = $('#transformers-progress');
-    if (!bar) return;
-    // Use the .tf-progress-hidden class as the single source of
-    // truth for visibility. Inline display:none would override the
-    // slide-down keyframe and the .tf-progress display:flex
-    // would still lose to !important, so we control via class.
-    bar.classList.remove('tf-progress-hidden');
-    const lbl = $('#transformers-progress-label');
-    if (lbl) lbl.textContent = label || 'Downloading AI model…';
-    const pct = $('#transformers-progress-percent');
-    if (pct) pct.textContent = '0%';
-    const fill = $('#transformers-progress-fill');
-    if (fill) fill.style.width = '0%';
-  }
-  function updateTransformersProgress(p, file) {
-    const pct = $('#transformers-progress-percent');
-    if (pct) pct.textContent = Math.round(p) + '%';
-    const fill = $('#transformers-progress-fill');
-    if (fill) fill.style.width = Math.round(p) + '%';
-    if (file) {
-      const lbl = $('#transformers-progress-label');
-      if (lbl) {
-        // The "Initializing model…" message is NOT a download —
-        // it's the ONNX runtime warming up after the files
-        // finished. Don't prefix it with "Downloading " or the
-        // bar looks stuck on a download that's already done.
-        if (/Initializing/i.test(file)) {
-          lbl.textContent = file;
-        } else {
-          lbl.textContent = 'Downloading ' + file + '…';
-        }
-      }
-    }
-  }
-  function showTransformersError(msg) {
-    const errBox = $('#transformers-error');
-    if (!errBox) return;
-    errBox.textContent = 'Couldn\u2019t download: ' + msg + '. You can try again from the menu.';
-    errBox.style.display = 'block';
-  }
-  function hideTransformersProgress() {
-    const bar = $('#transformers-progress');
-    if (!bar) return;
-    // Brief success flash, then re-hide via the class. We can't
-    // just set display:none immediately or the .tf-progress
-    // !important rule would skip the fade. Add a class that fades,
-    // then add .tf-progress-hidden after the transition ends.
-    bar.style.transition = 'opacity 0.4s';
-    bar.style.opacity = '0';
-    setTimeout(() => {
-      bar.classList.add('tf-progress-hidden');
-      bar.style.opacity = '1';
-      bar.style.transition = '';
-    }, 500);
-  }
-
-  // Wire up the download / skip buttons + progress listener. Called
-  // once at startup. Safe to call multiple times — listeners are
-  // Wire up the download / skip buttons + progress listener. Called
-  // once at startup. Safe to call multiple times — listeners are
-  // idempotent (we null them out after binding).
-  let _transformersBound = false;
-  // Three-stage watchdog for the "Initializing model…" phase.
-  // The hard 60s timeout fires from inside transformers.js
-  // (Promise.race), so these watchdogs are purely for UI feedback
-  // — they change the label so the user knows something is still
-  // happening, not a frozen bar.
-  // 15s: "Still initializing…" — first hint that this is slow.
-  // 35s: "taking longer than usual" with realistic estimate.
-  // 55s: imminent timeout warning (5s before the 60s hard cutoff).
-  // All three are cleared on 'ready' or 'failed' or any
-  // non-initializing progress event.
-  let _tfInitWatchdog15 = null;
-  let _tfInitWatchdog35 = null;
-  let _tfInitWatchdog55 = null;
-  function bindTransformersUI() {
-    if (_transformersBound) return;
-    _transformersBound = true;
-    const dl = $('#transformers-download');
-    const sk = $('#transformers-skip');
-    if (dl) dl.addEventListener('click', () => startTransformersDownload());
-    if (sk) sk.addEventListener('click', () => {
-      try { localStorage.setItem('ib_transformers_skipped', '1'); } catch {}
-      hideTransformersDialog();
-    });
-    if (window.Transformers) {
-      Transformers.onProgress((evt) => {
-        if (evt.type === 'progress') {
-          updateTransformersProgress(evt.progress, evt.file);
-          // Three-stage watchdog for the silent "initializing ONNX
-          // session" phase. The hard 60s Promise.race timeout in
-          // transformers.js is the real backstop — these just give
-          // the user a running commentary so the bar doesn't look
-          // frozen.
-          if (evt.progress >= 95 && /Initializing/i.test(evt.file || '')) {
-            if (_tfInitWatchdog15) clearTimeout(_tfInitWatchdog15);
-            if (_tfInitWatchdog35) clearTimeout(_tfInitWatchdog35);
-            if (_tfInitWatchdog55) clearTimeout(_tfInitWatchdog55);
-            _tfInitWatchdog15 = setTimeout(() => {
-              const lbl = $('#transformers-progress-label');
-              if (lbl && /Initializing/i.test(lbl.textContent)) {
-                lbl.textContent = 'Still initializing model… (WebAssembly + memory allocation, can take a while on phones)';
-              }
-              _tfInitWatchdog15 = null;
-            }, 15000);
-            _tfInitWatchdog35 = setTimeout(() => {
-              const lbl = $('#transformers-progress-label');
-              if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
-                lbl.textContent = 'Still initializing… slower than expected. Will time out at 60s if it doesn\'t finish.';
-              }
-              _tfInitWatchdog35 = null;
-            }, 35000);
-            _tfInitWatchdog55 = setTimeout(() => {
-              const lbl = $('#transformers-progress-label');
-              if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
-                lbl.textContent = 'About to time out… if this fails, clear browser cache and retry.';
-              }
-              _tfInitWatchdog55 = null;
-            }, 55000);
-          } else {
-            if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
-            if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
-            if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
-          }
-        } else if (evt.type === 'failed') {
-          if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
-          if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
-          if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
-          hideTransformersProgress();
-          showTransformersError(evt.error || 'unknown error');
-        } else if (evt.type === 'ready') {
-          if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
-          if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
-          if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
-          updateTransformersProgress(100, 'ready');
-          setTimeout(() => hideTransformersProgress(), 800);
-          hideTransformersDialog();
-        }
-      });
-    }
-  }
-
-  // Kick off the model download + initial scoring. Called when
-  // the user clicks "Download" in the dialog, or when the app
-  // decides to auto-prompt (initial load, after first render).
-  async function startTransformersDownload() {
-    if (!window.Transformers) {
-      showTransformersError('Transformers module not loaded');
-      return;
-    }
-    // Hide the dialog, show the progress strip. The app keeps
-    // working with the existing TF-IDF methods while the model
-    // downloads in a Web Worker.
-    hideTransformersDialog();
-    showTransformersProgress('Downloading AI model…');
-    const ok = await Transformers.load();
-    if (!ok) {
-      // Error already shown by the progress listener.
-      return;
-    }
-    // Score the articles already in the current scope's cache so
-    // the user sees the badges on the next render. We don't force
-    // a re-render here — the next user interaction (scroll, search,
-    // subcat switch) will pick up the scores naturally. The badges
-    // also appear immediately if the current view re-renders for
-    // any other reason.
-    try {
-      const key = scopeKey();
-      const cached = scopeCache[key];
-      if (cached && Array.isArray(cached.articles)) {
-        const n = await scoreArticles(cached.articles);
-        console.log('[Transformers] scored', n, 'articles in', key);
-        if (n > 0) {
-          // Force a re-render so the new badges appear.
-          displayCurrentSubcat().catch(err => console.warn('re-render failed:', err));
-        }
-      }
-    } catch (err) {
-      console.warn('[Transformers] initial scoring failed:', err);
-    }
-    // Mark the install so we don't prompt again on the same device.
-    try { localStorage.setItem('ib_transformers_accepted', Date.now().toString()); } catch {}
-  }
-
-  // Re-score articles in the current cache when the user navigates
-  // to a new subcat (articles not yet scored get scored in the
-  // background; ones already scored are reused).
-  async function rescoreCurrentScope() {
-    if (!window.Transformers || !Transformers.isReady()) return;
-    try {
-      const key = scopeKey();
-      const cached = scopeCache[key];
-      if (cached && Array.isArray(cached.articles)) {
-        const n = await scoreArticles(cached.articles);
-        if (n > 0) {
-          // Re-render so the badges appear.
-          displayCurrentSubcat().catch(() => {});
-        }
-      }
-    } catch {}
-  }
-
-  // Show the initial download prompt if the user hasn't accepted
-  // or skipped it yet. Called after the first render so the user
-  // actually has something to look at while they decide.
-  function maybePromptTransformers() {
-    if (!window.Transformers) return;
-    if (Transformers.isReady() || Transformers.isLoading()) return;
-    let accepted = false, skipped = false;
-    try {
-      accepted = !!localStorage.getItem('ib_transformers_accepted');
-      skipped = !!localStorage.getItem('ib_transformers_skipped');
-    } catch {}
-    if (accepted || skipped) return;
-    // Small delay so the prompt doesn't fight with the first paint.
-    setTimeout(showTransformersDialog, 1500);
-  }
 
   /* ── Top-Level Tabs (Global / Nation / Conflicts) ── */
   function renderTopTabs() {
@@ -1496,7 +1140,6 @@
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
             rankHtml +
             flagHtml +
-            scorePillsHtml(article) +
             (article._conflicts && article._conflicts.isConflicting
               ? '<span class="conflict-pill" title="Conflicting reports across sources">⚠ conflicting</span>'
               : '') +
@@ -2977,18 +2620,10 @@
     updateFilterSourceOptions(articles);
     if (!articles.length) { showEmpty(); return; }
 
-    // If Transformers.js is loaded, score any unscored articles
-    // in this view in the background. The Web Worker keeps the UI
-    // responsive; we re-render once scores land so the badges
-    // appear without the user having to interact.
-    if (window.Transformers && Transformers.isReady()) {
-      const unscored = articles.filter(a => !a._tx);
-      if (unscored.length) {
-        scoreArticles(unscored).then(n => {
-          if (n > 0) displayCurrentSubcat().catch(() => {});
-        }).catch(() => {});
-      }
-    }
+    // (No AI scoring pass here — scoreArticles is a no-op stub
+    // now that Transformers.js is gone. The existing TF-IDF
+    // ranking in ai.js handles the view without any click-blocking
+    // downloads or model loads.)
 
     // Trending mode: rank all articles in the current scope/subcat
     // with Analyzer.rankByAnalyzer (TF-IDF × recency × buzz ×
@@ -6466,20 +6101,14 @@
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
 
-    // Transformers.js — wire the download dialog + progress strip.
-    // We don't auto-download; the user has to opt in. The first
-    // article render already happened by this point, so the user
-    // sees a working app before being asked to add the AI layer.
-    bindTransformersUI();
-    maybePromptTransformers();
-
     // TensorFlow.js is loaded as a UMD bundle before this script
     // runs, so `tf` is on window synchronously. Log a one-line
     // status so we can confirm the bundle is reachable on first
-    // boot; the actual model loading happens lazily inside
-    // js/transformers.js (Transformers.js uses ONNX, but we keep
-    // TF.js available for any future feature that needs a graph
-    // session — sentiment regression, custom classifiers, etc).
+    // boot. No TF.js features are currently active — the app
+    // relies on the existing TF-IDF scoring (ai.js) and
+    // heuristics. TF.js is here as a foundation for a future
+    // ML pass. Critically, this NEVER creates a dialog, progress
+    // bar, or any DOM that could block clicks.
     if (window.tf) {
       try { console.log('[ML] TensorFlow.js ready:', tf.version_core); }
       catch {}
