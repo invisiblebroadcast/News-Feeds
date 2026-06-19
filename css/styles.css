@@ -5188,17 +5188,47 @@ body:not(.modal-open) #main-content {
 }
 .build-sources-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
-.build-source-chip {
-  display: inline-block;
-  padding: 3px 10px;
+.build-source-row {
+  display: block;
+  padding: 8px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-  border-radius: 10px;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.build-source-row:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent, #4dabf7);
+}
+.build-source-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.35;
+  margin-bottom: 3px;
+  word-break: break-word;
+}
+.build-source-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.74rem;
+  color: var(--text-tertiary);
+}
+.build-source-name { font-weight: 600; color: var(--text-secondary); }
+.build-source-sep { opacity: 0.6; }
+.build-no-sources {
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding: 6px 0;
 }
 .build-actions {
   display: flex;

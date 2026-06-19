@@ -176,63 +176,118 @@ const Publisher = (() => {
     return picked;
   }
 
-  // Build a framed lead sentence for the article body. Uses
-  // a small set of templates cycled per-call so consecutive
-  // builds don't read identically.
+  // ── Title generation ──
+  // The headline is built from a pool of templates that each
+  // frame the cluster's topic slightly differently. We pick
+  // one at random per build so consecutive regenerations feel
+  // fresh (the user asked for the title to be regenerative,
+  // not just re-derived from the same keywords).
+  const TITLE_TEMPLATES = [
+    s => `What we know about ${s.topic}`,
+    s => `${s.topic}: a developing story`,
+    s => `The latest on ${s.topic}`,
+    s => `${s.topic} — coverage roundup`,
+    s => `Why ${s.topic} is in the news`,
+    s => `Inside the ${s.topic} story`,
+    s => `${s.topic}, explained`,
+    s => `${s.topic}: what ${s.n} outlets are reporting`,
+    s => `The story behind ${s.topic}`,
+    s => `${s.topic} in brief`,
+    s => `How ${s.topic} unfolded`,
+    s => `${s.topic}: the key details`
+  ];
+  function buildTitle(cluster) {
+    const topic = cluster.topic || 'this story';
+    const n = cluster.sourceCount || (cluster.sources || []).length || 1;
+    const tpl = TITLE_TEMPLATES[Math.floor(Math.random() * TITLE_TEMPLATES.length)];
+    return tpl({ topic, n });
+  }
+
+  // ── Lead / closing sentence pools ──
+  // Single-sentence framings, picked at random so each
+  // regeneration produces a slightly different intro/outro.
   const LEAD_TEMPLATES = [
-    s => `According to ${s.n} source${s.n === 1 ? '' : 's'}, here's what's known so far about ${s.topic}.`,
-    s => `Multiple outlets are reporting on ${s.topic}. Here are the key details.`,
-    s => `${s.topic} is drawing coverage across ${s.n} outlet${s.n === 1 ? '' : 's'}. The story so far:`,
-    s => `Here's a roundup of reporting on ${s.topic}, based on ${s.n} source${s.n === 1 ? '' : 's'}.`
+    s => `Multiple outlets are covering ${s.topic}. Here's the picture so far.`,
+    s => `${s.topic} has been drawing coverage across ${s.n} source${s.n === 1 ? '' : 's'}.`,
+    s => `Here's what's known about ${s.topic} as reporting develops.`,
+    s => `${s.topic} is in the news. The story, so far, is this.`,
+    s => `A roundup of reporting on ${s.topic}, based on ${s.n} outlet${s.n === 1 ? '' : 's'}.`
   ];
   const CLOSING_TEMPLATES = [
-    s => `Coverage of ${s.topic} is developing; more outlets are expected to weigh in.`,
-    s => `As the story develops, expect further updates from covering outlets.`,
-    s => `This is a developing story — additional reporting is expected in the coming hours.`
+    s => `Coverage is ongoing; expect further updates.`,
+    s => `This is a developing story.`,
+    s => `More reporting is expected in the coming hours.`,
+    s => `The situation remains fluid.`,
+    s => `Additional details are likely to emerge.`
   ];
-  let _leadCursor = 0;
-  let _closingCursor = 0;
+  function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
 
   // Build the article. Returns:
-  //   { headline, lead, body, closing, sources, sentences }
-  // where body is an array of { text, source, link } objects.
+  //   {
+  //     headline,        — generative title (varies per build)
+  //     lead,            — single intro sentence
+  //     body,            — single cohesive paragraph (2–3 sentences
+  //                        joined with light transitions, NO inline
+  //                        source attribution)
+  //     closing,         — single outro sentence
+  //     sources,         — array of { name, title, link } for the
+  //                        sources section at the bottom
+  //     cluster
+  //   }
+  //
+  // The user's brief: "Collectively one description. Sources can
+  // be mentioned at the later half of the page with links." So
+  // the body is a single flowing paragraph, NOT a list of
+  // attributed sentences. Sources live in a dedicated section
+  // below the body with the original article title + source
+  // name + clickable link.
   async function buildArticle(cluster) {
     if (!cluster || !cluster.articles || !cluster.articles.length) {
-      return { headline: '', lead: '', body: [], closing: '', sources: [], sentences: [] };
+      return { headline: '', lead: '', body: '', closing: '', sources: [], cluster };
     }
 
     const topic = cluster.topic || 'this story';
-    const n = cluster.sourceCount || cluster.sources.length;
+    const n = cluster.sourceCount || (cluster.sources || []).length || 1;
 
-    const leadTpl = LEAD_TEMPLATES[_leadCursor % LEAD_TEMPLATES.length];
-    const closingTpl = CLOSING_TEMPLATES[_closingCursor % CLOSING_TEMPLATES.length];
-    _leadCursor = (_leadCursor + 1) | 0;
-    _closingCursor = (_closingCursor + 1) | 0;
+    const lead = pickRandom(LEAD_TEMPLATES)({ topic, n });
+    const closing = pickRandom(CLOSING_TEMPLATES)({ topic, n });
 
-    const lead = leadTpl({ topic, n });
-    const closing = closingTpl({ topic, n });
-
-    // Pick 2–4 diverse, central sentences.
+    // Pick 2–3 central, diverse sentences. Fewer than the old
+    // 4-sentence output because the body is now ONE paragraph
+    // and we want it tight, not a wall of text.
     let picked = await pickKeySentences(cluster);
-    if (picked.length > 4) picked = picked.slice(0, 4);
+    if (picked.length > 3) picked = picked.slice(0, 3);
+    if (picked.length < 1) picked = picked; // keep empty
 
-    // Cap each sentence, attach source attribution.
-    const body = picked.map(x => ({
-      text: capLen(x.text, 220),
-      source: x.article.source || 'Unknown',
-      link: x.article.link || '',
-      title: x.article.title || ''
-    }));
+    // Stitch the picked sentences into a single flowing
+    // paragraph. We cap each sentence to keep the total under
+    // ~600 chars (a comfortable read), join with a single
+    // space (they already end with sentence-final punctuation),
+    // and skip any that turn out to be empty after cleaning.
+    const sentences = picked
+      .map(x => capLen(x.text, 220))
+      .map(s => s.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    const body = sentences.join(' ');
 
-    const sources = cluster.sources.map(s => ({ name: s }));
+    // Sources section. We use the cluster's actual articles
+    // (not just the unique source names) so the user can see
+    // which specific piece ran where, and click through.
+    const sources = (cluster.articles || []).map(a => ({
+      name: a.source || 'Unknown',
+      title: a.title || a.link || 'Untitled',
+      link: a.link || '',
+      pubDate: a.pubDate || ''
+    })).filter(s => s.link);
 
     return {
-      headline: topic,
+      headline: buildTitle(cluster),
       lead,
       body,
       closing,
       sources,
-      sentences: body,
       cluster
     };
   }

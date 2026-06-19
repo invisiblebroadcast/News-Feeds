@@ -2176,21 +2176,29 @@
     const title = $('#build-modal-title');
     if (title) title.textContent = article.headline || 'Build Article';
 
-    const sourceList = (article.sources || []).map(s =>
-      '<span class="build-source-chip">' + escHtml(s.name) + '</span>'
-    ).join('');
-
-    // Body sentences: each one attributed to its source.
-    const bodyHtml = (article.body || []).map(s => {
-      const text = escHtml(s.text);
-      const src = escHtml(s.source);
-      return '<p class="build-paragraph"><span class="build-paragraph-text">' + text + '</span> ' +
-        '<span class="build-paragraph-src">— ' + src + '</span></p>';
+    // Render the sources section as a list of clickable
+    // entries (one per article in the cluster). Each shows
+    // the article title, the source name, and the publish
+    // date. Clicking opens the article in a new tab.
+    const sourceRows = (article.sources || []).map(s => {
+      const titleAttr = escHtml(s.title);
+      const srcAttr = escHtml(s.name);
+      const link = encodeURIComponent(s.link || '');
+      const dateStr = s.pubDate ? formatDateShort(s.pubDate) : '';
+      return '<a class="build-source-row" data-link="' + link + '" href="' + escHtml(s.link) + '" target="_blank" rel="noopener noreferrer">' +
+        '<div class="build-source-title">' + titleAttr + '</div>' +
+        '<div class="build-source-meta">' +
+          '<span class="build-source-name">' + srcAttr + '</span>' +
+          (dateStr ? '<span class="build-source-sep">·</span><span class="build-source-date">' + dateStr + '</span>' : '') +
+        '</div>' +
+      '</a>';
     }).join('');
 
-    const editable = '<textarea id="build-article-textarea" class="build-textarea" rows="14">' +
-      escHtml(articleToPlainText(article)) +
-    '</textarea>';
+    // The body is a single cohesive description (lead + 2–3
+    // central sentences + closing, joined into one paragraph).
+    // No inline source attribution — sources live in the
+    // dedicated section below.
+    const fullText = articleToPlainText(article);
 
     body.innerHTML =
       '<div class="build-headline-wrap">' +
@@ -2199,11 +2207,13 @@
       '</div>' +
       '<div class="build-body-wrap">' +
         '<label class="build-label">Body (edit before publishing)</label>' +
-        editable +
+        '<textarea id="build-article-textarea" class="build-textarea" rows="12">' +
+          escHtml(fullText) +
+        '</textarea>' +
       '</div>' +
       '<div class="build-sources-wrap">' +
         '<label class="build-label">Sources (' + (article.sources || []).length + ')</label>' +
-        '<div class="build-sources-list">' + sourceList + '</div>' +
+        '<div class="build-sources-list">' + (sourceRows || '<div class="build-no-sources">No source links available.</div>') + '</div>' +
       '</div>' +
       '<div class="build-actions">' +
         '<button class="btn btn-ghost" id="build-copy-btn">📋 Copy text</button>' +
@@ -2217,34 +2227,60 @@
     const copyMdBtn = body.querySelector('#build-copy-md-btn');
     if (copyMdBtn) copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
     const regenBtn = body.querySelector('#build-regen-btn');
-    if (regenBtn) regenBtn.addEventListener('click', () => openBuildModal(cluster.id));
+    if (regenBtn) regenBtn.addEventListener('click', () => {
+      // Regenerate = re-run the publisher. The publisher
+      // already picks a new random title template and new
+      // random lead/closing sentences, so the user gets a
+      // visibly different article on every click.
+      regenBtn.disabled = true;
+      regenBtn.textContent = '⏳ Regenerating…';
+      openBuildModal(cluster.id).finally(() => {
+        if (regenBtn) {
+          regenBtn.disabled = false;
+          regenBtn.textContent = '↻ Regenerate';
+        }
+      });
+    });
   }
 
+  // Build the plain-text version of the article for the
+  // textarea + clipboard copy. ONE description (no per-
+  // sentence attribution); sources are listed at the end
+  // with their URLs.
   function articleToPlainText(article) {
     const lines = [];
     lines.push(article.headline || '');
     lines.push('');
-    if (article.lead) { lines.push(article.lead); lines.push(''); }
-    for (const p of (article.body || [])) {
-      lines.push(p.text + '  — ' + p.source);
-      lines.push('');
+    if (article.lead) { lines.push(article.lead); }
+    if (article.body) { lines.push(article.body); }
+    if (article.closing) { lines.push(article.closing); }
+    lines.push('');
+    lines.push('Sources:');
+    for (const s of (article.sources || [])) {
+      const t = s.title || s.link || 'Untitled';
+      const src = s.name ? ' — ' + s.name : '';
+      lines.push('  • ' + t + src);
+      if (s.link) lines.push('    ' + s.link);
     }
-    if (article.closing) { lines.push(article.closing); lines.push(''); }
-    lines.push('Sources: ' + (article.sources || []).map(s => s.name).join(', '));
     return lines.join('\n').trim();
   }
 
+  // Markdown version: same structure, with the sources as
+  // a bulleted list with proper markdown links.
   function articleToMarkdown(article) {
     const lines = [];
     lines.push('# ' + (article.headline || ''));
     lines.push('');
-    if (article.lead) { lines.push('> ' + article.lead); lines.push(''); }
-    for (const p of (article.body || [])) {
-      lines.push(p.text + '  *— ' + p.source + '*');
-      lines.push('');
+    if (article.lead) { lines.push('> ' + article.lead); }
+    if (article.body) { lines.push(article.body); }
+    if (article.closing) { lines.push('*' + article.closing + '*'); }
+    lines.push('');
+    lines.push('## Sources');
+    for (const s of (article.sources || [])) {
+      const t = s.title || s.link || 'Untitled';
+      if (s.link) lines.push('- [' + t + '](' + s.link + ')' + (s.name ? ' — ' + s.name : ''));
+      else lines.push('- ' + t + (s.name ? ' — ' + s.name : ''));
     }
-    if (article.closing) { lines.push('*' + article.closing + '*'); lines.push(''); }
-    lines.push('**Sources:** ' + (article.sources || []).map(s => s.name).join(', '));
     return lines.join('\n').trim();
   }
 
