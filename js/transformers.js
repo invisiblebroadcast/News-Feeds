@@ -120,7 +120,16 @@ const Transformers = (() => {
       // when it reaches 100%.)
       let lastFileWasWeights = false;
       let initializingEmitted = false;
-      _classifier = await _pipeline('zero-shot-classification', MODEL_ID, {
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      // Hard cap on how long the whole pipeline() call (download +
+      // ONNX session init + warmup) is allowed to take. 90s is
+      // generous — even a mid-range phone on Wi-Fi should finish
+      // well under 60s. If we hit this, the model cache is likely
+      // corrupted (a half-downloaded file from a previous session)
+      // and the only fix is to clear it. We surface a specific
+      // error so the user knows what to do.
+      const INIT_TIMEOUT_MS = 90000;
+      const pipelinePromise = _pipeline('zero-shot-classification', MODEL_ID, {
         quantized: true,
         progress_callback: (data) => {
           if (data.status === 'progress' && typeof data.progress === 'number') {
@@ -137,6 +146,11 @@ const Transformers = (() => {
             if (data.progress >= 100 && /\.(onnx)(\.data)?$/.test(f)) {
               lastFileWasWeights = true;
             }
+            // Log to the console so a curious user (or a support
+            // request) can see exactly which file is downloading
+            // and at what speed.
+            const elapsed = (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0) / 1000;
+            console.log('[Transformers] download', f, Math.round(data.progress) + '%', '(' + elapsed.toFixed(1) + 's elapsed)');
             emit({ type: 'progress', progress: mapped, file: f });
           } else if (data.status === 'done' && data.file) {
             // The previous file hit 100% and the library moved
@@ -146,13 +160,40 @@ const Transformers = (() => {
             if (lastFileWasWeights && !initializingEmitted) {
               initializingEmitted = true;
               _progressFile = 'Initializing model…';
-              emit({ type: 'progress', progress: 99, file: 'Initializing model… (can take 10–30 s)' });
+              const elapsed = (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0) / 1000;
+              console.log('[Transformers] all files downloaded in', elapsed.toFixed(1) + 's — initialising ONNX session…');
+              emit({ type: 'progress', progress: 99, file: 'Initializing model… (can take 10–30 s on first run)' });
             } else {
               emit({ type: 'progress', progress: _progress, file: data.file });
             }
           }
         }
       });
+      // Race the pipeline against a hard timeout. The library's
+      // promise can't be cancelled, but if the timeout wins we
+      // surface a clear error and abandon the result — the
+      // underlying work continues in the background and will be
+      // GC'd. Better than letting the UI hang indefinitely.
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const elapsed = (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0) / 1000;
+          reject(new Error('Initialization timed out after ' + Math.round(elapsed) + 's. The model cache may be corrupted — try clearing site data (DevTools → Application → Clear site data) and retrying.'));
+        }, INIT_TIMEOUT_MS);
+      });
+      try {
+        _classifier = await Promise.race([pipelinePromise, timeoutPromise]);
+        clearTimeout(timeoutId);
+      } catch (raceErr) {
+        clearTimeout(timeoutId);
+        // If it was our timeout, surface a friendly error. If it
+        // was a real pipeline error, re-throw so the catch below
+        // logs it normally.
+        if (raceErr && /timed out/i.test(raceErr.message)) {
+          throw raceErr;
+        }
+        throw raceErr;
+      }
 
       _state = 'ready';
       _progress = 100;

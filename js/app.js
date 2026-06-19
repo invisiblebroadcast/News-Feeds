@@ -749,11 +749,16 @@
   // once at startup. Safe to call multiple times — listeners are
   // idempotent (we null them out after binding).
   let _transformersBound = false;
-  // Watchdog timer: if progress stays ≥95% for 12s with no
-  // 'ready' event, the library is silently initialising the ONNX
-  // session (which has no progress events of its own). Switch the
-  // label to "Initializing…" so the bar doesn't look frozen.
-  let _tfInitWatchdog = null;
+  // Three-stage watchdog for the "Initializing model…" phase.
+  // 30s: clearer "Still initializing…" message.
+  // 60s: "taking longer than usual" note with realistic estimate.
+  // 90s: hint to clear browser cache (the in-library Promise.race
+  // timeout will fire around the same time and surface a real
+  // error). All three are cleared on 'ready' or 'failed' or any
+  // non-initializing progress event.
+  let _tfInitWatchdog30 = null;
+  let _tfInitWatchdog60 = null;
+  let _tfInitWatchdog90 = null;
   function bindTransformersUI() {
     if (_transformersBound) return;
     _transformersBound = true;
@@ -768,31 +773,55 @@
       Transformers.onProgress((evt) => {
         if (evt.type === 'progress') {
           updateTransformersProgress(evt.progress, evt.file);
-          // Safety net: if the progress callback stops firing at
-          // ≥95% (the library is silently initialising the ONNX
-          // session, which has no progress events), switch the
-          // label to "Initializing model…" after 12s so the user
-          // doesn't think the download is stuck. The proper
-          // 'ready' event below will still bump to 100% and
-          // dismiss the bar.
-          if (evt.progress >= 95) {
-            if (_tfInitWatchdog) clearTimeout(_tfInitWatchdog);
-            _tfInitWatchdog = setTimeout(() => {
+          // Two-stage watchdog for the silent "initializing ONNX
+          // session" phase that follows the last file download.
+          //  - 30s in: switch the label to a clearer "still
+          //    initializing" message so the user knows the bar
+          //    isn't frozen.
+          //  - 60s in: append a "this is taking longer than usual"
+          //    note. We still trust the library to finish; only
+          //    the in-library 90s hard timeout (Promise.race) will
+          //    actually give up.
+          if (evt.progress >= 95 && /Initializing/i.test(evt.file || '')) {
+            if (_tfInitWatchdog30) clearTimeout(_tfInitWatchdog30);
+            if (_tfInitWatchdog60) clearTimeout(_tfInitWatchdog60);
+            if (_tfInitWatchdog90) clearTimeout(_tfInitWatchdog90);
+            _tfInitWatchdog30 = setTimeout(() => {
               const lbl = $('#transformers-progress-label');
-              if (lbl && lbl.textContent.indexOf('Initializing') === -1) {
-                updateTransformersProgress(99, 'Initializing model… (can take 10–30 s on first run)');
+              if (lbl && /Initializing/i.test(lbl.textContent)) {
+                lbl.textContent = 'Still initializing model… (WebAssembly + memory allocation, can take a while on phones)';
               }
-              _tfInitWatchdog = null;
-            }, 12000);
+              _tfInitWatchdog30 = null;
+            }, 30000);
+            _tfInitWatchdog60 = setTimeout(() => {
+              const lbl = $('#transformers-progress-label');
+              if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
+                lbl.textContent = 'Still initializing… taking longer than usual. On a slow device this can take 1–2 min. Will time out at 90s if it fails.';
+              }
+              _tfInitWatchdog60 = null;
+            }, 60000);
+            _tfInitWatchdog90 = setTimeout(() => {
+              const lbl = $('#transformers-progress-label');
+              if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
+                lbl.textContent = 'Initialization is taking very long. If this doesn\'t complete in a few seconds, clear your browser cache and retry.';
+              }
+              _tfInitWatchdog90 = null;
+            }, 90000);
           } else {
-            if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
+            if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
+            if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
+            if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
           }
         } else if (evt.type === 'failed') {
-          if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
+          if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
+          if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
+          if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
           hideTransformersProgress();
           showTransformersError(evt.error || 'unknown error');
         } else if (evt.type === 'ready') {
-          if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
+          if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
+          if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
+          if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
           updateTransformersProgress(100, 'ready');
           setTimeout(() => hideTransformersProgress(), 800);
           hideTransformersDialog();
