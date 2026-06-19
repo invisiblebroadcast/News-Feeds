@@ -603,7 +603,7 @@
   }
 
 
-  /* ── Top-Level Tabs (Global / Nation / Conflicts) ── */
+  /* ── Top-Level Tabs (Global / Nation / Topics / Conflicts) ── */
   function renderTopTabs() {
     const nations = FeedManager.getNations();
     const current = currentNation;
@@ -611,6 +611,27 @@
     for (const [key, label] of Object.entries(nations)) {
       html += '<li class="tab-item' + (currentScope === 'nation' && current === key ? ' active' : '') + '" data-scope="nation" data-nation="' + key + '">' + label + '</li>';
     }
+    // Topics view: groups articles that cover the same story
+    // across sources. The badge shows how many multi-source
+    // clusters are currently visible. The count is computed
+    // lazily (it can take a second on a full cache) so we
+    // don't block the initial tab render on it.
+    let topicCount = 0;
+    try {
+      const all = collectScopeArticles();
+      if (all && all.length) {
+        // Cheap synchronous count: just count articles from
+        // 2+ distinct sources that share ≥1 title token. Not
+        // the same as the full TF-IDF cluster pass, but gives
+        // a stable-enough badge number without blocking.
+        const buckets = bucketBySharedTitleToken(all);
+        topicCount = buckets.filter(b => b.sources >= 2).length;
+      }
+    } catch {}
+    html += '<li class="tab-item topics-tab' + (currentScope === 'topics' ? ' active' : '') + '" data-scope="topics">' +
+      '<span class="ct-icon">&#x1F4F0;</span> Topics' +
+      (topicCount ? '<span class="ct-count">' + topicCount + '</span>' : '') +
+      '</li>';
     // Conflicts view is a special scope that lists articles in
     // cross-source conflicting clusters. Compute its count up-front so
     // the tab badge stays in sync with what the user will see.
@@ -632,6 +653,57 @@
       (conflictCount ? '<span class="ct-count">' + conflictCount + '</span>' : '') +
       '</li>';
     el.topTabs.innerHTML = html;
+  }
+
+  // Cheap pre-bucketing for the Topics tab badge. We bucket
+  // articles by the first "significant" title token (length ≥5,
+  // not a stopword). Two articles in the same bucket with
+  // different sources = a potential topic. Not the same as a
+  // real cluster, but it's O(n) and gives a good-enough badge.
+  function bucketBySharedTitleToken(articles) {
+    const STOP = new Set((
+      'the and for are but not you all can her was one our had has his how man new now old see two way who boy did its let put say she too use from with this that have will your what when make like long look many some them then than been call come could does each find first from have like make more only over part people said take than them there these they time used want water which word work would write about after again also around another away back because before'
+    ).split(/\s+/));
+    const map = new Map();
+    for (const a of articles) {
+      const title = (a.title || '').toLowerCase();
+      const tokens = (title.match(/\b[a-z]{5,}\b/g) || []).filter(t => !STOP.has(t));
+      if (!tokens.length) continue;
+      const key = tokens.slice(0, 3).sort().join('|');
+      if (!map.has(key)) map.set(key, { sources: new Set(), count: 0 });
+      const b = map.get(key);
+      if (a.source) b.sources.add(a.source);
+      b.count++;
+    }
+    const out = [];
+    for (const b of map.values()) out.push({ sources: b.sources.size, count: b.count });
+    return out;
+  }
+
+  // Flatten all articles across all scopes+subcats into a
+  // single deduped array (most recent first). Used by the
+  // Topics view and a few other places.
+  function collectScopeArticles() {
+    const seen = new Set();
+    const out = [];
+    for (const key of Object.keys(scopeCache)) {
+      const cached = scopeCache[key];
+      if (!cached || !cached.groups) continue;
+      for (const cat of Object.keys(cached.groups)) {
+        for (const a of cached.groups[cat]) {
+          if (!a || !a.link) continue;
+          if (seen.has(a.link)) continue;
+          seen.add(a.link);
+          out.push(a);
+        }
+      }
+    }
+    out.sort((a, b) => {
+      const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+      const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+      return tb - ta;
+    });
+    return out;
   }
 
   function bindTopTabs() {
@@ -664,6 +736,8 @@
       tab.classList.add('active');
       if (scope === 'conflicts') {
         renderConflictsView();
+      } else if (scope === 'topics') {
+        renderTopicsView();
       } else {
         renderSubTabs();
         renderContent();
@@ -1887,6 +1961,313 @@
     });
   }
 
+  /* ── Topics view ──
+   *
+   * Lists "story clusters": groups of articles from 2+ different
+   * sources that cover the same topic. Each card shows the
+   * cluster topic, the number of covering sources, a derived
+   * critical rating (editorial confidence from source diversity)
+   * and a derived "people's" rating (proxy: how many of those
+   * sources published in the last 24h). Clicking a card opens
+   * a detail modal listing every article in the cluster; the
+   * "build article" icon on each card opens the publisher
+   * modal pre-filled with a fresh composition.
+   */
+  let _topicsClusters = [];
+  let _topicsBuilding = false;
+
+  async function renderTopicsView() {
+    updateStickyHeader('Topics view');
+    const all = collectScopeArticles();
+    if (!all.length) {
+      el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">📰</div>' +
+        '<h3>No articles loaded yet</h3>' +
+        '<p>Visit Global or your Nation tab first so we can cluster the latest articles by topic.</p></div>';
+      return;
+    }
+
+    // Show a loading state immediately. The clustering pass can
+    // take a second on a full cache.
+    el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">⏳</div>' +
+      '<h3>Clustering articles…</h3>' +
+      '<p>Grouping ' + all.length + ' articles by topic. This takes a moment.</p></div>';
+
+    try {
+      // Cap to the most recent 500 so the O(n²) TF-IDF pass
+      // stays under ~1 second on a typical phone. Older
+      // articles just aren't considered for clustering — the
+      // user is here for today's stories anyway.
+      const pool = all.slice(0, 500);
+      const clusters = await Clustering.clusterArticles(pool, { threshold: 0.25, maxArticles: 500, minSources: 2 });
+      _topicsClusters = clusters;
+
+      if (!clusters.length) {
+        el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">🔍</div>' +
+          '<h3>No topic clusters found</h3>' +
+          '<p>Across ' + pool.length + ' articles, we couldn\'t find any stories covered by 2+ different sources. ' +
+          'This is normal early in a session or for niche feeds.</p></div>';
+        return;
+      }
+
+      const html = clusters.map(renderClusterCard).join('');
+      el.main.innerHTML = '<div class="topics-list">' + html + '</div>';
+
+      // Wire card-level events.
+      el.main.querySelectorAll('.topic-card').forEach(card => {
+        const clusterId = card.dataset.clusterId;
+        // Card body (not the build button) → open detail modal.
+        card.addEventListener('click', e => {
+          if (e.target.closest('.topic-build-btn')) return;
+          if (e.target.closest('.topic-critical-pill')) return;
+          openClusterModal(clusterId);
+        });
+      });
+      el.main.querySelectorAll('.topic-build-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          openBuildModal(btn.dataset.clusterId);
+        });
+      });
+    } catch (err) {
+      console.warn('Topics clustering failed:', err && err.message);
+      el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">⚠️</div>' +
+        '<h3>Couldn\'t cluster articles</h3>' +
+        '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
+    }
+  }
+
+  function renderClusterCard(cluster) {
+    const topic = escHtml(cluster.topic || 'Story');
+    const sources = cluster.sources || [];
+    const articles = cluster.articles || [];
+    const sample = articles.slice(0, 3).map(a => escHtml(a.title || '')).filter(Boolean).join(' · ');
+    const critClass = (cluster.criticalLabel || 'low').toLowerCase();
+    const peopleClass = (cluster.peopleLabel || 'low').toLowerCase();
+    return '<div class="topic-card" data-cluster-id="' + cluster.id + '">' +
+      '<div class="topic-card-head">' +
+        '<h3 class="topic-title">' + topic + '</h3>' +
+        '<button class="topic-build-btn" data-cluster-id="' + cluster.id + '" title="Build article from this topic" aria-label="Build article">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>' +
+          '</svg>' +
+          '<span>Build article</span>' +
+        '</button>' +
+      '</div>' +
+      '<div class="topic-meta">' +
+        '<span class="topic-sources"><strong>' + sources.length + '</strong> source' + (sources.length === 1 ? '' : 's') + ' · ' + articles.length + ' article' + (articles.length === 1 ? '' : 's') + '</span>' +
+        '<span class="topic-rating-pill rating-critical ' + critClass + '" title="Editorial confidence based on source diversity">Critical: ' + escHtml(cluster.criticalLabel || 'Low') + '</span>' +
+        '<span class="topic-rating-pill rating-people ' + peopleClass + '" title="How many of the covering sources published in the last 24h. Stand-in for actual public interest rating.">Recent: ' + escHtml(cluster.peopleLabel || 'Low') + '</span>' +
+      '</div>' +
+      (sample ? '<div class="topic-sample">' + sample + '</div>' : '') +
+      '<div class="topic-source-chips">' +
+        sources.slice(0, 6).map(s => '<span class="topic-source-chip">' + escHtml(s) + '</span>').join('') +
+        (sources.length > 6 ? '<span class="topic-source-chip more">+' + (sources.length - 6) + ' more</span>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // Open the cluster detail modal showing every article in the
+  // cluster, with clickable rows that go straight to the
+  // article reader.
+  function openClusterModal(clusterId) {
+    const cluster = _topicsClusters.find(c => c.id === clusterId);
+    if (!cluster) return;
+    const modal = $('#cluster-modal');
+    if (!modal) return;
+    $('#cluster-modal-title').textContent = cluster.topic || 'Topic';
+    const body = $('#cluster-modal-body');
+    if (!body) return;
+
+    const critClass = (cluster.criticalLabel || 'low').toLowerCase();
+    const peopleClass = (cluster.peopleLabel || 'low').toLowerCase();
+
+    const header = '<div class="cluster-modal-summary">' +
+      '<div class="cluster-modal-meta">' +
+        '<span class="topic-rating-pill rating-critical ' + critClass + '">Critical: ' + escHtml(cluster.criticalLabel || 'Low') + '</span>' +
+        '<span class="topic-rating-pill rating-people ' + peopleClass + '">Recent: ' + escHtml(cluster.peopleLabel || 'Low') + '</span>' +
+        '<span class="cluster-modal-stat"><strong>' + cluster.sourceCount + '</strong> source' + (cluster.sourceCount === 1 ? '' : 's') + ' · ' +
+        '<strong>' + cluster.articles.length + '</strong> article' + (cluster.articles.length === 1 ? '' : 's') + ' · ' +
+        '<strong>' + cluster.recentCount + '</strong> in last 24h</span>' +
+      '</div>' +
+      '<button class="btn btn-primary cluster-build-btn" data-cluster-id="' + cluster.id + '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>' +
+        '</svg>' +
+        'Build article from this topic' +
+      '</button>' +
+    '</div>';
+
+    const rows = cluster.articles.map(a => {
+      const title = escHtml(a.title || a.link || 'Untitled');
+      const source = escHtml(a.source || 'Unknown source');
+      const dateStr = a.pubDate ? formatDateShort(a.pubDate) : '';
+      const lang = a.lang || 'en';
+      return '<a class="cluster-article-row" data-link="' + encodeURIComponent(a.link || '') + '" href="javascript:void(0)">' +
+        '<div class="cluster-article-title">' + title + '</div>' +
+        '<div class="cluster-article-meta"><span>' + source + '</span>' + (dateStr ? '<span>·</span><span>' + dateStr + '</span>' : '') + '<span class="cluster-article-lang">' + lang + '</span></div>' +
+      '</a>';
+    }).join('');
+
+    body.innerHTML = header + '<div class="cluster-article-list">' + rows + '</div>';
+
+    // Wire rows: click → article reader.
+    body.querySelectorAll('.cluster-article-row').forEach(row => {
+      row.addEventListener('click', e => {
+        e.preventDefault();
+        const url = decodeURIComponent(row.dataset.link || '');
+        if (!url) return;
+        closeClusterModal();
+        openArticleDetail(url);
+      });
+    });
+    // Wire build button.
+    const buildBtn = body.querySelector('.cluster-build-btn');
+    if (buildBtn) {
+      buildBtn.addEventListener('click', () => {
+        closeClusterModal();
+        openBuildModal(cluster.id);
+      });
+    }
+
+    modal.classList.add('open');
+  }
+
+  function closeClusterModal() {
+    const modal = $('#cluster-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  // Open the publisher modal for a cluster. Generates a
+  // fresh composition (headline + lead + 2–4 body sentences
+  // attributed to sources + closing line) using TF.js USE
+  // when available, falling back to TF-IDF otherwise.
+  async function openBuildModal(clusterId) {
+    const cluster = _topicsClusters.find(c => c.id === clusterId);
+    if (!cluster) return;
+    const modal = $('#build-modal');
+    if (!modal) return;
+    const body = $('#build-modal-body');
+    if (!body) return;
+
+    if (_topicsBuilding) return;
+    _topicsBuilding = true;
+
+    body.innerHTML = '<div class="build-loading"><div class="ce-icon">⏳</div>' +
+      '<h3>Composing article…</h3>' +
+      '<p>Reading ' + cluster.articles.length + ' source' + (cluster.articles.length === 1 ? '' : 's') + ' and selecting the most central sentences.</p></div>';
+    modal.classList.add('open');
+
+    try {
+      const article = await Publisher.buildArticle(cluster);
+      renderBuildArticle(article, cluster);
+    } catch (err) {
+      console.warn('Build article failed:', err && err.message);
+      body.innerHTML = '<div class="build-loading"><div class="ce-icon">⚠️</div>' +
+        '<h3>Couldn\'t build article</h3>' +
+        '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
+    } finally {
+      _topicsBuilding = false;
+    }
+  }
+
+  function renderBuildArticle(article, cluster) {
+    const body = $('#build-modal-body');
+    if (!body) return;
+    const title = $('#build-modal-title');
+    if (title) title.textContent = article.headline || 'Build Article';
+
+    const sourceList = (article.sources || []).map(s =>
+      '<span class="build-source-chip">' + escHtml(s.name) + '</span>'
+    ).join('');
+
+    // Body sentences: each one attributed to its source.
+    const bodyHtml = (article.body || []).map(s => {
+      const text = escHtml(s.text);
+      const src = escHtml(s.source);
+      return '<p class="build-paragraph"><span class="build-paragraph-text">' + text + '</span> ' +
+        '<span class="build-paragraph-src">— ' + src + '</span></p>';
+    }).join('');
+
+    const editable = '<textarea id="build-article-textarea" class="build-textarea" rows="14">' +
+      escHtml(articleToPlainText(article)) +
+    '</textarea>';
+
+    body.innerHTML =
+      '<div class="build-headline-wrap">' +
+        '<label class="build-label">Headline</label>' +
+        '<input type="text" id="build-headline-input" class="build-headline" value="' + escHtml(article.headline || '') + '">' +
+      '</div>' +
+      '<div class="build-body-wrap">' +
+        '<label class="build-label">Body (edit before publishing)</label>' +
+        editable +
+      '</div>' +
+      '<div class="build-sources-wrap">' +
+        '<label class="build-label">Sources (' + (article.sources || []).length + ')</label>' +
+        '<div class="build-sources-list">' + sourceList + '</div>' +
+      '</div>' +
+      '<div class="build-actions">' +
+        '<button class="btn btn-ghost" id="build-copy-btn">📋 Copy text</button>' +
+        '<button class="btn btn-ghost" id="build-copy-md-btn">📋 Copy as Markdown</button>' +
+        '<button class="btn btn-primary" id="build-regen-btn">↻ Regenerate</button>' +
+      '</div>';
+
+    // Wire buttons.
+    const copyBtn = body.querySelector('#build-copy-btn');
+    if (copyBtn) copyBtn.addEventListener('click', () => copyBuildArticle(article, 'text'));
+    const copyMdBtn = body.querySelector('#build-copy-md-btn');
+    if (copyMdBtn) copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
+    const regenBtn = body.querySelector('#build-regen-btn');
+    if (regenBtn) regenBtn.addEventListener('click', () => openBuildModal(cluster.id));
+  }
+
+  function articleToPlainText(article) {
+    const lines = [];
+    lines.push(article.headline || '');
+    lines.push('');
+    if (article.lead) { lines.push(article.lead); lines.push(''); }
+    for (const p of (article.body || [])) {
+      lines.push(p.text + '  — ' + p.source);
+      lines.push('');
+    }
+    if (article.closing) { lines.push(article.closing); lines.push(''); }
+    lines.push('Sources: ' + (article.sources || []).map(s => s.name).join(', '));
+    return lines.join('\n').trim();
+  }
+
+  function articleToMarkdown(article) {
+    const lines = [];
+    lines.push('# ' + (article.headline || ''));
+    lines.push('');
+    if (article.lead) { lines.push('> ' + article.lead); lines.push(''); }
+    for (const p of (article.body || [])) {
+      lines.push(p.text + '  *— ' + p.source + '*');
+      lines.push('');
+    }
+    if (article.closing) { lines.push('*' + article.closing + '*'); lines.push(''); }
+    lines.push('**Sources:** ' + (article.sources || []).map(s => s.name).join(', '));
+    return lines.join('\n').trim();
+  }
+
+  async function copyBuildArticle(article, format) {
+    const text = format === 'md' ? articleToMarkdown(article) : articleToPlainText(article);
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = format === 'md' ? $('#build-copy-md-btn') : $('#build-copy-btn');
+      if (btn) {
+        const prev = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = prev; }, 1400);
+      }
+    } catch (e) {
+      console.warn('Copy failed:', e && e.message);
+    }
+  }
+
+  function closeBuildModal() {
+    const modal = $('#build-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
   function forceExitToHome() {
     if (document.fullscreenElement || document.webkitFullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
@@ -1993,6 +2374,24 @@
       if (closeBtn) closeBtn.addEventListener('click', () => closeModal('translate'));
       el.translateModal.addEventListener('click', e => {
         if (e.target === el.translateModal) closeModal('translate');
+      });
+    }
+    // Cluster detail modal.
+    const clusterModal = $('#cluster-modal');
+    if (clusterModal) {
+      const closeBtn = $('#cluster-modal-close');
+      if (closeBtn) closeBtn.addEventListener('click', closeClusterModal);
+      clusterModal.addEventListener('click', e => {
+        if (e.target === clusterModal) closeClusterModal();
+      });
+    }
+    // Build-article modal.
+    const buildModal = $('#build-modal');
+    if (buildModal) {
+      const closeBtn = $('#build-modal-close');
+      if (closeBtn) closeBtn.addEventListener('click', closeBuildModal);
+      buildModal.addEventListener('click', e => {
+        if (e.target === buildModal) closeBuildModal();
       });
     }
   }
