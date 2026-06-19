@@ -34,10 +34,12 @@ const Transformers = (() => {
   // Good for our "importance" + "benefit" zero-shot labels and
   // for NLI-based conflict detection.
   const MODEL_ID = 'Xenova/nli-deberta-small';
-  // jsdelivr serves the npm package as a single ES-module file.
-  // Pinning to ^3 keeps us on the v3 API (env.allowLocalModels,
-  // progress_callback, etc.) while still getting patch updates.
-  const LIB_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5/dist/transformers.min.js';
+  // Library is served from the same origin (committed to the
+  // repo under js/lib/) so GitHub Pages users don't need a
+  // separate CDN round-trip just to load the JavaScript. The
+  // model weights themselves still come from Hugging Face at
+  // runtime — those are ~25MB and not checked into git.
+  const LIB_URL = './lib/transformers.min.js';
 
   function onProgress(callback) {
     _listeners.add(callback);

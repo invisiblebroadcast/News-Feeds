@@ -699,7 +699,11 @@
   function showTransformersProgress(label) {
     const bar = $('#transformers-progress');
     if (!bar) return;
-    bar.style.display = 'block';
+    // Use the .tf-progress-hidden class as the single source of
+    // truth for visibility. Inline display:none would override the
+    // slide-down keyframe and the .tf-progress display:flex
+    // would still lose to !important, so we control via class.
+    bar.classList.remove('tf-progress-hidden');
     const lbl = $('#transformers-progress-label');
     if (lbl) lbl.textContent = label || 'Downloading AI model…';
     const pct = $('#transformers-progress-percent');
@@ -726,12 +730,14 @@
   function hideTransformersProgress() {
     const bar = $('#transformers-progress');
     if (!bar) return;
-    // Brief success flash, then fade. We use a CSS class for the
-    // transition; setting display:none immediately would skip it.
+    // Brief success flash, then re-hide via the class. We can't
+    // just set display:none immediately or the .tf-progress
+    // !important rule would skip the fade. Add a class that fades,
+    // then add .tf-progress-hidden after the transition ends.
     bar.style.transition = 'opacity 0.4s';
     bar.style.opacity = '0';
     setTimeout(() => {
-      bar.style.display = 'none';
+      bar.classList.add('tf-progress-hidden');
       bar.style.opacity = '1';
       bar.style.transition = '';
     }, 500);
@@ -6356,6 +6362,20 @@
     // sees a working app before being asked to add the AI layer.
     bindTransformersUI();
     maybePromptTransformers();
+
+    // TensorFlow.js is loaded as a UMD bundle before this script
+    // runs, so `tf` is on window synchronously. Log a one-line
+    // status so we can confirm the bundle is reachable on first
+    // boot; the actual model loading happens lazily inside
+    // js/transformers.js (Transformers.js uses ONNX, but we keep
+    // TF.js available for any future feature that needs a graph
+    // session — sentiment regression, custom classifiers, etc).
+    if (window.tf) {
+      try { console.log('[ML] TensorFlow.js ready:', tf.version_core); }
+      catch {}
+    } else {
+      console.warn('[ML] TensorFlow.js not loaded — js/lib/tf.min.js missing or blocked?');
+    }
   }
 
   init();
