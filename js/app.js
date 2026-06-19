@@ -629,47 +629,91 @@
       return ((title ? title + '. ' : '') + summary).slice(0, 256);
     });
 
-    try {
-      const [impResults, benResults] = await Promise.all([
-        Transformers.classifyBatch(texts, [
-          'important breaking news',
-          'routine news update',
-          'opinion or analysis'
-        ]),
-        Transformers.classifyBatch(texts, [
-          'actionable advice or tips',
-          'factual news report',
-          'entertainment or lifestyle'
-        ])
-      ]);
+    // CHUNK SIZE: the ONNX runtime runs inference as a single
+    // WASM call. Browsers cap WASM execution at ~10-15s per
+    // function; a single batch of 200+ articles blows past that
+    // and the browser kills the script with
+    // "Script terminated by timeout" → "Refusing to execute
+    // function from global in which script is disabled" for
+    // every subsequent inference. Chunking into 8 at a time
+    // keeps each WASM call well under the timeout and lets the
+    // UI re-render between chunks so score badges appear
+    // progressively instead of all at once at the end.
+    const CHUNK = 8;
+    const CHUNK_PAUSE_MS = 30;  // tiny yield so the UI can paint
 
-      const now = Date.now();
-      for (let i = 0; i < todo.length; i++) {
-        const a = todo[i];
-        const imp = impResults[i];
-        const ben = benResults[i];
-        if (!imp || !ben) continue;
-        // Score = P(top-label) * 10 if it's the "good" label, else
-        // a lower mapping so the 0–10 scale still feels meaningful.
-        // The exact mapping matters less than the ranking order it
-        // produces, which is what downstream code uses.
-        const impScore = imp.labels[0] === 'important breaking news'
-          ? imp.scores[0] * 10
-          : (1 - imp.scores[0]) * 5;
-        const benScore = ben.labels[0] === 'actionable advice or tips'
-          ? ben.scores[0] * 10
-          : ben.scores[0] * 5;
-        a._tx = {
-          importance: Math.round(impScore * 10) / 10,
-          benefit: Math.round(benScore * 10) / 10,
-          category: imp.labels[0],
-          scoredAt: now
-        };
+    const LABELS_IMPORTANCE = [
+      'important breaking news',
+      'routine news update',
+      'opinion or analysis'
+    ];
+    const LABELS_BENEFIT = [
+      'actionable advice or tips',
+      'factual news report',
+      'entertainment or lifestyle'
+    ];
+
+    let scored = 0;
+    try {
+      for (let off = 0; off < texts.length; off += CHUNK) {
+        const end = Math.min(off + CHUNK, texts.length);
+        const chunkTexts = texts.slice(off, end);
+        const chunkArticles = todo.slice(off, end);
+
+        // Two zero-shot calls per chunk (importance + benefit).
+        // Run them in parallel — the ONNX runtime internally
+        // serialises WASM calls anyway, so we don't gain
+        // anything by sequencing, and Promise.all keeps the
+        // code simple.
+        const [impResults, benResults] = await Promise.all([
+          Transformers.classifyBatch(chunkTexts, LABELS_IMPORTANCE),
+          Transformers.classifyBatch(chunkTexts, LABELS_BENEFIT)
+        ]);
+
+        const now = Date.now();
+        for (let i = 0; i < chunkArticles.length; i++) {
+          const a = chunkArticles[i];
+          const imp = impResults[i];
+          const ben = benResults[i];
+          if (!imp || !ben) continue;
+          // Score = P(top-label) * 10 if it's the "good" label,
+          // else a lower mapping so the 0–10 scale still feels
+          // meaningful. The exact mapping matters less than the
+          // ranking order it produces, which is what downstream
+          // code uses.
+          const impScore = imp.labels[0] === 'important breaking news'
+            ? imp.scores[0] * 10
+            : (1 - imp.scores[0]) * 5;
+          const benScore = ben.labels[0] === 'actionable advice or tips'
+            ? ben.scores[0] * 10
+            : ben.scores[0] * 5;
+          a._tx = {
+            importance: Math.round(impScore * 10) / 10,
+            benefit: Math.round(benScore * 10) / 10,
+            category: imp.labels[0],
+            scoredAt: now
+          };
+          scored++;
+        }
+
+        // Yield to the event loop so the browser can paint the
+        // newly-scored badges before we hit the ONNX runtime
+        // again. Without this, the UI shows a blank bar for
+        // the entire inference duration and the user has no
+        // feedback that scoring is in progress.
+        if (end < texts.length) {
+          await new Promise(r => setTimeout(r, CHUNK_PAUSE_MS));
+        }
       }
-      return todo.length;
+      return scored;
     } catch (err) {
-      console.warn('[Transformers] scoreArticles failed:', err);
-      return 0;
+      console.warn('[Transformers] scoreArticles failed at', scored, '/', todo.length, ':', err);
+      // Return whatever we managed to score so the badges that
+      // DID make it through still render. If the WASM script was
+      // killed mid-batch the next scoreArticles call will retry
+      // the unscored subset from the filter at the top of this
+      // function.
+      return scored;
     }
   }
 
