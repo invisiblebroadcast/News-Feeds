@@ -3594,7 +3594,7 @@
     }
   }
 
-  function handleAddFeed() {
+  async function handleAddFeed() {
     const name = el.feedNameInput?.value?.trim();
     const url = validatedFeed?.url || el.feedUrlInput?.value?.trim();
     const scope = el.feedScopeSelect?.value || 'global';
@@ -3604,15 +3604,16 @@
       if (el.feedValidateMsg) { el.feedValidateMsg.textContent = 'Enter a name and validate a URL first.'; el.feedValidateMsg.className = 'feed-validate-msg error'; }
       return;
     }
-    FeedManager.addCustomFeed(name, url, scope, nation, subcat, 'en');
+    try { await FeedManager.addCustomFeed(name, url, scope, nation, subcat, 'en'); }
+    catch (e) { console.warn('addCustomFeed failed:', e && e.message); }
     validatedFeed = null;
     if (el.feedUrlInput) el.feedUrlInput.value = '';
     if (el.feedNameInput) el.feedNameInput.value = '';
     if (el.feedValidateMsg) el.feedValidateMsg.textContent = '';
-    renderCustomFeedList();
+    await renderCustomFeedList();
   }
 
-  function renderCustomFeedList() {
+  async function renderCustomFeedList() {
     if (!el.feedCustomList) return;
     const feeds = FeedManager.getCustomFeeds();
     if (!feeds.length) {
@@ -3629,7 +3630,11 @@
         '<span class="feed-remove" data-url="' + f.url + '">Remove</span></li>';
     }).join('') + '</ul>';
     el.feedCustomList.querySelectorAll('.feed-remove').forEach(btn => {
-      btn.addEventListener('click', () => { FeedManager.removeCustomFeed(btn.dataset.url); renderCustomFeedList(); });
+      btn.addEventListener('click', async () => {
+        try { await FeedManager.removeCustomFeed(btn.dataset.url); }
+        catch (e) { console.warn('removeCustomFeed failed:', e && e.message); }
+        await renderCustomFeedList();
+      });
     });
   }
 
@@ -6146,6 +6151,13 @@
 
     currentNation = FeedManager.getSelectedNation();
     await SupabaseStore.load();
+    // Load custom feeds (Supabase is the source of truth when the
+    // user is signed in; localStorage is a cache + the only store
+    // when signed out). This must run AFTER SupabaseStore is ready
+    // so FeedManager can hit the `custom_feeds` table.
+    try { await FeedManager.loadCustomFeeds(); } catch (e) {
+      console.warn('FeedManager.loadCustomFeeds failed:', e && e.message);
+    }
     // Resume any article-archive queue from a previous session.
     // This must happen AFTER SupabaseStore is ready (the archive
     // uses SupabaseStore.getClient()) and after FeedManager is

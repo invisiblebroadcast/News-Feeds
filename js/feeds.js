@@ -2,8 +2,34 @@ const FeedManager = (() => {
   let feedData = null;
   let loadPromise = null;
 
+  // In-memory cache for the signed-in user's custom feeds.
+  // Populated by loadCustomFeeds() at app start and again on every
+  // SIGNED_IN event. When this is null, getCustomFeeds() falls back
+  // to the localStorage value (sync) so synchronous callers (e.g.
+  // article-archive's lookupLang) keep working.
+  let customFeedsCache = null;
+  let customFeedsLoadPromise = null;
+  let signedInSyncPromise = null;
+
   const CUSTOM_FEEDS_KEY = 'newsfeeds_custom_feeds';
   const SELECTED_NATION_KEY = 'newsfeeds_selected_nation';
+  // Supabase table that mirrors custom_feeds per user.
+  // Create with:
+  //   create table custom_feeds (
+  //     user_id uuid references auth.users(id) on delete cascade,
+  //     name text not null,
+  //     url text not null,
+  //     scope text not null default 'global',
+  //     nation text default '',
+  //     subcat text default 'politics',
+  //     lang text default 'en',
+  //     created_at timestamptz default now(),
+  //     primary key (user_id, url)
+  //   );
+  //   alter table custom_feeds enable row level security;
+  //   create policy "Users manage their own custom feeds" on custom_feeds
+  //     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  const CUSTOM_FEEDS_TABLE = 'custom_feeds';
 
   const SUBCAT_LABELS = {
     all: 'All', politics: 'Politics & Governance', business: 'Business & Economy',
@@ -108,23 +134,204 @@ const FeedManager = (() => {
     return grouped;
   }
 
-  function getCustomFeeds() {
+  // ── Custom feeds — Supabase is the source of truth when signed in.
+  //    localStorage is just a local cache (and the only store when
+  //    the user is not signed in). The on-disk cache is refreshed
+  //    on every load and every add/remove, so it always reflects
+  //    what the user sees.
+
+  function _readLocalCustomFeeds() {
     try { return JSON.parse(localStorage.getItem(CUSTOM_FEEDS_KEY) || '[]'); }
     catch { return []; }
   }
 
-  function saveCustomFeeds(feeds) {
-    localStorage.setItem(CUSTOM_FEEDS_KEY, JSON.stringify(feeds));
+  function _writeLocalCustomFeeds(feeds) {
+    try { localStorage.setItem(CUSTOM_FEEDS_KEY, JSON.stringify(feeds)); } catch {}
   }
 
-  function addCustomFeed(name, url, scope, nation, subcat, lang) {
-    const feeds = getCustomFeeds();
-    feeds.push({ name, url, scope: scope || 'global', nation: nation || '', subcat: subcat || 'politics', lang: lang || 'en' });
-    saveCustomFeeds(feeds);
+  // Sync getter used everywhere in the app. Returns the in-memory
+  // cache if loaded, else the localStorage value. Always synchronous
+  // so the fetcher / article-archive hot paths don't have to await.
+  function getCustomFeeds() {
+    if (customFeedsCache) return customFeedsCache;
+    return _readLocalCustomFeeds();
   }
 
-  function removeCustomFeed(url) {
-    saveCustomFeeds(getCustomFeeds().filter(f => f.url !== url));
+  // Async loader. Called at app start (after SupabaseStore is
+  // ready) and again on every SIGNED_IN event. When signed in,
+  // Supabase is the source of truth and we cache to localStorage.
+  // When signed out, we just use whatever's in localStorage.
+  async function loadCustomFeeds() {
+    if (customFeedsLoadPromise) return customFeedsLoadPromise;
+    customFeedsLoadPromise = (async () => {
+      try {
+        const local = _readLocalCustomFeeds();
+        const client = (typeof SupabaseStore !== 'undefined' && SupabaseStore.getClient)
+          ? SupabaseStore.getClient() : null;
+        if (!client) {
+          customFeedsCache = local.slice();
+          return customFeedsCache;
+        }
+        let session = null;
+        try { const r = await client.auth.getSession(); session = r?.data?.session || null; } catch {}
+        if (!session) {
+          customFeedsCache = local.slice();
+          return customFeedsCache;
+        }
+        const { data, error } = await client
+          .from(CUSTOM_FEEDS_TABLE)
+          .select('name,url,scope,nation,subcat,lang,created_at')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: true });
+        if (error) {
+          console.warn('FeedManager: custom_feeds load error', error.message);
+          customFeedsCache = local.slice();
+          return customFeedsCache;
+        }
+        const remote = (data || []).map(r => ({
+          name: r.name, url: r.url,
+          scope: r.scope || 'global',
+          nation: r.nation || '',
+          subcat: r.subcat || 'politics',
+          lang: r.lang || 'en'
+        }));
+        customFeedsCache = remote;
+        _writeLocalCustomFeeds(remote);
+        return customFeedsCache;
+      } catch (e) {
+        console.warn('FeedManager: loadCustomFeeds failed', e && e.message);
+        if (!customFeedsCache) customFeedsCache = _readLocalCustomFeeds();
+        return customFeedsCache;
+      } finally {
+        customFeedsLoadPromise = null;
+      }
+    })();
+    return customFeedsLoadPromise;
+  }
+
+  // Add a custom feed. Updates the in-memory cache + localStorage
+  // synchronously, then writes through to Supabase if signed in.
+  // If Supabase is unavailable, the local copy is still kept — the
+  // next SIGNED_IN sync will upload it.
+  async function addCustomFeed(name, url, scope, nation, subcat, lang) {
+    const feed = {
+      name, url,
+      scope: scope || 'global',
+      nation: nation || '',
+      subcat: subcat || 'politics',
+      lang: lang || 'en'
+    };
+    if (!feed.url) return;
+    // Update local mirror first (so the UI reflects it immediately).
+    if (!customFeedsCache) customFeedsCache = _readLocalCustomFeeds();
+    customFeedsCache = customFeedsCache.filter(f => f.url !== feed.url);
+    customFeedsCache.push(feed);
+    _writeLocalCustomFeeds(customFeedsCache);
+
+    // Write through to Supabase if signed in.
+    try {
+      const client = (typeof SupabaseStore !== 'undefined' && SupabaseStore.getClient)
+        ? SupabaseStore.getClient() : null;
+      if (!client) return;
+      const r = await client.auth.getSession();
+      const session = r?.data?.session || null;
+      if (!session) return;
+      const { error } = await client
+        .from(CUSTOM_FEEDS_TABLE)
+        .upsert({
+          user_id: session.user.id,
+          name: feed.name, url: feed.url,
+          scope: feed.scope, nation: feed.nation,
+          subcat: feed.subcat, lang: feed.lang
+        }, { onConflict: 'user_id,url' });
+      if (error) console.warn('FeedManager: addCustomFeed Supabase upsert error', error.message);
+    } catch (e) {
+      console.warn('FeedManager: addCustomFeed Supabase write failed', e && e.message);
+    }
+  }
+
+  // Remove a custom feed. Updates the in-memory cache + localStorage
+  // synchronously, then deletes from Supabase if signed in.
+  async function removeCustomFeed(url) {
+    if (!url) return;
+    if (!customFeedsCache) customFeedsCache = _readLocalCustomFeeds();
+    customFeedsCache = customFeedsCache.filter(f => f.url !== url);
+    _writeLocalCustomFeeds(customFeedsCache);
+
+    try {
+      const client = (typeof SupabaseStore !== 'undefined' && SupabaseStore.getClient)
+        ? SupabaseStore.getClient() : null;
+      if (!client) return;
+      const r = await client.auth.getSession();
+      const session = r?.data?.session || null;
+      if (!session) return;
+      const { error } = await client
+        .from(CUSTOM_FEEDS_TABLE)
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('url', url);
+      if (error) console.warn('FeedManager: removeCustomFeed Supabase delete error', error.message);
+    } catch (e) {
+      console.warn('FeedManager: removeCustomFeed Supabase delete failed', e && e.message);
+    }
+  }
+
+  // Sync any localStorage-only custom feeds up to Supabase when the
+  // user signs in. We then re-read from Supabase so the in-memory
+  // cache is authoritative (Supabase is the source of truth).
+  async function syncCustomFeedsOnSignIn() {
+    if (signedInSyncPromise) return signedInSyncPromise;
+    signedInSyncPromise = (async () => {
+      try {
+        const client = (typeof SupabaseStore !== 'undefined' && SupabaseStore.getClient)
+          ? SupabaseStore.getClient() : null;
+        if (!client) return;
+        const r = await client.auth.getSession();
+        const session = r?.data?.session || null;
+        if (!session) return;
+
+        const local = _readLocalCustomFeeds();
+        if (!local.length) {
+          // Nothing to upload; just refresh the cache from Supabase.
+          await loadCustomFeeds();
+          return;
+        }
+        // Find which URLs already exist remotely so we don't fight a
+        // race against a fresh upload of the same feed.
+        const { data: remote, error: readErr } = await client
+          .from(CUSTOM_FEEDS_TABLE)
+          .select('url')
+          .eq('user_id', session.user.id);
+        if (readErr) {
+          console.warn('FeedManager: syncCustomFeedsOnSignIn read error', readErr.message);
+          return;
+        }
+        const remoteUrls = new Set((remote || []).map(r => r.url));
+        const toUpload = local.filter(f => f.url && !remoteUrls.has(f.url));
+        if (toUpload.length) {
+          const rows = toUpload.map(f => ({
+            user_id: session.user.id,
+            name: f.name, url: f.url,
+            scope: f.scope || 'global',
+            nation: f.nation || '',
+            subcat: f.subcat || 'politics',
+            lang: f.lang || 'en'
+          }));
+          const { error: upErr } = await client
+            .from(CUSTOM_FEEDS_TABLE)
+            .upsert(rows, { onConflict: 'user_id,url' });
+          if (upErr) console.warn('FeedManager: syncCustomFeedsOnSignIn upload error', upErr.message);
+        }
+        // Reload from Supabase so the in-memory cache is the merged
+        // authoritative set.
+        await loadCustomFeeds();
+      } catch (e) {
+        console.warn('FeedManager: syncCustomFeedsOnSignIn failed', e && e.message);
+      } finally {
+        signedInSyncPromise = null;
+      }
+    })();
+    return signedInSyncPromise;
   }
 
   function getSubscribableFeeds() {
@@ -246,11 +453,37 @@ const FeedManager = (() => {
     load, subcategories, subcategoriesForScope, subcatLabel, subcatIcon,
     getNations, defaultNation, getSelectedNation, setSelectedNation,
     getFeeds, getFeedsBySubcat,
-    getCustomFeeds, addCustomFeed, removeCustomFeed, validateFeed,
+    getCustomFeeds, addCustomFeed, removeCustomFeed, loadCustomFeeds,
+    syncCustomFeedsOnSignIn, validateFeed,
     getSubscribableFeeds, getSubscribedFeeds, saveSubscribedFeeds, isSubscribed, toggleSubscription,
     getParliamentFeeds, getParliamentItemById, parliamentItemToFeed, getFeedsForSubcat
   };
 })();
+
+// Hook into Supabase auth state changes. When the user signs in,
+// sync any locally-saved custom feeds up to Supabase and reload
+// the in-memory cache from there. Supabase is the source of truth
+// for signed-in users; localStorage is just a local cache.
+try {
+  const _client = (typeof SupabaseStore !== 'undefined' && SupabaseStore.getClient)
+    ? SupabaseStore.getClient() : null;
+  if (_client && _client.auth && _client.auth.onAuthStateChange) {
+    _client.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        try { FeedManager.syncCustomFeedsOnSignIn(); } catch (e) {
+          console.warn('FeedManager: SIGNED_IN sync threw', e && e.message);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        // Keep the cache as-is (it still reflects what the user had
+        // while signed in). Subsequent add/remove calls will only
+        // touch localStorage until they sign in again.
+      }
+    });
+  }
+} catch (e) {
+  // Supabase not yet loaded — the listener will be re-attached on
+  // the next page load once SupabaseStore is available.
+}
 
 // Expose on window. Top-level `const` in a script lives in the
 // global scope but is NOT a property of `window` in browsers, so
