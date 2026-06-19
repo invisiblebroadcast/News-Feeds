@@ -2790,6 +2790,11 @@
         skipHeavyWork = false;
         const articles = getFilteredArticles(currentSubcat, cached);
         renderTranslated(articles);
+        // If USE is ready, re-rank the substring-filtered results
+        // by semantic similarity. Runs in the background; a
+        // newer search will cancel the in-flight ranking via
+        // _searchVersion.
+        if (currentSearch) applySemanticRank(articles);
       }, 120);
     });
     // Clear the debounce on Enter / Escape so the user gets
@@ -2804,8 +2809,67 @@
         if (!cached) return;
         const articles = getFilteredArticles(currentSubcat, cached);
         renderTranslated(articles);
+        if (currentSearch) applySemanticRank(articles);
       }
     });
+  }
+
+  // Semantic re-ranking of the search results using Universal
+  // Sentence Encoder embeddings. The substring filter in
+  // applySearch() already narrowed the pool; this only re-orders
+  // the surviving articles by cosine similarity between the
+  // query embedding and each article's embedding. A version
+  // counter kills stale results if the user keeps typing.
+  let _searchVersion = 0;
+  async function applySemanticRank(articles) {
+    if (!currentSearch || !articles || !articles.length) return;
+    if (!window.Embeddings) return;
+    const myVersion = ++_searchVersion;
+
+    // Kick off the model load in the background if it hasn't
+    // started yet. No-op once it's already in flight.
+    const m = await Embeddings.loadModel();
+    if (!m) return;                            // library missing
+    if (myVersion !== _searchVersion) return;  // user typed again
+
+    try {
+      const queryEmbedding = await Embeddings.embed(currentSearch);
+      if (!queryEmbedding) return;
+      if (myVersion !== _searchVersion) return;
+
+      // Score every filtered article. Embeddings are cached by
+      // URL so repeated searches (e.g. switching scopes) don't
+      // re-compute.
+      const scored = [];
+      for (let i = 0; i < articles.length; i++) {
+        const a = articles[i];
+        const text = ((a.title || '') + '. ' + (a.summary || '')).trim();
+        let articleEmbedding = Embeddings.getCached(a.link);
+        if (!articleEmbedding && text) {
+          articleEmbedding = await Embeddings.embed(text);
+          if (articleEmbedding) Embeddings.setCached(a.link, articleEmbedding);
+        }
+        if (myVersion !== _searchVersion) return;
+        const sim = articleEmbedding
+          ? Embeddings.cosineSimilarity(queryEmbedding, articleEmbedding)
+          : 0;
+        scored.push({ article: a, score: sim });
+      }
+      if (myVersion !== _searchVersion) return;
+
+      scored.sort((a, b) => b.score - a.score);
+      const ranked = scored.map(s => s.article);
+
+      // Only re-render if the user is still on the same query
+      // and the substring filter still passes (it always will,
+      // since we ranked the same set — this is just a safety
+      // net in case currentSearch changed mid-flight).
+      if (currentSearch && ranked.length) {
+        renderTranslated(ranked);
+      }
+    } catch (e) {
+      console.warn('Semantic rank failed:', e && e.message);
+    }
   }
 
   function applySearch(articles) {
@@ -6164,6 +6228,18 @@
     // loaded (the archive looks up feed lang by URL).
     if (window.ArticleArchive && ArticleArchive.init) ArticleArchive.init();
     bindAuth();
+
+    // Kick off the USE model load in the background. The full
+    // version is ~25MB so this can take 5–15s on a fresh device
+    // and we don't want to block app startup on it. The model
+    // is only used for semantic re-ranking of search results;
+    // substring search works perfectly well without it, so a
+    // slow or failed model load never affects the core UX.
+    if (window.Embeddings && Embeddings.loadModel) {
+      Embeddings.loadModel().catch(err => {
+        console.warn('Embeddings.loadModel failed:', err && err.message);
+      });
+    }
 
     renderTopTabs();
     bindTopTabs();

@@ -832,6 +832,17 @@
        heuristics. TF.js is here as a foundation for a future
        ML pass. -->
   <script src="js/lib/tf.min.js"></script>
+  <!-- Universal Sentence Encoder for semantic search.
+       The full version is ~25MB and used on PC; the Lite variant
+       is ~1MB and used on mobile (auto-detected). Both expose a
+       global: `universalSentenceEncoder` and
+       `universalSentenceEncoderLite` respectively, each with a
+       `.load()` method that returns a model with `.embed(texts)`.
+       The model weights are fetched from Google's storage at
+       first load and cached by the browser afterwards. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder-lite@1.0.0/dist/universal-sentence-encoder-lite.min.js"></script>
+  <script src="js/embeddings.js"></script>
   <script src="js/app.js"></script>
   <script>
     // Register the service worker for PWA install + offline app shell.
