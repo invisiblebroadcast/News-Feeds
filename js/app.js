@@ -745,8 +745,15 @@
 
   // Wire up the download / skip buttons + progress listener. Called
   // once at startup. Safe to call multiple times — listeners are
+  // Wire up the download / skip buttons + progress listener. Called
+  // once at startup. Safe to call multiple times — listeners are
   // idempotent (we null them out after binding).
   let _transformersBound = false;
+  // Watchdog timer: if progress stays ≥95% for 12s with no
+  // 'ready' event, the library is silently initialising the ONNX
+  // session (which has no progress events of its own). Switch the
+  // label to "Initializing…" so the bar doesn't look frozen.
+  let _tfInitWatchdog = null;
   function bindTransformersUI() {
     if (_transformersBound) return;
     _transformersBound = true;
@@ -761,10 +768,31 @@
       Transformers.onProgress((evt) => {
         if (evt.type === 'progress') {
           updateTransformersProgress(evt.progress, evt.file);
+          // Safety net: if the progress callback stops firing at
+          // ≥95% (the library is silently initialising the ONNX
+          // session, which has no progress events), switch the
+          // label to "Initializing model…" after 12s so the user
+          // doesn't think the download is stuck. The proper
+          // 'ready' event below will still bump to 100% and
+          // dismiss the bar.
+          if (evt.progress >= 95) {
+            if (_tfInitWatchdog) clearTimeout(_tfInitWatchdog);
+            _tfInitWatchdog = setTimeout(() => {
+              const lbl = $('#transformers-progress-label');
+              if (lbl && lbl.textContent.indexOf('Initializing') === -1) {
+                updateTransformersProgress(99, 'Initializing model… (can take 10–30 s on first run)');
+              }
+              _tfInitWatchdog = null;
+            }, 12000);
+          } else {
+            if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
+          }
         } else if (evt.type === 'failed') {
+          if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
           hideTransformersProgress();
           showTransformersError(evt.error || 'unknown error');
         } else if (evt.type === 'ready') {
+          if (_tfInitWatchdog) { clearTimeout(_tfInitWatchdog); _tfInitWatchdog = null; }
           updateTransformersProgress(100, 'ready');
           setTimeout(() => hideTransformersProgress(), 800);
           hideTransformersDialog();

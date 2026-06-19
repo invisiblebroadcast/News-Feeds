@@ -97,20 +97,59 @@ const Transformers = (() => {
 
       // Load the zero-shot classification pipeline. `quantized: true`
       // picks the int8-quantized ONNX weights (~25MB vs ~95MB).
+      // The library does three phases, each of which calls our
+      // progress_callback with a different `status`:
+      //   1. 'initiate' / 'download' / 'progress' — fetching each
+      //      model file. `data.progress` is 0–100 for that file.
+      //   2. 'done' — that file finished downloading. No progress
+      //      number, but the next file's progress starts at 0.
+      //   3. (silent) — once all files are downloaded, the library
+      //      INITIALIZES THE ONNX RUNTIME SESSION. This phase has
+      //      no progress events and can take 10–30s on a phone.
+      //      The bar would otherwise look stuck at 99% during this.
+      //   4. (pipeline resolves) — emit our own 'ready' event
+      //      from the code below, which jumps the bar to 100%
+      //      and dismisses it.
+      //
+      // To make phase 3 visible we switch the label to "Initializing
+      // model…" the moment the LAST file finishes downloading.
+      // The largest file in a Transformers.js model is almost
+      // always the ONNX weights, so we treat the file matching
+      // `*.onnx` or `*.onnx_data` as the last one. (For models
+      // that only have a single .onnx file, this fires correctly
+      // when it reaches 100%.)
+      let lastFileWasWeights = false;
+      let initializingEmitted = false;
       _classifier = await _pipeline('zero-shot-classification', MODEL_ID, {
         quantized: true,
-        // The library calls this for every chunk it downloads.
-        // `data.status` is one of: initiate, download, progress,
-        // done, ready, etc. `data.progress` is 0–100 for that file.
         progress_callback: (data) => {
           if (data.status === 'progress' && typeof data.progress === 'number') {
             // Map model-file progress (0–100) into 5–99% of the bar.
+            // We deliberately cap at 99% so the 'ready' handler
+            // (which jumps to 100%) always shows a visible bump.
             const mapped = Math.round(5 + Math.min(100, data.progress) * 0.94);
             _progress = mapped;
-            _progressFile = (data.file || MODEL_ID) + '  ' + mapped + '%';
-            emit({ type: 'progress', progress: mapped, file: data.file || MODEL_ID });
+            const f = data.file || MODEL_ID;
+            _progressFile = f + '  ' + Math.round(data.progress) + '%';
+            // If this is the weights file and it's fully done,
+            // remember it — the next 'done' event will trigger
+            // the "Initializing" label.
+            if (data.progress >= 100 && /\.(onnx)(\.data)?$/.test(f)) {
+              lastFileWasWeights = true;
+            }
+            emit({ type: 'progress', progress: mapped, file: f });
           } else if (data.status === 'done' && data.file) {
-            emit({ type: 'progress', progress: _progress, file: data.file });
+            // The previous file hit 100% and the library moved
+            // on. If that was the weights file, all downloads
+            // are done — switch to "Initializing" so the user
+            // doesn't think the download is stuck.
+            if (lastFileWasWeights && !initializingEmitted) {
+              initializingEmitted = true;
+              _progressFile = 'Initializing model…';
+              emit({ type: 'progress', progress: 99, file: 'Initializing model… (can take 10–30 s)' });
+            } else {
+              emit({ type: 'progress', progress: _progress, file: data.file });
+            }
           }
         }
       });
