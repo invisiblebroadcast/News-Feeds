@@ -30,10 +30,15 @@ const Transformers = (() => {
   let _listeners = new Set();
   let _classifier = null;
 
-  // Smallest viable NLI / zero-shot model. ~25MB quantized.
-  // Good for our "importance" + "benefit" zero-shot labels and
-  // for NLI-based conflict detection.
-  const MODEL_ID = 'Xenova/nli-deberta-small';
+  // NLI / zero-shot model. We use distilbert-base-uncased-mnli
+  // because it's the canonical, guaranteed-available Xenova model
+  // (the original NLI checkpoint that Transformers.js was built
+  // around). Earlier we tried `Xenova/nli-deberta-small` which
+  // turned out not to be on the Xenova org — Hugging Face was
+  // returning 401 for every model file. distilbert-base-uncased-mnli
+  // is ~67MB quantized — bigger than the previous target but the
+  // trade-off is "works" vs "doesn't work".
+  const MODEL_ID = 'Xenova/distilbert-base-uncased-mnli';
   // Library is served from the same origin (committed to the
   // repo under js/lib/) so GitHub Pages users don't need a
   // separate CDN round-trip just to load the JavaScript. The

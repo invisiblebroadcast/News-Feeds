@@ -54,6 +54,16 @@ const ArticleArchive = (() => {
   let isFlushing = false;
   let pendingFlush = false;
   let lastErrorLoggedAt = 0;
+  // When Supabase rejects our upserts with a row-level-security
+  // (RLS) violation, the table either has no INSERT policy for our
+  // JWT role (typically 'anon' for signed-out users) or the policy
+  // is too strict. Retrying won't help — the next upsert will fail
+  // the exact same way — and the queue would grow unbounded until
+  // the localStorage cap kicks in. Detect RLS once, log one clear
+  // message, then drop the queue and stop retrying until the
+  // user signs in. Re-enabled on successful flush (see flush()).
+  let disabledUntilAuth = false;
+  let rlsMessageLogged = false;
 
   function loadQueue() {
     try {
@@ -148,6 +158,10 @@ const ArticleArchive = (() => {
       return;
     }
     if (queue.length === 0) return;
+    // RLS disabled us last time around — don't bother trying again
+    // until the user signs in. The flag is cleared on the next
+    // successful flush (see end of this function).
+    if (disabledUntilAuth) return;
 
     const batch = queue.splice(0, BATCH_SIZE);
     isFlushing = true;
@@ -168,25 +182,60 @@ const ArticleArchive = (() => {
         .upsert(batch, { onConflict: 'url', ignoreDuplicates: true });
 
       if (error) {
-        // Throttle the log so a sustained outage doesn't spam the
-        // console with one warning per batch.
+        const msg = (error && error.message) || String(error);
+        // RLS rejection: Supabase returns 401 / "new row violates
+        // row-level security policy" when the JWT role lacks INSERT
+        // permission on the table. Detect this and back off so we
+        // don't burn the localStorage budget on permanent failures.
+        const isRls = /row-level security|violates|401|forbidden|not authorized/i.test(msg);
+        if (isRls) {
+          if (!rlsMessageLogged) {
+            console.warn(
+              '[ArticleArchive] Supabase RLS rejected the upsert (' + msg + '). ' +
+              'The seen_articles table is blocking inserts for this JWT role. ' +
+              'Archiving is disabled until the next successful flush (usually after signing in). ' +
+              'To re-enable: add an INSERT policy on seen_articles for your role, or run:\n' +
+              '  alter table seen_articles disable row level security;'
+            );
+            rlsMessageLogged = true;
+          }
+          // Drop the batch (don't re-queue — it will just fail again
+          // on the next flush). Disable further attempts so we don't
+          // keep reading from localStorage and spamming the network.
+          disabledUntilAuth = true;
+          // Re-queue the batch anyway — when the user signs in and
+          // the next flush succeeds, these items will be re-tried.
+          // (Cheap to keep; the queue cap bounds it.)
+          queue.unshift(...batch);
+          saveQueue();
+          return;
+        }
+        // Generic non-RLS failure: throttle the log + re-queue.
         const now = Date.now();
         if (now - lastErrorLoggedAt > 30000) {
-          console.warn('[ArticleArchive] flush failed:', error.message);
+          console.warn('[ArticleArchive] flush failed:', msg);
           lastErrorLoggedAt = now;
         }
-        // Re-queue the batch at the front and try again later.
         queue.unshift(...batch);
         saveQueue();
         return;
       }
 
-      // Success — persist the (now smaller) queue.
+      // Success — the table accepts our inserts. If we were previously
+      // disabled by an RLS rejection, clear the flags and re-enable.
+      if (disabledUntilAuth) {
+        console.log('[ArticleArchive] RLS issue resolved — archiving re-enabled.');
+        disabledUntilAuth = false;
+        rlsMessageLogged = false;
+      }
+      // Persist the (now smaller) queue.
       saveQueue();
     } catch (err) {
+      const msg = (err && err.message) || String(err);
+      // Network error / fetch failed. Retry — these are transient.
       const now = Date.now();
       if (now - lastErrorLoggedAt > 30000) {
-        console.warn('[ArticleArchive] flush threw:', err?.message || err);
+        console.warn('[ArticleArchive] flush threw:', msg);
         lastErrorLoggedAt = now;
       }
       queue.unshift(...batch);
