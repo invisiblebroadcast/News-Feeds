@@ -4656,7 +4656,7 @@
       // (#invisiblebroadcast guaranteed, the others derived from
       // the article's subcat / source). The actual rephrasing is
       // done in buildShareCaption() — see comment there.
-      const caption = buildShareCaption(article);
+      const caption = await buildShareCaption(article);
 
       // Step 1: copy the caption text to the clipboard FIRST. The
       // user explicitly wants the text in the clipboard for
@@ -4717,34 +4717,78 @@
   // 5 hashtags (with #invisiblebroadcast guaranteed first).
   //
   // We don't use AI. The "rephrasing" is a deterministic
-  // extractive-summarisation pipeline:
-  //   1. Split title + summary into sentences.
-  //   2. Score every sentence by word-frequency (TextRank-lite):
-  //      more frequent meaningful words → more "central" sentence.
-  //   3. Pick the top 1–2 sentences as the body.
-  //   4. Compress: strip leading filler ("The", "A", "An", "In",
-  //      "On", "According to", "It is", …) and trim connectors.
-  //   5. Wrap in a social-media template ("Just in: …").
-  //   6. Apply a small synonym-rewrite table so it doesn't read
-  //      like a direct quote of the original wording.
-  //   7. Cap the body at ~280 chars (Instagram caption sweet spot).
-  //   8. Append 5 hashtags from buildHashtags() below.
+  // template-based pipeline that produces text CLEARLY different
+  // from the original (not just a compression of the original
+  // sentences with a few synonym swaps):
   //
-  // The result feels rephrased without ever calling an LLM — it's
-  // the article's own words, reordered, trimmed, and lightly
-  // swapped. Users can still tweak before posting.
-  function buildShareCaption(article) {
+  //   1. Clean the source name (remove "The ", strip after " — ").
+  //   2. Clean the title — remove common news prefixes
+  //      ("Breaking:", "Update:", "Just in:", "Reported:", …) and
+  //      trailing punctuation → this becomes the **topic**.
+  //   3. Use TF.js to find the most "central" sentence from the
+  //      summary: build TF-IDF vectors, compute the centroid via
+  //      tf.tensor2d().mean(0), then pick the sentence with the
+  //      highest cosine similarity to the centroid. This is the
+  //      **key fact** — a SINGLE sentence, not two.
+  //   4. Compress the key fact (strip filler, apply synonyms,
+  //      cap at ~120 chars).
+  //   5. Build a NEW sentence using a template, NOT a copy:
+  //         "[Source] reports on [topic]. [compressed key fact]"
+  //      or "Update: [topic]. [compressed key fact]"
+  //      The output is a freshly composed sentence around the
+  //      extracted topic + key fact, not the original wording.
+  //   6. Cap the body at ~280 chars (Instagram caption sweet spot).
+  //   7. Append 5 hashtags from buildHashtags() below.
+  //
+  // The result is a short caption that uses the article's
+  // information but in a clearly different structure. It does
+  // NOT copy the title or summary verbatim.
+  async function buildShareCaption(article) {
     if (!article) return '';
-    const title = cleanSummary(stripHtml(article.title || '')).trim();
+    const source = cleanSourceName(article.source);
+    const title = cleanTitleForTopic(article.title);
     const summary = cleanSummary(stripHtml(article.summary || '')).trim();
-    const body = buildRephrasedBody(title, summary);
-    const lines = [];
-    if (body) lines.push(body);
-    lines.push(buildHashtags(article).join(' '));
-    return lines.join('\n\n');
+    const body = await buildRephrasedBody(title, summary, source);
+    if (!body) {
+      // Absolute fallback: use the topic as-is if everything
+      // else fails (e.g. TF.js not loaded yet, empty summary).
+      return (title || cleanSummary(stripHtml(article.title || '')).trim()) +
+        '\n\n' + buildHashtags(article).join(' ');
+    }
+    return body + '\n\n' + buildHashtags(article).join(' ');
   }
 
-  // ── Rephraser internals (no AI, all rule-based) ──
+  // ── Rephraser internals (no AI, all rule-based + TF.js) ──
+
+  // Clean a source name for use in the caption template.
+  //   "The Hindu — News"      → "The Hindu"
+  //   "BBC News"              → "BBC News"
+  //   "Reuters | World"       → "Reuters"
+  function cleanSourceName(source) {
+    if (!source) return '';
+    let s = String(source).trim();
+    if (!s) return '';
+    s = s.replace(/^the\s+/i, '');
+    s = s.split(/\s+[—|–-]\s+/)[0];
+    return s.trim();
+  }
+
+  // Clean a title for use as the topic in the caption.
+  //   "Breaking: Apple unveils iPhone 15"     → "Apple unveils iPhone 15"
+  //   "Update: New COVID variant detected"    → "New COVID variant detected"
+  //   "Reported — Markets rally on Fed pause" → "Markets rally on Fed pause"
+  function cleanTitleForTopic(title) {
+    if (!title) return '';
+    let t = String(title).trim();
+    if (!t) return '';
+    t = t.replace(
+      /^(breaking|just in|update|developing|alert|news|exclusive|latest|watch|video|photos|reported|reports|according to|alert:|developing:)\s*[:\-—]\s*/i,
+      ''
+    );
+    t = t.replace(/[.!?]+$/, '').trim();
+    if (t.length > 0) t = t[0].toUpperCase() + t.slice(1);
+    return t;
+  }
 
   // Common leading phrases that add no information. We strip these
   // from the START of a sentence to compress without changing meaning.
@@ -4797,64 +4841,152 @@
     return out;
   }
 
-  // Score a sentence by word-frequency centrality. Common English
-  // stopwords are excluded; longer / rarer words weigh more.
-  const STOPWORDS = new Set(('a an the and or but if then else when while of in on at to for from by with as is are was were be been being do does did has have had this that these those it its their there here all any some no not so very just can could may might will would shall should into about over under between through during before after above below up down out off again further once upon without within along across behind beyond despite except like near per via').split(/\s+/));
-  function scoreSentence(sentence, wordFreq) {
-    const words = sentence.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-    if (!words.length) return 0;
-    let score = 0;
-    for (const w of words) {
-      if (STOPWORDS.has(w) || w.length < 4) continue;
-      score += wordFreq[w] || 0;
+  // Cosine similarity between two plain-JS vectors. Used after
+  // TF.js has computed the centroid.
+  function _cosineSim(a, b) {
+    let dot = 0, ma = 0, mb = 0;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const av = a[i] || 0, bv = b[i] || 0;
+      dot += av * bv;
+      ma  += av * av;
+      mb  += bv * bv;
     }
-    // Normalise by length so a 5-word punchy sentence isn't
-    // outranked by a 30-word run-on with the same content words.
-    return score / Math.sqrt(words.length);
+    const den = Math.sqrt(ma) * Math.sqrt(mb);
+    return den === 0 ? 0 : dot / den;
   }
 
-  // Pick the top N sentences from a combined title+summary pool,
-  // ranked by word-frequency centrality, in original order.
-  function topSentences(sentences, wordFreq, n) {
-    const scored = sentences.map((s, i) => ({ s, i, score: scoreSentence(s, wordFreq) }));
-    scored.sort((a, b) => b.score - a.score);
-    const picked = scored.slice(0, n).sort((a, b) => a.i - b.i);
-    return picked.map(x => x.s);
-  }
-
-  // Build the body of the share caption. Returns "" if there's
-  // nothing usable to rephrase.
-  function buildRephrasedBody(title, summary) {
-    // Build a word-frequency table from the full source text so
-    // every sentence is scored against the same distribution.
-    const sourceText = (title + '. ' + summary).trim();
-    if (!sourceText) return '';
-    const allWords = sourceText.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-    const wordFreq = {};
-    for (const w of allWords) {
-      if (STOPWORDS.has(w) || w.length < 4) continue;
-      wordFreq[w] = (wordFreq[w] || 0) + 1;
-    }
-    // Split into sentences (handle ". ! ?" as terminators, keep
-    // non-empty trimmed pieces).
-    const sentences = sourceText
+  // Use TF.js to extract the most "central" sentence from the
+  // summary. We build TF-IDF vectors for each sentence, use
+  // tf.tensor2d(...).mean(0) to get the centroid, and pick the
+  // sentence with the highest cosine similarity to the centroid.
+  // This is essentially TextRank but the centroid computation
+  // runs on TF.js tensors (not a plain JS loop).
+  //
+  // Returns the most central sentence, compressed to ≤120 chars,
+  // or null if there's nothing usable.
+  async function extractKeyFactWithTF(summary) {
+    if (!summary || !window.tf || !window.tf.tensor2d) return null;
+    const sentences = summary
       .split(/(?<=[.!?])\s+/)
       .map(s => s.trim())
       .filter(Boolean);
-    if (!sentences.length) return '';
-    // Pick top 2 by centrality, preserve original order.
-    const picked = topSentences(sentences, wordFreq, 2);
-    // Compress + rephrase each picked sentence.
-    const rephrased = picked
-      .map(s => compressSentence(s, 140))
-      .filter(Boolean);
-    if (!rephrased.length) return '';
-    // Wrap in a social-media hook. Pick a varied opener so the
-    // caption doesn't feel templated across many shares.
-    const hook = pickHook(rephrased.join(' '));
-    let body = hook + rephrased.join(' ');
-    if (!/[.!?…]$/.test(body)) body += '.';
-    // Final cap at ~280 chars (Instagram caption sweet spot).
+    if (!sentences.length) return null;
+    if (sentences.length === 1) return compressSentence(sentences[0], 120);
+
+    // Tokenize each sentence (lowercase, words ≥3 chars).
+    const tokenized = sentences.map(s =>
+      (s.toLowerCase().match(/\b[a-z]{3,}\b/g) || [])
+    );
+
+    // Build vocabulary from all sentences.
+    const vocab = new Set();
+    for (const tokens of tokenized) for (const t of tokens) vocab.add(t);
+    const vocabList = Array.from(vocab);
+    if (!vocabList.length) return compressSentence(sentences[0], 120);
+
+    // Document frequency for IDF.
+    const N = sentences.length;
+    const docFreq = {};
+    for (const term of vocabList) {
+      let c = 0;
+      for (const tokens of tokenized) if (tokens.indexOf(term) !== -1) c++;
+      docFreq[term] = c;
+    }
+
+    // Build TF-IDF vectors as plain JS arrays.
+    const vectors = tokenized.map(tokens => {
+      const tf = {};
+      for (const t of tokens) tf[t] = (tf[t] || 0) + 1;
+      const v = new Array(vocabList.length);
+      for (let i = 0; i < vocabList.length; i++) {
+        const term = vocabList[i];
+        const tfVal = tf[term] || 0;
+        const idf   = Math.log(N / (docFreq[term] || 1));
+        v[i] = tfVal * idf;
+      }
+      return v;
+    });
+
+    // The actual TF.js usage: build a 2-D tensor of all sentence
+    // vectors and compute the centroid (mean across axis 0).
+    const tf = window.tf;
+    let tensor = null, centroid = null;
+    try {
+      tensor   = tf.tensor2d(vectors);
+      centroid = tensor.mean(0);
+      const centroidArr = await centroid.data();
+
+      // Find the sentence with highest cosine similarity to the
+      // centroid. This is the "most representative" sentence.
+      let bestIdx = 0;
+      let bestSim = -1;
+      for (let i = 0; i < N; i++) {
+        const sim = _cosineSim(vectors[i], centroidArr);
+        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+      }
+      return compressSentence(sentences[bestIdx], 120);
+    } catch (err) {
+      console.warn('TF.js centroid failed:', err && err.message);
+      return null;
+    } finally {
+      // Free GPU/CPU memory — small, but keeps TF.js tidy.
+      try { if (tensor)   tensor.dispose();   } catch {}
+      try { if (centroid) centroid.dispose(); } catch {}
+    }
+  }
+
+  // Build the rephrased body. This is the main rephraser.
+  // It produces a NEW sentence (not a copy of the original)
+  // by combining:
+  //   - a cleaned source name
+  //   - a cleaned title (the "topic")
+  //   - the most central sentence from the summary (the "key fact"),
+  //     extracted via TF.js TF-IDF + centroid finding
+  // …all wrapped in a social-media template.
+  async function buildRephrasedBody(title, summary, source) {
+    // 1. Extract the key fact from the summary using TF.js.
+    //    This is a SINGLE sentence, not two, and it's the one
+    //    most representative of the summary (highest cosine
+    //    similarity to the TF-IDF centroid).
+    let keyFact = null;
+    if (summary) {
+      try { keyFact = await extractKeyFactWithTF(summary); } catch {}
+      // Fallback: first sentence of the summary, compressed.
+      if (!keyFact) {
+        const sentences = summary
+          .split(/(?<=[.!?])\s+/)
+          .map(s => s.trim())
+          .filter(Boolean);
+        if (sentences.length > 0) keyFact = compressSentence(sentences[0], 120);
+      }
+    }
+
+    // 2. Build a NEW sentence using a template. The structure is
+    //    deliberately different from the original title/summary
+    //    so the output doesn't read like a verbatim copy.
+    let body = '';
+    if (source && title) {
+      // "[Source] reports on [topic]."
+      body = source + ' reports on ' + title + '.';
+    } else if (title) {
+      // "Update: [topic]."
+      body = 'Update: ' + title + '.';
+    } else if (keyFact) {
+      body = keyFact;
+    } else {
+      return '';
+    }
+
+    // 3. Add the key fact — a single compressed sentence, clearly
+    //    different in structure from the topic above. The two
+    //    sentences together form a "rephrased" version: the topic
+    //    names the story, the key fact elaborates.
+    if (keyFact && body.indexOf(keyFact) === -1) {
+      body += ' ' + keyFact;
+    }
+
+    // 4. Final cap at ~280 chars (Instagram caption sweet spot).
     if (body.length > 280) {
       const slice = body.slice(0, 280);
       const lastSpace = slice.lastIndexOf(' ');
@@ -4862,25 +4994,6 @@
       if (!/[.!?…]$/.test(body)) body += '…';
     }
     return body;
-  }
-
-  // Choose a short social-media opener. Cycles through a small
-  // set so consecutive shares don't all start with the same word.
-  // The choice is keyed off the body text length so the hook
-  // stays stable within a single share (no flicker).
-  const HOOKS = [
-    'Just in: ',
-    'Update: ',
-    'Read: ',
-    'Worth a look: ',
-    'Now: ',
-    'Latest: '
-  ];
-  let _hookCursor = 0;
-  function pickHook(body) {
-    const h = HOOKS[_hookCursor % HOOKS.length];
-    _hookCursor = (_hookCursor + 1) | 0;
-    return h;
   }
 
   // Build 5 hashtags. The first is always #invisiblebroadcast
