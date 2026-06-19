@@ -4721,34 +4721,32 @@
   // from the original (not just a compression of the original
   // sentences with a few synonym swaps):
   //
-  //   1. Clean the source name (remove "The ", strip after " — ").
-  //   2. Clean the title — remove common news prefixes
+  //   1. Clean the title — remove common news prefixes
   //      ("Breaking:", "Update:", "Just in:", "Reported:", …) and
   //      trailing punctuation → this becomes the **topic**.
-  //   3. Use TF.js to find the most "central" sentence from the
+  //   2. Use TF.js to find the most "central" sentence from the
   //      summary: build TF-IDF vectors, compute the centroid via
   //      tf.tensor2d().mean(0), then pick the sentence with the
   //      highest cosine similarity to the centroid. This is the
   //      **key fact** — a SINGLE sentence, not two.
-  //   4. Compress the key fact (strip filler, apply synonyms,
+  //   3. Compress the key fact (strip filler, apply synonyms,
   //      cap at ~120 chars).
-  //   5. Build a NEW sentence using a template, NOT a copy:
-  //         "[Source] reports on [topic]. [compressed key fact]"
-  //      or "Update: [topic]. [compressed key fact]"
-  //      The output is a freshly composed sentence around the
-  //      extracted topic + key fact, not the original wording.
-  //   6. Cap the body at ~280 chars (Instagram caption sweet spot).
-  //   7. Append 5 hashtags from buildHashtags() below.
+  //   4. Build the body as "Update: [topic]. [compressed key fact]"
+  //      — a freshly composed sentence around the extracted topic
+  //      + key fact, not the original wording.
+  //   5. Cap the body at ~280 chars (Instagram caption sweet spot).
+  //   6. Append 5 hashtags from buildHashtags() below. The source
+  //      name shows up here (e.g. #apple, #thehindu) instead of
+  //      being spliced into the body — the body stays clean.
   //
   // The result is a short caption that uses the article's
   // information but in a clearly different structure. It does
   // NOT copy the title or summary verbatim.
   async function buildShareCaption(article) {
     if (!article) return '';
-    const source = cleanSourceName(article.source);
     const title = cleanTitleForTopic(article.title);
     const summary = cleanSummary(stripHtml(article.summary || '')).trim();
-    const body = await buildRephrasedBody(title, summary, source);
+    const body = await buildRephrasedBody(title, summary);
     if (!body) {
       // Absolute fallback: use the topic as-is if everything
       // else fails (e.g. TF.js not loaded yet, empty summary).
@@ -4759,19 +4757,6 @@
   }
 
   // ── Rephraser internals (no AI, all rule-based + TF.js) ──
-
-  // Clean a source name for use in the caption template.
-  //   "The Hindu — News"      → "The Hindu"
-  //   "BBC News"              → "BBC News"
-  //   "Reuters | World"       → "Reuters"
-  function cleanSourceName(source) {
-    if (!source) return '';
-    let s = String(source).trim();
-    if (!s) return '';
-    s = s.replace(/^the\s+/i, '');
-    s = s.split(/\s+[—|–-]\s+/)[0];
-    return s.trim();
-  }
 
   // Clean a title for use as the topic in the caption.
   //   "Breaking: Apple unveils iPhone 15"     → "Apple unveils iPhone 15"
@@ -4939,12 +4924,14 @@
   // Build the rephrased body. This is the main rephraser.
   // It produces a NEW sentence (not a copy of the original)
   // by combining:
-  //   - a cleaned source name
   //   - a cleaned title (the "topic")
   //   - the most central sentence from the summary (the "key fact"),
   //     extracted via TF.js TF-IDF + centroid finding
-  // …all wrapped in a social-media template.
-  async function buildRephrasedBody(title, summary, source) {
+  // …wrapped in a simple "Update: [topic]." hook. The source name
+  // is no longer spliced into the body — that read as awkward
+  // filler ("Apple reports on Apple unveils iPhone 15…") and the
+  // source is already represented in the hashtags instead.
+  async function buildRephrasedBody(title, summary) {
     // 1. Extract the key fact from the summary using TF.js.
     //    This is a SINGLE sentence, not two, and it's the one
     //    most representative of the summary (highest cosine
@@ -4962,14 +4949,11 @@
       }
     }
 
-    // 2. Build a NEW sentence using a template. The structure is
-    //    deliberately different from the original title/summary
-    //    so the output doesn't read like a verbatim copy.
+    // 2. Build the body. The structure is deliberately different
+    //    from the original title/summary so the output doesn't
+    //    read like a verbatim copy.
     let body = '';
-    if (source && title) {
-      // "[Source] reports on [topic]."
-      body = source + ' reports on ' + title + '.';
-    } else if (title) {
+    if (title) {
       // "Update: [topic]."
       body = 'Update: ' + title + '.';
     } else if (keyFact) {
