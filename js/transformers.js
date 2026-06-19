@@ -122,13 +122,13 @@ const Transformers = (() => {
       let initializingEmitted = false;
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       // Hard cap on how long the whole pipeline() call (download +
-      // ONNX session init + warmup) is allowed to take. 90s is
+      // ONNX session init + warmup) is allowed to take. 60s is
       // generous — even a mid-range phone on Wi-Fi should finish
-      // well under 60s. If we hit this, the model cache is likely
+      // well under 30s. If we hit this, the model cache is likely
       // corrupted (a half-downloaded file from a previous session)
       // and the only fix is to clear it. We surface a specific
       // error so the user knows what to do.
-      const INIT_TIMEOUT_MS = 90000;
+      const INIT_TIMEOUT_MS = 60000;
       const pipelinePromise = _pipeline('zero-shot-classification', MODEL_ID, {
         quantized: true,
         progress_callback: (data) => {

@@ -718,7 +718,17 @@
     if (fill) fill.style.width = Math.round(p) + '%';
     if (file) {
       const lbl = $('#transformers-progress-label');
-      if (lbl) lbl.textContent = 'Downloading ' + file + '…';
+      if (lbl) {
+        // The "Initializing model…" message is NOT a download —
+        // it's the ONNX runtime warming up after the files
+        // finished. Don't prefix it with "Downloading " or the
+        // bar looks stuck on a download that's already done.
+        if (/Initializing/i.test(file)) {
+          lbl.textContent = file;
+        } else {
+          lbl.textContent = 'Downloading ' + file + '…';
+        }
+      }
     }
   }
   function showTransformersError(msg) {
@@ -750,15 +760,18 @@
   // idempotent (we null them out after binding).
   let _transformersBound = false;
   // Three-stage watchdog for the "Initializing model…" phase.
-  // 30s: clearer "Still initializing…" message.
-  // 60s: "taking longer than usual" note with realistic estimate.
-  // 90s: hint to clear browser cache (the in-library Promise.race
-  // timeout will fire around the same time and surface a real
-  // error). All three are cleared on 'ready' or 'failed' or any
+  // The hard 60s timeout fires from inside transformers.js
+  // (Promise.race), so these watchdogs are purely for UI feedback
+  // — they change the label so the user knows something is still
+  // happening, not a frozen bar.
+  // 15s: "Still initializing…" — first hint that this is slow.
+  // 35s: "taking longer than usual" with realistic estimate.
+  // 55s: imminent timeout warning (5s before the 60s hard cutoff).
+  // All three are cleared on 'ready' or 'failed' or any
   // non-initializing progress event.
-  let _tfInitWatchdog30 = null;
-  let _tfInitWatchdog60 = null;
-  let _tfInitWatchdog90 = null;
+  let _tfInitWatchdog15 = null;
+  let _tfInitWatchdog35 = null;
+  let _tfInitWatchdog55 = null;
   function bindTransformersUI() {
     if (_transformersBound) return;
     _transformersBound = true;
@@ -773,55 +786,51 @@
       Transformers.onProgress((evt) => {
         if (evt.type === 'progress') {
           updateTransformersProgress(evt.progress, evt.file);
-          // Two-stage watchdog for the silent "initializing ONNX
-          // session" phase that follows the last file download.
-          //  - 30s in: switch the label to a clearer "still
-          //    initializing" message so the user knows the bar
-          //    isn't frozen.
-          //  - 60s in: append a "this is taking longer than usual"
-          //    note. We still trust the library to finish; only
-          //    the in-library 90s hard timeout (Promise.race) will
-          //    actually give up.
+          // Three-stage watchdog for the silent "initializing ONNX
+          // session" phase. The hard 60s Promise.race timeout in
+          // transformers.js is the real backstop — these just give
+          // the user a running commentary so the bar doesn't look
+          // frozen.
           if (evt.progress >= 95 && /Initializing/i.test(evt.file || '')) {
-            if (_tfInitWatchdog30) clearTimeout(_tfInitWatchdog30);
-            if (_tfInitWatchdog60) clearTimeout(_tfInitWatchdog60);
-            if (_tfInitWatchdog90) clearTimeout(_tfInitWatchdog90);
-            _tfInitWatchdog30 = setTimeout(() => {
+            if (_tfInitWatchdog15) clearTimeout(_tfInitWatchdog15);
+            if (_tfInitWatchdog35) clearTimeout(_tfInitWatchdog35);
+            if (_tfInitWatchdog55) clearTimeout(_tfInitWatchdog55);
+            _tfInitWatchdog15 = setTimeout(() => {
               const lbl = $('#transformers-progress-label');
               if (lbl && /Initializing/i.test(lbl.textContent)) {
                 lbl.textContent = 'Still initializing model… (WebAssembly + memory allocation, can take a while on phones)';
               }
-              _tfInitWatchdog30 = null;
-            }, 30000);
-            _tfInitWatchdog60 = setTimeout(() => {
+              _tfInitWatchdog15 = null;
+            }, 15000);
+            _tfInitWatchdog35 = setTimeout(() => {
               const lbl = $('#transformers-progress-label');
               if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
-                lbl.textContent = 'Still initializing… taking longer than usual. On a slow device this can take 1–2 min. Will time out at 90s if it fails.';
+                lbl.textContent = 'Still initializing… slower than expected. Will time out at 60s if it doesn\'t finish.';
               }
-              _tfInitWatchdog60 = null;
-            }, 60000);
-            _tfInitWatchdog90 = setTimeout(() => {
+              _tfInitWatchdog35 = null;
+            }, 35000);
+            _tfInitWatchdog55 = setTimeout(() => {
               const lbl = $('#transformers-progress-label');
               if (lbl && /Initializing|Still/i.test(lbl.textContent)) {
-                lbl.textContent = 'Initialization is taking very long. If this doesn\'t complete in a few seconds, clear your browser cache and retry.';
+                lbl.textContent = 'About to time out… if this fails, clear browser cache and retry.';
               }
-              _tfInitWatchdog90 = null;
-            }, 90000);
+              _tfInitWatchdog55 = null;
+            }, 55000);
           } else {
-            if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
-            if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
-            if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
+            if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
+            if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
+            if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
           }
         } else if (evt.type === 'failed') {
-          if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
-          if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
-          if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
+          if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
+          if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
+          if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
           hideTransformersProgress();
           showTransformersError(evt.error || 'unknown error');
         } else if (evt.type === 'ready') {
-          if (_tfInitWatchdog30) { clearTimeout(_tfInitWatchdog30); _tfInitWatchdog30 = null; }
-          if (_tfInitWatchdog60) { clearTimeout(_tfInitWatchdog60); _tfInitWatchdog60 = null; }
-          if (_tfInitWatchdog90) { clearTimeout(_tfInitWatchdog90); _tfInitWatchdog90 = null; }
+          if (_tfInitWatchdog15) { clearTimeout(_tfInitWatchdog15); _tfInitWatchdog15 = null; }
+          if (_tfInitWatchdog35) { clearTimeout(_tfInitWatchdog35); _tfInitWatchdog35 = null; }
+          if (_tfInitWatchdog55) { clearTimeout(_tfInitWatchdog55); _tfInitWatchdog55 = null; }
           updateTransformersProgress(100, 'ready');
           setTimeout(() => hideTransformersProgress(), 800);
           hideTransformersDialog();
