@@ -23,7 +23,8 @@
   <meta property="og:description" content="Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
-  <title>Invisible Broadcast — Home</title>
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Invisible Broadcast — Analyze</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -101,49 +102,26 @@
         <input type="text" id="search-input" placeholder="Search articles…">
       </div>
     </div>
-
-    <!-- Top Navigation Tabs -->
-    <nav class="top-tabs-row" id="top-tabs-row">
-      <div class="page-container">
-        <ul class="tab-list" id="top-tab-list">
-          <li class="tab-item active" data-scope="global">Global</li>
-          <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-        </ul>
-      </div>
-    </nav>
-    <div class="sub-tabs-row" id="sub-tabs-row">
-      <div class="page-container">
-        <div class="tab-list" id="sub-tab-list" hidden></div>
-      </div>
-    </div>
-    <div class="explore-inner-tabs" id="explore-inner-tabs" hidden>
-      <div class="page-container" id="explore-inner-tabs-container"></div>
-    </div>
   </div>
 
   <!-- Main Content Area -->
   <main class="app-main page-enter" id="main-content">
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Loading news feeds&hellip;</p>
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Subject Analysis</h1>
+      </div>
+
+      <section class="hero">
+        <div class="hero-content">
+          <h2>Analysis Dashboard</h2>
+          <p>Analyze public figures, track media coverage, and measure hypocrisy, bias, relevance, and factual clarity across news articles and Twitter discourse. Enter a subject to generate a comprehensive analysis report.</p>
+          <button class="btn btn-primary" id="hero-analyze-btn">&#x1F680; Start Analysis</button>
+        </div>
+      </section>
     </div>
   </main>
 
-  <!-- Section Footer Bar (title + view toggle, always fixed at bottom) -->
-  <div class="section-footer-bar" id="section-footer-bar">
-    <div class="section-footer-inner">
-      <div class="section-footer-left">
-        <span class="section-meta" id="section-meta"></span>
-        <h2 id="section-title"></h2>
-      </div>
-      <div class="section-footer-right">
-        <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Footer -->
   <footer class="app-footer">
     <div class="page-container">
       Invisible Broadcast &mdash; Aggregated from global sources.
@@ -155,7 +133,7 @@
     </div>
   </footer>
 
-  <!-- Modals (preserved from original SPA) -->
+  <!-- Modals -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal">
       <div class="modal-header">
@@ -166,6 +144,14 @@
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
       <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label">Tweets (via Nitter)</label>
+          <p class="setting-desc">Tweets for the Analyze feature are fetched from public Nitter instances.</p>
+          <p class="setting-desc" id="settings-nitter-hint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-tertiary);word-break:break-word;"></p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-ghost" id="settings-nitter-clear" type="button">Clear tweet cache</button>
+          </div>
+        </div>
         <div class="setting-group">
           <label class="setting-label" for="settings-language">Translation Language</label>
           <p class="setting-desc">Translate articles to your preferred language.</p>
@@ -233,12 +219,6 @@
           </div>
           <div id="feed-validate-msg" class="feed-validate-msg"></div>
           <div id="feed-custom-list"></div>
-        </div>
-        <div class="setting-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
-          <button class="btn" id="hard-refresh-btn" style="width:100%;justify-content:center;color:var(--accent-red) !important;border-color:var(--accent-red) !important;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Hard Refresh — Clear Cache &amp; Reset
-          </button>
         </div>
       </div>
       <div class="modal-footer">
@@ -309,202 +289,6 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="activity-modal">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/></svg>
-          Activity
-        </h2>
-        <button class="modal-close" id="activity-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="activity-tabs">
-          <button class="activity-tab active" data-actab="history">History</button>
-          <button class="activity-tab" data-actab="liked">Liked</button>
-          <button class="activity-tab" data-actab="disliked">Disliked</button>
-          <button class="activity-tab" data-actab="flagged">Flagged</button>
-          <button class="activity-tab" data-actab="failed">Failed Sources</button>
-        </div>
-        <div id="activity-content"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="comments-page" id="comments-page" style="display:none">
-    <div class="comments-drag-area" id="comments-drag-handle">
-      <div class="comments-drag-handle" id="comments-drag-handle-inner"></div>
-    </div>
-    <div class="comments-page-header">
-      <button class="comments-back-btn" id="comments-back-btn" title="Back">&#x2190;</button>
-      <h2>Comments</h2>
-      <div style="width:32px;"></div>
-    </div>
-    <div class="comments-list" id="comments-list"></div>
-    <div class="comments-input-area">
-      <div class="comments-reply-preview" id="comments-reply-preview" style="display:none">
-        <span id="comments-reply-text"></span>
-        <button class="comments-reply-cancel" id="comments-reply-cancel">&times;</button>
-      </div>
-      <div class="comments-input-row">
-        <textarea class="comments-input" id="comments-input" placeholder="Add a comment…" rows="1"></textarea>
-        <button class="comments-post-btn" id="comments-post-btn" title="Post">&#x27A4;</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="delete-comment-modal">
-    <div class="modal" style="max-width:400px;">
-      <div class="modal-header">
-        <h2>Delete Comment</h2>
-        <button class="modal-close" id="delete-comment-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="margin:0 0 16px;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">Are you sure you want to delete this comment?</p>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn" id="delete-comment-cancel">Cancel</button>
-          <button class="btn btn-danger" id="delete-comment-confirm">Delete</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="hard-refresh-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Hard Refresh</h2>
-        <button class="modal-close" id="hard-refresh-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="margin:0 0 12px;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">This will clear the local cache and reload the page.</p>
-        <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;"><strong style="color:var(--text-primary);">Your sign-in session will be preserved.</strong></p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" id="hard-refresh-cancel">Cancel</button>
-        <button class="btn btn-primary" id="hard-refresh-confirm">Hard Refresh</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay sources-config-modal" id="sources-config-modal">
-    <div class="modal modal-wide">
-      <div class="modal-header">
-        <h2>Configure Sources</h2>
-        <button class="modal-close" id="sources-config-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="scm-search-row">
-          <input type="text" id="sources-config-search" class="scm-search" placeholder="Search sources by name, region, or language…" autocomplete="off">
-        </div>
-        <div id="sources-config-body" class="scm-body"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" id="sources-config-done">Done</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="top-date-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/></svg>
-          Pick a Date
-        </h2>
-        <button class="modal-close" id="top-date-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="setting-desc" style="margin-bottom:12px;">Choose the day to view rankings for.</p>
-        <div id="top-date-list" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="filter-modal">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <h2><span style="margin-right:6px;">&#x1F50D;</span><span>Filter</span></h2>
-        <button class="modal-close" id="filter-modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="filter-modal-body">
-        <div class="filter-section">
-          <div class="filter-section-label">Date Range <span class="filter-optional">(leave blank for "all time")</span></div>
-          <div class="filter-date-row">
-            <input type="date" id="filter-date-start">
-            <span class="filter-date-sep">&rarr;</span>
-            <input type="date" id="filter-date-end">
-          </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-section-label"><span>Sources</span> <span class="filter-scope-hint" id="filter-scope-hint"></span></div>
-          <div class="filter-bulk-row">
-            <button type="button" class="filter-bulk-btn" id="filter-select-all">Select all</button>
-            <button type="button" class="filter-bulk-btn" id="filter-select-none">Clear</button>
-          </div>
-          <div class="filter-source-list" id="filter-source-list"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" id="filter-modal-reset">Reset</button>
-        <button class="btn" id="filter-modal-cancel">Cancel</button>
-        <button class="btn btn-primary" id="filter-modal-apply">Apply</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="categories-modal">
-    <div class="modal modal-categories" style="max-width:640px;">
-      <div class="modal-header">
-        <h2><span style="margin-right:6px;">&#x1F4C2;</span><span>Categories</span></h2>
-        <button class="modal-close" id="categories-modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="categories-modal-body">
-        <div class="cat-tabs" id="cat-tabs" role="tablist">
-          <button class="cat-tab active" data-cat-tab="news" role="tab" aria-selected="true">&#x1F4F0; News Feeds</button>
-          <button class="cat-tab" data-cat-tab="parliament" role="tab" aria-selected="false">&#x1F3DB;&#xFE0F; Parliament Statements</button>
-        </div>
-        <div class="cat-pane active" id="cat-pane-news" role="tabpanel">
-          <p class="cat-pane-hint" id="cat-pane-news-hint">Pick a category to filter the news.</p>
-          <div class="cat-grid" id="cat-news-grid"></div>
-        </div>
-        <div class="cat-pane" id="cat-pane-parliament" role="tabpanel">
-          <p class="cat-pane-hint" id="cat-pane-parliament-hint">Browse official statements, questions, and debates from legislatures around the world.</p>
-          <div id="cat-parliament-content"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="translate-modal">
-    <div class="modal" style="max-width:380px;">
-      <div class="modal-header">
-        <h2><span style="margin-right:6px;">&#x1F310;</span><span id="translate-modal-title">Translate</span></h2>
-        <button class="modal-close" id="translate-modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="translate-modal-body" style="padding:8px 0;"></div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="cluster-modal">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h2 id="cluster-modal-title">Topic</h2>
-        <button class="modal-close" id="cluster-modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="cluster-modal-body" style="padding:0;"></div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="build-modal">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h2 id="build-modal-title">Build Article</h2>
-        <button class="modal-close" id="build-modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="build-modal-body" style="padding:0;"></div>
-    </div>
-  </div>
-
   <div class="modal-overlay" id="analyze-config-modal">
     <div class="modal">
       <div class="modal-header">
@@ -521,7 +305,9 @@
         <div class="acf-section">
           <label class="acf-label">Data Source</label>
           <div class="acf-source-row">
-            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds" checked><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="twitter" id="acf-source-twitter"><span>Twitter Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds"><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="both" id="acf-source-both" checked><span>Both</span></label>
           </div>
         </div>
         <div class="acf-section">
@@ -721,7 +507,7 @@
   <script src="js/clustering.js"></script>
   <script src="js/publisher.js"></script>
   <script src="js/shared-state.js"></script>
-  <script src="js/app-home.js?v=6"></script>
+  <script src="js/app-analyze.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

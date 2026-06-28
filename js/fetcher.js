@@ -147,6 +147,9 @@ const FeedFetcher = (() => {
     const res = await fetchWithTimeout(proxyUrl);
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     const xmlText = await res.text();
+    if (!xmlText || !xmlText.includes('<')) {
+      throw new Error('Proxy returned empty or non-XML content');
+    }
     // Quick parse to count items before we build full article objects.
     try {
       const parser = new DOMParser();
@@ -223,6 +226,7 @@ const FeedFetcher = (() => {
     } catch (proxyErr) {
       // Fall back to rss2json if the proxy fails (network, 503, etc.)
       const encodedUrl = encodeURIComponent(feed.url);
+      const proxyMessage = proxyErr && proxyErr.message ? proxyErr.message : 'Proxy fetch failed';
       // rss2json free tier caps at 100 items, but it's a good fallback
       const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
 
@@ -260,8 +264,10 @@ const FeedFetcher = (() => {
         afterFetch(feed, allItems);
         return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
       } catch (rssErr) {
-        console.warn(`Feed failed: ${feed.name} (${feed.url})`, proxyErr.message, rssErr.message);
-        afterFetch(feed, [], rssErr);
+        if (console && typeof console.warn === 'function') {
+          console.warn(`Feed failed: ${feed.name} (${feed.url})`, proxyMessage, rssErr && rssErr.message ? rssErr.message : 'RSS fallback failed');
+        }
+        afterFetch(feed, [], rssErr || new Error(proxyMessage));
         return [];
       }
     }

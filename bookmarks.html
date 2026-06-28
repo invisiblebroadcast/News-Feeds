@@ -23,7 +23,8 @@
   <meta property="og:description" content="Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
-  <title>Invisible Broadcast — Home</title>
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Invisible Broadcast — Bookmarks</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -101,49 +102,24 @@
         <input type="text" id="search-input" placeholder="Search articles…">
       </div>
     </div>
-
-    <!-- Top Navigation Tabs -->
-    <nav class="top-tabs-row" id="top-tabs-row">
-      <div class="page-container">
-        <ul class="tab-list" id="top-tab-list">
-          <li class="tab-item active" data-scope="global">Global</li>
-          <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-        </ul>
-      </div>
-    </nav>
-    <div class="sub-tabs-row" id="sub-tabs-row">
-      <div class="page-container">
-        <div class="tab-list" id="sub-tab-list" hidden></div>
-      </div>
-    </div>
-    <div class="explore-inner-tabs" id="explore-inner-tabs" hidden>
-      <div class="page-container" id="explore-inner-tabs-container"></div>
-    </div>
   </div>
 
   <!-- Main Content Area -->
   <main class="app-main page-enter" id="main-content">
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Loading news feeds&hellip;</p>
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Bookmarks</h1>
+        <p>Your saved articles, flagged for later.</p>
+      </div>
+      <div class="bookmarks-grid" id="bookmarks-grid"></div>
+      <div class="loading-state" id="bookmarks-loading" style="display:none;">
+        <div class="loading-spinner"></div>
+        <p>Loading bookmarks&hellip;</p>
+      </div>
     </div>
   </main>
 
-  <!-- Section Footer Bar (title + view toggle, always fixed at bottom) -->
-  <div class="section-footer-bar" id="section-footer-bar">
-    <div class="section-footer-inner">
-      <div class="section-footer-left">
-        <span class="section-meta" id="section-meta"></span>
-        <h2 id="section-title"></h2>
-      </div>
-      <div class="section-footer-right">
-        <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Footer -->
   <footer class="app-footer">
     <div class="page-container">
       Invisible Broadcast &mdash; Aggregated from global sources.
@@ -166,6 +142,14 @@
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
       <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label">Tweets (via Nitter)</label>
+          <p class="setting-desc">Tweets for the Analyze feature are fetched from public Nitter instances.</p>
+          <p class="setting-desc" id="settings-nitter-hint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-tertiary);word-break:break-word;"></p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-ghost" id="settings-nitter-clear" type="button">Clear tweet cache</button>
+          </div>
+        </div>
         <div class="setting-group">
           <label class="setting-label" for="settings-language">Translation Language</label>
           <p class="setting-desc">Translate articles to your preferred language.</p>
@@ -233,12 +217,6 @@
           </div>
           <div id="feed-validate-msg" class="feed-validate-msg"></div>
           <div id="feed-custom-list"></div>
-        </div>
-        <div class="setting-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
-          <button class="btn" id="hard-refresh-btn" style="width:100%;justify-content:center;color:var(--accent-red) !important;border-color:var(--accent-red) !important;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Hard Refresh — Clear Cache &amp; Reset
-          </button>
         </div>
       </div>
       <div class="modal-footer">
@@ -521,7 +499,9 @@
         <div class="acf-section">
           <label class="acf-label">Data Source</label>
           <div class="acf-source-row">
-            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds" checked><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="twitter" id="acf-source-twitter"><span>Twitter Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds"><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="both" id="acf-source-both" checked><span>Both</span></label>
           </div>
         </div>
         <div class="acf-section">
@@ -721,7 +701,7 @@
   <script src="js/clustering.js"></script>
   <script src="js/publisher.js"></script>
   <script src="js/shared-state.js"></script>
-  <script src="js/app-home.js?v=6"></script>
+  <script src="js/app-bookmarks.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

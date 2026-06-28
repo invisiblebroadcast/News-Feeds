@@ -5,8 +5,9 @@ const APP_VERSION = 6;
   const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
   console.log('[NewsFeeds] App version: ' + APP_VERSION);
 
-  let currentScope = 'nation';
+  let currentScope = 'global';
   let currentNation = FeedManager.getSelectedNation();
+  let currentSection = 'news';
   let currentSubcat = 'all';
   let currentMode = 'live';
   let currentRankType = 'ai'; // legacy — kept for compatibility; always ignored
@@ -42,6 +43,7 @@ const APP_VERSION = 6;
     get currentMode() { return currentMode; },
     get currentScope() { return currentScope; },
     get currentNation() { return currentNation; },
+    get currentSection() { return currentSection; },
     get currentSubcat() { return currentSubcat; },
     openModal,
     closeModal,
@@ -65,6 +67,21 @@ const APP_VERSION = 6;
     popIsInFlight() { return popstateBusy; },
     get nextFrameId() { return ++nextFrameId; }
   };
+
+  /* Persist state variables to AppState so the next page load
+   * (or the dashboard page, or any other page that imports
+   * shared-state.js) can restore them. Called automatically
+   * after every state mutation. */
+  function _persist() {
+    AppState.set('currentScope', currentScope);
+    AppState.set('currentNation', currentNation);
+    AppState.set('currentSection', currentSection);
+    AppState.set('currentSubcat', currentSubcat);
+    AppState.set('currentMode', currentMode);
+    AppState.set('currentView', currentView);
+    AppState.set('currentSort', currentSort);
+    AppState.set('currentSearch', currentSearch);
+  }
 
   /* ── Modal / "deeper view" history stack ──
    * Goal: when the user presses the browser back button (or the
@@ -364,6 +381,7 @@ const APP_VERSION = 6;
 
   const el = {
     topTabs: $('#top-tab-list'),
+    subTabs: $('#sub-tab-list'),
     // The old sub-tab-list / sub-tab-bar elements have been removed
     // from the DOM (replaced by the Categories modal). Older
     // cached copies of this script can still call into them, so
@@ -606,56 +624,28 @@ const APP_VERSION = 6;
   }
 
 
-  /* ── Top-Level Tabs (Global / Nation / Topics / Conflicts) ── */
+  /* ── Primary Tabs (Global / India) ── */
   function renderTopTabs() {
-    const nations = FeedManager.getNations();
-    const current = currentNation;
     let html = '<li class="tab-item' + (currentScope === 'global' ? ' active' : '') + '" data-scope="global">Global</li>';
-    for (const [key, label] of Object.entries(nations)) {
-      html += '<li class="tab-item' + (currentScope === 'nation' && current === key ? ' active' : '') + '" data-scope="nation" data-nation="' + key + '">' + label + '</li>';
-    }
-    // Topics view: groups articles that cover the same story
-    // across sources. The badge shows how many multi-source
-    // clusters are currently visible. The count is computed
-    // lazily (it can take a second on a full cache) so we
-    // don't block the initial tab render on it.
-    let topicCount = 0;
-    try {
-      const all = collectScopeArticles();
-      if (all && all.length) {
-        // Cheap synchronous count: just count articles from
-        // 2+ distinct sources that share ≥1 title token. Not
-        // the same as the full TF-IDF cluster pass, but gives
-        // a stable-enough badge number without blocking.
-        const buckets = bucketBySharedTitleToken(all);
-        topicCount = buckets.filter(b => b.sources >= 2).length;
-      }
-    } catch {}
-    html += '<li class="tab-item topics-tab' + (currentScope === 'topics' ? ' active' : '') + '" data-scope="topics">' +
-      '<span class="ct-icon">&#x1F4F0;</span> Topics' +
-      (topicCount ? '<span class="ct-count">' + topicCount + '</span>' : '') +
-      '</li>';
-    // Conflicts view is a special scope that lists articles in
-    // cross-source conflicting clusters. Compute its count up-front so
-    // the tab badge stays in sync with what the user will see.
-    // Capped to the most recent CONFLICT_CORPUS_CAP articles per
-    // scope so the badge never takes more than ~1 second to
-    // compute, even on a full 5000-article cache.
-    let conflictCount = 0;
-    for (const key of Object.keys(scopeCache)) {
-      const cached = scopeCache[key];
-      if (!cached || !cached.groups) continue;
-      const all = [].concat(...Object.values(cached.groups));
-      if (!all.length) continue;
-      const recent = all.slice(0, CONFLICT_CORPUS_CAP);
-      const map = AI.detectConflicts(recent);
-      for (const c of map.values()) if (c.isConflicting) conflictCount++;
-    }
-    html += '<li class="tab-item conflicts-tab' + (currentScope === 'conflicts' ? ' active' : '') + '" data-scope="conflicts">' +
-      '<span class="ct-icon">⚠</span> Conflicts' +
-      (conflictCount ? '<span class="ct-count">' + conflictCount + '</span>' : '') +
-      '</li>';
+    html += '<li class="tab-item' + (currentScope === 'nation' && currentNation === 'india' ? ' active' : '') + '" data-scope="nation" data-nation="india">India</li>';
     el.topTabs.innerHTML = html;
+    renderSectionTabs();
+  }
+
+  function renderSectionTabs() {
+    if (!el.subTabs) return;
+    const tabs = [
+      { key: 'news', label: 'Stories', icon: '📰' }
+    ];
+    const html = tabs.map(tab => {
+      const active = currentSection === tab.key;
+      return '<button class="sub-tab' + (active ? ' active' : '') + '" type="button" data-section="' + tab.key + '">' +
+        '<span class="sub-tab-icon">' + tab.icon + '</span>' +
+        '<span class="sub-tab-label">' + escHtml(tab.label) + '</span>' +
+      '</button>';
+    }).join('');
+    el.subTabs.innerHTML = html;
+    el.subTabs.hidden = false;
   }
 
   // Cheap pre-bucketing for the Topics tab badge. We bucket
@@ -709,43 +699,144 @@ const APP_VERSION = 6;
     return out;
   }
 
+  function renderExploreView() {
+    const container = el.main;
+    if (!container) return;
+
+    const EXPLORE_TABS = [
+      { key: 'categories', label: 'Categories', icon: '🗂' },
+      { key: 'topics', label: 'Topics', icon: '📡' },
+      { key: 'conflicts', label: 'Conflicts', icon: '⚠' }
+    ];
+
+    const tabsHtml = EXPLORE_TABS.map(t =>
+      '<button class="explore-inner-tab' + (t.key === currentExploreTab ? ' active' : '') + '" data-explore-tab="' + t.key + '">' +
+        '<span class="sub-tab-icon">' + t.icon + '</span>' +
+        '<span class="sub-tab-label">' + t.label + '</span>' +
+      '</button>'
+    ).join('');
+
+    const tabsWrap = document.getElementById('explore-inner-tabs');
+    const tabsContainer = document.getElementById('explore-inner-tabs-container');
+    if (tabsWrap && tabsContainer) {
+      tabsWrap.hidden = false;
+      tabsContainer.innerHTML = tabsHtml;
+      tabsContainer.querySelectorAll('.explore-inner-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tab = btn.dataset.exploreTab;
+          if (tab === currentExploreTab) return;
+          currentExploreTab = tab;
+          renderExploreTabContent();
+          tabsContainer.querySelectorAll('.explore-inner-tab').forEach(b => b.classList.toggle('active', b.dataset.exploreTab === tab));
+          updateStickyHeader();
+        });
+      });
+    }
+
+    container.innerHTML = '<div class="explore-view">' +
+      '<div class="explore-inner-content" id="explore-inner-content"></div>' +
+    '</div>';
+
+    renderExploreTabContent();
+    updateStickyHeader();
+  }
+
+  function renderExploreTabContent() {
+    const content = document.getElementById('explore-inner-content');
+    if (!content) return;
+    if (currentExploreTab === 'categories') {
+      renderExploreCategories(content);
+    } else if (currentExploreTab === 'topics') {
+      renderTopicsView(content);
+    } else if (currentExploreTab === 'conflicts') {
+      renderConflictsView(content);
+    }
+  }
+
+  function renderExploreCategories(container) {
+    if (isParliamentSubcat(currentSubcat)) { currentSubcat = 'all'; }
+    const CATEGORIES = [
+      { id: 'all', label: 'All', icon: '📊' },
+      { id: 'politics', label: 'Politics', icon: '🏛' },
+      { id: 'business', label: 'Business', icon: '📈' },
+      { id: 'technology', label: 'Technology', icon: '💻' },
+      { id: 'science', label: 'Science', icon: '🔬' },
+      { id: 'health', label: 'Health', icon: '❤' },
+      { id: 'sports', label: 'Sports', icon: '⚽' },
+      { id: 'entertainment', label: 'Entertainment', icon: '🎬' },
+      { id: 'environment', label: 'Environment', icon: '🌱' },
+      { id: 'education', label: 'Education', icon: '📚' }
+    ];
+    const scopeParam = currentScope === 'global' ? '' : '&scope=nation&nation=' + currentNation;
+    container.innerHTML = '<div class="explore-cat-grid">' +
+      CATEGORIES.map(c =>
+        '<a href="index.html?subcat=' + c.id + scopeParam + '" class="category-card explore-cat-card">' +
+          '<span class="cat-icon">' + c.icon + '</span>' +
+          '<span class="cat-name">' + c.label + '</span>' +
+        '</a>'
+      ).join('') +
+    '</div>';
+  }
+
+  function openSectionSelection(scope, nation, section, subcat) {
+    const targetScope = scope || currentScope;
+    const targetNation = targetScope === 'nation'
+      ? (nation || currentNation || FeedManager.getSelectedNation())
+      : 'india';
+    const targetSection = section || 'explore';
+    const prevKey = scopeKey();
+    const isScopeChange = targetScope !== currentScope || targetNation !== currentNation;
+    if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
+    currentScope = targetScope;
+    currentNation = targetNation;
+    currentSection = targetSection;
+    FeedManager.setSelectedNation(currentNation);
+    if (subcat != null) {
+      currentSubcat = subcat;
+    }
+    if (isParliamentSubcat(currentSubcat)) { currentSubcat = 'all'; }
+    _persist();
+    showLoading();
+    loadedCount = 0;
+    hasFreshBackground = false;
+    liveAllLoaded = false;
+    loadAllState = 'idle';
+    liveAllArticles = null;
+    lastRenderedCount = 0;
+    $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
+    const activeTab = el.topTabs && el.topTabs.querySelector('.tab-item[data-scope="' + currentScope + '"]' + (currentScope === 'nation' ? '[data-nation="' + currentNation + '"]' : ''));
+    if (activeTab) activeTab.classList.add('active');
+    renderSectionTabs();
+    if (targetSection === 'explore' || targetSection === 'topics' || targetSection === 'conflicts') {
+      currentExploreTab = targetSection === 'explore' ? 'categories' : targetSection;
+      if (isParliamentSubcat(currentSubcat)) { currentSubcat = 'all'; }
+      renderExploreView();
+    } else {
+      const tabsWrap = document.getElementById('explore-inner-tabs');
+      if (tabsWrap) tabsWrap.hidden = true;
+      renderSubTabs();
+      renderContent();
+    }
+  }
+
   function bindTopTabs() {
     el.topTabs.addEventListener('click', e => {
       const tab = e.target.closest('.tab-item');
       if (!tab) return;
       const scope = tab.dataset.scope;
-      const nation = tab.dataset.nation || currentNation;
-      if (scope === currentScope && (scope !== 'nation' || nation === currentNation)) return;
-      // Abort any in-flight background fetch for the previous
-      // scope — its results would be dropped on arrival anyway,
-      // and we don't want it competing for the CORS proxy with
-      // the new scope's quick batch.
-      const prevKey = scopeKey();
-      if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
-      currentScope = scope;
-      currentNation = nation;
-      FeedManager.setSelectedNation(nation);
-      // Switching scope almost always invalidates a parliament
-      // subcat (Lok Sabha is not a valid view in the Global tab).
-      // Drop back to 'all' so the new scope's categories show.
-      if (isParliamentSubcat(currentSubcat)) currentSubcat = 'all';
-      loadedCount = 0;
-      hasFreshBackground = false;
-      liveAllLoaded = false;
-      loadAllState = 'idle';
-      liveAllArticles = null;
-      lastRenderedCount = 0;
-      $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      if (scope === 'conflicts') {
-        renderConflictsView();
-      } else if (scope === 'topics') {
-        renderTopicsView();
-      } else {
-        renderSubTabs();
-        renderContent();
-      }
+      const nation = tab.dataset.nation || 'india';
+      openSectionSelection(scope, nation, 'explore', currentSubcat);
     });
+
+    if (el.subTabs) {
+      el.subTabs.addEventListener('click', e => {
+        const tab = e.target.closest('.sub-tab');
+        if (!tab) return;
+        const section = tab.dataset.section;
+        if (!section || section === currentSection) return;
+        openSectionSelection(currentScope, currentNation, section, currentSubcat);
+      });
+    }
   }
 
   /* ── Subcategory Tabs ── */
@@ -814,6 +905,7 @@ const APP_VERSION = 6;
     const prevKey = scopeKey();
     if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
     currentSubcat = sub;
+    _persist();
     hasFreshBackground = false;
     loadedCount = 0;
     liveAllLoaded = false;
@@ -839,12 +931,15 @@ const APP_VERSION = 6;
   }
 
   function updateStickyHeader(metaText) {
-    if (currentScope === 'conflicts') {
+    if (currentSection === 'explore') {
+      const tabLabels = { categories: 'Categories', topics: 'Topics', conflicts: 'Conflicts' };
+      const tabLabel = tabLabels[currentExploreTab] || 'Explore';
       if (el.sectionTitle) {
-        el.sectionTitle.innerHTML = '⚠ Conflicts view' +
-          '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">Cross-source disagreements</span>';
+        el.sectionTitle.innerHTML = (currentScope === 'global' ? '🌍' : '🇮🇳') + ' ' + (currentScope === 'global' ? 'Global' : 'India') +
+          '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + tabLabel + '</span>';
       }
       if (el.sectionMeta) el.sectionMeta.innerHTML = '';
+      syncViewToggleBtn();
       return;
     }
     const disp = categoryDisplay(currentSubcat, currentScope, currentNation);
@@ -852,15 +947,20 @@ const APP_VERSION = 6;
       el.sectionTitle.innerHTML = disp.icon + ' ' + disp.label +
         '<span style="font-size:0.8rem;font-weight:400;color:var(--text-tertiary);margin-left:8px;">' + disp.scopeLabel + '</span>';
     }
-    if (el.sectionMeta) {
-      el.sectionMeta.innerHTML = '';
-      const leftHtml = updateViewToggleInline();
-      if (leftHtml) el.sectionMeta.innerHTML = leftHtml;
+    if (el.sectionMeta) el.sectionMeta.innerHTML = '';
+    syncViewToggleBtn();
+  }
+
+  function syncViewToggleBtn() {
+    const btn = document.getElementById('view-toggle-btn');
+    if (!btn) return;
+    if (currentView === 'reels') {
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+      btn.title = 'List View';
+    } else {
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>';
+      btn.title = 'Cards View';
     }
-    if (el.modeToggle) {
-      updateModeButtonActive();
-    }
-    updateViewToggleInNav();
   }
 
   /* ── Render Content ── */
@@ -1473,18 +1573,14 @@ const APP_VERSION = 6;
 
   function sizeReelsContainer() {
     const container = el.main.querySelector('.reels-container');
-    const bottomBar = document.getElementById('bottom-bar');
     const header = document.querySelector('.app-header');
+    const footerBar = document.getElementById('section-footer-bar');
     if (!container) return;
     requestAnimationFrame(() => {
       const headerH = header ? header.getBoundingClientRect().height : 0;
-      const bottomH = bottomBar ? bottomBar.getBoundingClientRect().height : 0;
-      const available = window.innerHeight - headerH - bottomH;
+      const footerH = footerBar ? footerBar.getBoundingClientRect().height : 0;
+      const available = window.innerHeight - headerH - footerH;
       const maxH = Math.max(240, available - 4);
-      // Only set MAX-height — don't force a fixed height. The card sizes
-      // naturally to its content (image + text) and only the summary
-      // gets a scrollbar IF the card exceeds max-height. When content is
-      // short, the card is short and there's no scrollbar.
       container.style.maxHeight = maxH + 'px';
     });
   }
@@ -1851,6 +1947,7 @@ const APP_VERSION = 6;
   function exitReels() {
     if (currentView !== 'reels') return;
     currentView = 'list';
+    _persist();
     document.body.classList.remove('cards-view');
     $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.view === currentView);
@@ -1864,12 +1961,67 @@ const APP_VERSION = 6;
     displayCurrentSubcat();
   }
 
+  /* ── Categories view ──
+   * A dedicated browse page for Global and India categories.
+   * Selecting a card jumps straight into the matching scope.
+   */
+  function renderCategoriesView() {
+    updateStickyHeader('Categories');
+    const scope = currentScope === 'nation' ? 'nation' : 'global';
+    const title = scope === 'global' ? 'Global' : 'India';
+    const subtitle = scope === 'global'
+      ? 'International coverage, world affairs, and cross-border reporting.'
+      : 'India-focused stories, national policy, and regional context.';
+    const icon = scope === 'global' ? '🌍' : '🇮🇳';
+    const items = FeedManager.subcategoriesForScope(scope);
+    const html = '<div class="categories-view">' +
+      '<div class="categories-hero">' +
+        '<div class="categories-hero-kicker">Browse by category</div>' +
+        '<h3>' + escHtml(title) + ' categories</h3>' +
+        '<p>' + escHtml(subtitle) + '</p>' +
+      '</div>' +
+      '<div class="categories-grid">' +
+        '<section class="categories-panel">' +
+          '<div class="categories-panel-header">' +
+            '<div class="categories-panel-icon">' + icon + '</div>' +
+            '<div>' +
+              '<h4>' + escHtml(title) + '</h4>' +
+              '<p>Tap a card to jump into that feed directly.</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="categories-pill-grid">' +
+            items.map(subcat => {
+              const label = subcat === 'all' ? 'All' : FeedManager.subcatLabel(subcat, scope);
+              const iconName = FeedManager.subcatIcon(subcat);
+              const isActive = currentSubcat === subcat;
+              return '<button class="categories-pill' + (isActive ? ' active' : '') + '" type="button" data-scope="' + escHtml(scope) + '" data-nation="' + escHtml(currentNation) + '" data-subcat="' + escHtml(subcat) + '">' +
+                '<span class="categories-pill-icon">' + iconName + '</span>' +
+                '<span class="categories-pill-label">' + escHtml(label) + '</span>' +
+              '</button>';
+            }).join('') +
+          '</div>' +
+        '</section>' +
+      '</div>' +
+    '</div>';
+    el.main.innerHTML = html;
+
+    el.main.querySelectorAll('.categories-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const scope = btn.dataset.scope || currentScope;
+        const nation = btn.dataset.nation || currentNation;
+        const subcat = btn.dataset.subcat || 'all';
+        openSectionSelection(scope, nation, 'news', subcat);
+      });
+    });
+  }
+
   /* ── Conflicts view ──
    * Lists cross-source conflict clusters across all loaded scope caches,
    * sorted by severity. Each cluster is a card showing the involved
    * articles and the conflicting figures / claims.
    */
-  function renderConflictsView() {
+  function renderConflictsView(container) {
+    const root = container || el.main;
     // 1) Aggregate all loaded articles across every scope cache.
     const seen = new Set();
     const all = [];
@@ -1889,7 +2041,7 @@ const APP_VERSION = 6;
     updateStickyHeader('Conflicts view');
 
     if (!all.length) {
-      el.main.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">⚠️</div>' +
+      root.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">⚠️</div>' +
         '<h3>No articles loaded yet</h3>' +
         '<p>Visit Global or your Nation tab first so we can analyze the latest articles for conflicts.</p></div>';
       return;
@@ -1917,7 +2069,7 @@ const APP_VERSION = 6;
     list.sort((a, b) => (b.severity || 0) - (a.severity || 0));
 
     if (!list.length) {
-      el.main.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">✓</div>' +
+      root.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">✓</div>' +
         '<h3>No conflicts detected</h3>' +
         '<p>Across ' + all.length + ' articles we didn\'t find any cross-source disagreements on numbers or claims.</p></div>';
       return;
@@ -1952,10 +2104,10 @@ const APP_VERSION = 6;
         '</div>';
     }).join('');
 
-    el.main.innerHTML = '<div class="conflicts-list">' + html + '</div>';
+    root.innerHTML = '<div class="conflicts-list">' + html + '</div>';
 
     // Wire article links to open the modal.
-    el.main.querySelectorAll('.cc-article-link').forEach(link => {
+    root.querySelectorAll('.cc-article-link').forEach(link => {
       link.addEventListener('click', e => {
         e.preventDefault();
         const url = decodeURIComponent(link.dataset.link);
@@ -1979,11 +2131,12 @@ const APP_VERSION = 6;
   let _topicsClusters = [];
   let _topicsBuilding = false;
 
-  async function renderTopicsView() {
+  async function renderTopicsView(container) {
+    const root = container || el.main;
     updateStickyHeader('Topics view');
     const all = collectScopeArticles();
     if (!all.length) {
-      el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">📰</div>' +
+      root.innerHTML = '<div class="topics-empty"><div class="ce-icon">📰</div>' +
         '<h3>No articles loaded yet</h3>' +
         '<p>Visit Global or your Nation tab first so we can cluster the latest articles by topic.</p></div>';
       return;
@@ -1991,7 +2144,7 @@ const APP_VERSION = 6;
 
     // Show a loading state immediately. The clustering pass can
     // take a second on a full cache.
-    el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">⏳</div>' +
+    root.innerHTML = '<div class="topics-empty"><div class="ce-icon">⏳</div>' +
       '<h3>Clustering articles…</h3>' +
       '<p>Grouping ' + all.length + ' articles by topic. This takes a moment.</p></div>';
 
@@ -2005,7 +2158,7 @@ const APP_VERSION = 6;
       _topicsClusters = clusters;
 
       if (!clusters.length) {
-        el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">🔍</div>' +
+        root.innerHTML = '<div class="topics-empty"><div class="ce-icon">🔍</div>' +
           '<h3>No topic clusters found</h3>' +
           '<p>Across ' + pool.length + ' articles, we couldn\'t find any stories covered by 2+ different sources. ' +
           'This is normal early in a session or for niche feeds.</p></div>';
@@ -2013,10 +2166,10 @@ const APP_VERSION = 6;
       }
 
       const html = clusters.map(renderClusterCard).join('');
-      el.main.innerHTML = '<div class="topics-list">' + html + '</div>';
+      root.innerHTML = '<div class="topics-list">' + html + '</div>';
 
       // Wire card-level events.
-      el.main.querySelectorAll('.topic-card').forEach(card => {
+      root.querySelectorAll('.topic-card').forEach(card => {
         const clusterId = card.dataset.clusterId;
         // Card body (not the build button) → open detail modal.
         card.addEventListener('click', e => {
@@ -2025,7 +2178,7 @@ const APP_VERSION = 6;
           openClusterModal(clusterId);
         });
       });
-      el.main.querySelectorAll('.topic-build-btn').forEach(btn => {
+      root.querySelectorAll('.topic-build-btn').forEach(btn => {
         btn.addEventListener('click', e => {
           e.stopPropagation();
           openBuildModal(btn.dataset.clusterId);
@@ -2033,7 +2186,7 @@ const APP_VERSION = 6;
       });
     } catch (err) {
       console.warn('Topics clustering failed:', err && err.message);
-      el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">⚠️</div>' +
+      root.innerHTML = '<div class="topics-empty"><div class="ce-icon">⚠️</div>' +
         '<h3>Couldn\'t cluster articles</h3>' +
         '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
     }
@@ -2448,6 +2601,7 @@ const APP_VERSION = 6;
     if (!el.sortBy) return;
     if (!el.sortBy.value) el.sortBy.value = currentSort || 'date-desc';
     currentSort = el.sortBy.value;
+    _persist();
     // Keep the extras select in sync if it exists.
     if (el.sortByExtras && el.sortByExtras.value !== currentSort) {
       el.sortByExtras.value = currentSort;
@@ -2598,17 +2752,19 @@ const APP_VERSION = 6;
   const MIN_VIEW_LOADING_MS = 220;
 
   function bindViewToggle() {
-    document.addEventListener('click', e => {
-      const btn = e.target.closest('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn');
-      if (!btn || btn.classList.contains('active')) return;
-      const newView = btn.dataset.view;
-      const wasReels = currentView === 'reels';
-      currentView = newView;
-      $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => b.classList.remove('active'));
-      $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
-        if (b.dataset.view === currentView) b.classList.add('active');
-      });
-      document.body.classList.toggle('cards-view', currentView === 'reels');
+    const footerBtn = document.getElementById('view-toggle-btn');
+    if (footerBtn) {
+      footerBtn.addEventListener('click', () => {
+        const newView = currentView === 'reels' ? 'list' : 'reels';
+        const wasReels = currentView === 'reels';
+        currentView = newView;
+        _persist();
+        $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => b.classList.remove('active'));
+        $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+          if (b.dataset.view === currentView) b.classList.add('active');
+        });
+        document.body.classList.toggle('cards-view', currentView === 'reels');
+        syncViewToggleBtn();
       // Show the FULL-SCREEN processing overlay (same one used by
       // switchModeNonBlocking) — it has z-index 9999 and a backdrop
       // blur, so the user can't miss it. The earlier inline
@@ -2674,9 +2830,10 @@ const APP_VERSION = 6;
         try { history.back(); } catch {}
       }
     });
-    window.addEventListener('resize', () => {
-      if (currentView === 'reels') sizeReelsContainer();
-    });
+      window.addEventListener('resize', () => {
+        if (currentView === 'reels') sizeReelsContainer();
+      });
+    }
   }
 
   // Exit reels view (e.g. via back button or Escape) without going
@@ -2690,6 +2847,7 @@ const APP_VERSION = 6;
   function exitReelsFromBack() {
     if (currentView !== 'reels') return;
     currentView = 'list';
+    _persist();
     document.body.classList.remove('cards-view');
     $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.view === currentView);
@@ -2854,6 +3012,7 @@ const APP_VERSION = 6;
       // 'all' if the current subcat is genuinely unknown.
       if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
         currentSubcat = 'all';
+        _persist();
       }
 
       // ── PHASE 1: quick batch (15 sources, low cap) ──────────
@@ -3180,6 +3339,7 @@ const APP_VERSION = 6;
       updateSortOptions();
       sb.addEventListener('change', () => {
         currentSort = sb.value;
+        _persist();
         for (const other of sortEls) {
           if (other !== sb) other.value = sb.value;
         }
@@ -3205,6 +3365,8 @@ const APP_VERSION = 6;
   }
 
   let currentSearch = '';
+  let currentExploreQuery = '';
+  let currentExploreTab = 'categories';
 
   function bindSearch() {
     if (!el.searchInput) return;
@@ -3215,6 +3377,7 @@ const APP_VERSION = 6;
     let searchTimer = null;
     el.searchInput.addEventListener('input', () => {
       currentSearch = el.searchInput.value.trim().toLowerCase();
+      _persist();
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         searchTimer = null;
@@ -3241,6 +3404,7 @@ const APP_VERSION = 6;
       if (e.key === 'Enter' || e.key === 'Escape') {
         if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
         currentSearch = el.searchInput.value.trim().toLowerCase();
+        _persist();
         skipHeavyWork = false;
         const key = scopeKey();
         const cached = scopeCache[key];
@@ -3538,6 +3702,7 @@ const APP_VERSION = 6;
       // 'all' if the current subcat is genuinely unknown.
       if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
         currentSubcat = 'all';
+        _persist();
       }
 
       const perSourceCap = 100;
@@ -3660,13 +3825,6 @@ const APP_VERSION = 6;
     const settings = Settings.load();
     const lang = $('#settings-language');
     if (lang) lang.value = settings.language;
-    // Twitter is now Nitter-backed (no auth). Show the user
-    // which instances we rotate through.
-    const nitterHint = $('#settings-nitter-hint');
-    if (nitterHint && window.TwitterFetcher && Array.isArray(TwitterFetcher.NITTER_INSTANCES)) {
-      nitterHint.textContent = 'Rotates through: ' +
-        TwitterFetcher.NITTER_INSTANCES.map(u => u.replace(/^https?:\/\//, '')).join(', ');
-    }
     populateFeedSelects();
     renderCustomFeedList();
     renderSubscriptionList();
@@ -3676,31 +3834,6 @@ const APP_VERSION = 6;
     });
   }
 
-  // Bind the "Clear tweet cache" button. The user can wipe the
-  // localStorage copy of every fetched tweet if an instance
-  // is serving bad data or they want a fresh fetch on the
-  // next Analyze run.
-  function bindNitterControls() {
-    const clearAll = $('#settings-nitter-clear');
-    if (clearAll) {
-      clearAll.addEventListener('click', () => {
-        if (!window.TwitterFetcher || !window.TwitterFetcher.clearCache) return;
-        try {
-          const prefix = window.TwitterFetcher.CACHE_PREFIX;
-          const toRemove = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(prefix)) toRemove.push(k);
-          }
-          toRemove.forEach(k => localStorage.removeItem(k));
-          clearAll.textContent = '✓ Cleared (' + toRemove.length + ' handles)';
-          setTimeout(() => { clearAll.textContent = 'Clear tweet cache'; }, 2500);
-        } catch (e) {
-          console.warn('Nitter cache clear failed:', e);
-        }
-      });
-    }
-  }
 
   // Render the Feed Health sectionction inside the Settings modal. Shows the
   // current state of the auto-disable toggle, how many sources are
@@ -3755,7 +3888,6 @@ const APP_VERSION = 6;
     el.modalSave.addEventListener('click', saveSettings);
     el.modal.addEventListener('click', e => { if (e.target === el.modal) closeSettings(); });
     if (el.hardRefreshBtn) el.hardRefreshBtn.addEventListener('click', openHardRefreshModal);
-    bindNitterControls();
     // Feed Health controls (auto-disable toggle + re-enable-all button)
     if (el.autoDisableFailingSources) {
       el.autoDisableFailingSources.addEventListener('change', () => {
@@ -3802,32 +3934,21 @@ const APP_VERSION = 6;
       });
     }
     bindIBRow();
-    // The "collapse" button is now a search toggle — it shows or
-    // hides the search input row in the bottom bar. The whole
-    // bottom bar still auto-collapses (via the .collapsed class)
-    // when the user opens a modal, and re-opens when the modal
-    // closes. The button id is kept as #collapse-btn for
-    // backwards compat with anything that targets it by id.
-    const collapseBtn = $('#collapse-btn');
-    const searchRow = $('#search-row');
-    const searchInput = el.searchInput;
-    if (collapseBtn && searchRow) {
-      collapseBtn.addEventListener('click', () => {
+    const searchToggleBtn = $('#search-toggle-btn');
+    const searchRow = $('#header-search-row');
+    const searchInput = $('#search-input');
+    if (searchToggleBtn && searchRow) {
+      searchToggleBtn.addEventListener('click', () => {
         const willShow = searchRow.hasAttribute('hidden');
         if (willShow) {
           searchRow.removeAttribute('hidden');
-          collapseBtn.classList.add('active');
-          collapseBtn.setAttribute('aria-pressed', 'true');
-          // Focus the input on the next tick so the show animation
-          // (if any) gets a frame to paint first.
+          searchToggleBtn.classList.add('active');
           if (searchInput) requestAnimationFrame(() => searchInput.focus());
         } else {
           searchRow.setAttribute('hidden', '');
-          collapseBtn.classList.remove('active');
-          collapseBtn.setAttribute('aria-pressed', 'false');
+          searchToggleBtn.classList.remove('active');
           if (searchInput) searchInput.blur();
         }
-        sizeReelsContainer();
       });
     }
     if (el.hardRefreshModalClose) el.hardRefreshModalClose.addEventListener('click', closeHardRefreshModal);
@@ -3857,27 +3978,15 @@ const APP_VERSION = 6;
         optionsBtn.classList.remove('active');
       });
     }
-    // Category toggle button opens the new two-tab Categories modal
-    // (News Feeds + Parliament Statements). The old sub-tab-bar is
-    // gone — the picker lives inside the modal instead. The
-    // Conflicts view has no categories, so the button is a no-op
-    // there (the conflicts view has its own analysis UI).
-    const catToggleBtn = $('#cat-toggle-btn');
-    if (catToggleBtn) {
-      catToggleBtn.addEventListener('click', () => {
-        if (currentScope === 'conflicts') return;
-        if (window.CategoriesModal) CategoriesModal.openModal();
-      });
-    }
-    // Also make the section title itself act as a category opener.
+    // Make the section title act as a category opener.
     // Power users tend to aim for the title, not the tiny icon.
     // The Conflicts view doesn't have categories, so the title
     // stays non-interactive there.
     if (el.sectionTitle) {
       el.sectionTitle.style.cursor = 'pointer';
       el.sectionTitle.addEventListener('click', () => {
-        if (currentScope === 'conflicts') return;
-        if (window.CategoriesModal) CategoriesModal.openModal();
+        if (currentSection === 'conflicts') return;
+        openSectionSelection(currentScope, currentNation, 'categories', 'all');
       });
     }
   }
@@ -4522,7 +4631,7 @@ const APP_VERSION = 6;
   }
 
   function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-  function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
   /* ── Article & Source Modals ── */
   function findArticleByLink(link) {
@@ -6651,7 +6760,61 @@ const APP_VERSION = 6;
       console.warn('Subscription auto-init failed:', e);
     }
 
-    currentNation = FeedManager.getSelectedNation();
+    // Restore persisted cross-page state from AppState so the user
+    // lands on the same scope / nation / subcat / mode / view / sort
+    // / search they left on the last visit. Must happen AFTER all let
+    // declarations have executed (to avoid TDZ issues) and before any
+    // rendering. The FeedManager default below is the fallback.
+    (function _restoreState() {
+      const params = new URLSearchParams(window.location.search);
+      const s = AppState.load();
+      const paramScope = params.get('scope');
+      const paramNation = params.get('nation');
+      const paramSection = params.get('section');
+      const paramSubcat = params.get('subcat');
+      const paramExploreTab = params.get('exploreTab');
+
+      if (paramExploreTab) {
+        currentExploreTab = paramExploreTab;
+      }
+
+      if (paramScope === 'global') {
+        currentScope = 'global';
+      } else if (paramScope === 'nation') {
+        currentScope = 'nation';
+      } else if (s.currentScope) {
+        currentScope = s.currentScope;
+      }
+
+      if (paramNation) {
+        currentNation = paramNation;
+      } else if (s.currentNation) {
+        currentNation = s.currentNation;
+      } else {
+        currentNation = FeedManager.getSelectedNation();
+      }
+
+      if (paramSection) {
+        currentSection = paramSection;
+      } else if (s.currentSection) {
+        currentSection = s.currentSection;
+      } else {
+        currentSection = 'explore';
+      }
+
+      if (paramSubcat) {
+        currentSubcat = paramSubcat;
+        currentSection = 'news';
+      } else if (s.currentSubcat) {
+        currentSubcat = s.currentSubcat;
+      }
+
+      if (s.currentMode) currentMode = s.currentMode;
+      if (s.currentView) currentView = s.currentView;
+      if (s.currentSort) currentSort = s.currentSort;
+      if (s.currentSearch !== undefined) currentSearch = s.currentSearch;
+    })();
+
     await SupabaseStore.load();
     // Load custom feeds (Supabase is the source of truth when the
     // user is signed in; localStorage is a cache + the only store
@@ -6685,6 +6848,7 @@ const APP_VERSION = 6;
     bindSubTabs();
     bindTrendingBtn();
     bindViewToggle();
+    syncViewToggleBtn();
     bindTranslate();
     bindSearch();
     bindFilterSort();
@@ -6716,7 +6880,13 @@ const APP_VERSION = 6;
       CategoriesModal.setOnSelect(sub => selectCategory(sub));
       CategoriesModal.bindAll();
     }
-    await renderContent();
+    if (currentSection === 'explore') {
+      renderExploreView();
+    } else {
+      const tabsWrap = document.getElementById('explore-inner-tabs');
+      if (tabsWrap) tabsWrap.hidden = true;
+      await renderContent();
+    }
 
     // Start periodic auto-refresh — fetches silently in the background
     // every 5 minutes. The page never re-renders automatically; user clicks

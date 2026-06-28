@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ff2929" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ff2929">
+  <meta name="description" content="Invisible Broadcast — Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
+  <meta name="application-name" content="Invisible Broadcast">
+  <meta name="apple-mobile-web-app-title" content="Invisible Broadcast">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-TileColor" content="#ff2929">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="mask-icon" href="icons/icon.svg" color="#ff2929">
+  <meta property="og:title" content="Invisible Broadcast">
+  <meta property="og:description" content="Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/social-3000x3000.png">
+  <title>Invisible Broadcast — Settings</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <script>
+    (function() {
+      try { if (screen.orientation && screen.orientation.lock) { screen.orientation.lock('portrait').catch(function() {}); } } catch (e) {}
+      var style = document.createElement('style');
+      style.textContent = 'html, body { orientation: portrait; }';
+      document.head.appendChild(style);
+    })();
+  </script>
+
+  <!-- Progress Bar -->
+  <div class="progress-bar" id="progress-bar"><div class="pb-fill" id="progress-fill"></div></div>
+
+  <!-- Sticky Header -->
+  <div class="sticky-zone" id="sticky-zone">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="header-left">
+          <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds" style="cursor:pointer;">
+            <span class="logo-icon">IB</span>
+          </div>
+          <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
+            <button class="btn btn-ghost btn-icon ib-refresh-spinner" id="ib-refresh-spinner" disabled>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/></svg>
+            </button>
+            <button class="btn btn-ghost btn-icon ib-recent-btn" id="ib-recent-btn" style="display:none">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4dabf7" stroke-width="1.6"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4 8,8 11,10" stroke="#4dabf7"/></svg>
+            </button>
+          </div>
+          <button class="btn btn-ghost btn-icon nav-btn-icon" id="trending-btn" title="Trending · Top 25" aria-label="Trending">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          </button>
+        </div>
+
+        <div class="header-right">
+          <button class="btn btn-ghost btn-icon nav-btn-icon" id="search-toggle-btn" title="Search" aria-label="Search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-icon nav-btn-icon" id="analyze-btn" title="Analyze a person" aria-label="Analyze">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+          </button>
+          <a href="activity.html" class="nav-icon-only" data-page="activity"><span class="nav-icon">&#x1F4CA;</span></a>
+          <button class="btn btn-ghost btn-icon nav-btn-icon" id="settings-btn" title="Quick Settings" aria-label="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button class="btn" id="auth-btn">Sign In</button>
+          <div class="auth-user" id="auth-user" style="display:none">
+            <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
+              <span class="auth-avatar-wrap">
+                <img class="auth-avatar" id="auth-avatar" src="" alt="">
+                <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
+              </span>
+            </button>
+            <div class="auth-dropdown" id="auth-dropdown" style="display:none">
+              <div class="auth-dropdown-header">
+                <div class="auth-dropdown-name" id="auth-dropdown-name"></div>
+                <div class="auth-dropdown-email" id="auth-dropdown-email"></div>
+              </div>
+              <button class="auth-dropdown-item" id="auth-change-avatar-btn"><span>&#x1F4F7;</span> Change Avatar</button>
+              <button class="auth-dropdown-item" id="auth-change-name-btn"><span>&#x270F;&#xFE0F;</span> Change Name</button>
+              <button class="auth-dropdown-item" id="auth-change-password-btn"><span>&#x1F511;</span> Change Password</button>
+              <div class="auth-dropdown-divider"></div>
+              <button class="auth-dropdown-item auth-dropdown-item-danger" id="auth-signout-btn"><span>&#x23FB;</span> Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Search Row -->
+    <div class="header-search-row" id="header-search-row" hidden>
+      <div class="page-container">
+        <input type="text" id="search-input" placeholder="Search articles…">
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="app-main page-enter" id="main-content">
+    <div class="page-container">
+
+      <!-- Settings Page Header -->
+      <div class="settings-hero">
+        <h1>
+          <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:8px;"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/></svg>
+          Settings
+        </h1>
+        <p class="page-subtitle">Configure your news feed preferences, language, sources, and more.</p>
+      </div>
+
+      <!-- Translation Language -->
+      <div class="setting-group">
+        <label class="setting-label" for="settings-language">Translation Language</label>
+        <p class="setting-desc">Translate articles to your preferred language.</p>
+        <div class="select-wrapper">
+          <select id="settings-language">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option><option value="kn">Kannada</option>
+            <option value="ta">Tamil</option><option value="te">Telugu</option>
+            <option value="ml">Malayalam</option><option value="bn">Bengali</option>
+            <option value="mr">Marathi</option><option value="gu">Gujarati</option>
+            <option value="pa">Punjabi</option><option value="ur">Urdu</option>
+            <option value="es">Spanish</option><option value="fr">French</option>
+            <option value="ar">Arabic</option><option value="zh">Chinese</option>
+            <option value="ja">Japanese</option><option value="de">German</option>
+            <option value="ru">Russian</option><option value="pt">Portuguese</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Feed Subscriptions -->
+      <div class="setting-group">
+        <label class="setting-label">Feed Subscriptions</label>
+        <p class="setting-desc">Toggle RSS feeds on/off when fetching news.</p>
+        <div id="subscription-list"></div>
+      </div>
+
+      <!-- Feed Health -->
+      <div class="setting-group">
+        <label class="setting-label">Feed Health</label>
+        <p class="setting-desc">Skip RSS sources that fail 5 times in a row.</p>
+        <div class="feed-health-row">
+          <label class="toggle-row">
+            <input type="checkbox" id="auto-disable-failing-sources">
+            <span class="toggle-row-text">
+              <strong>Auto-disable failing sources</strong>
+              <span class="toggle-row-desc">When ON, a source that fails 5 times in a row is skipped.</span>
+            </span>
+          </label>
+        </div>
+        <div class="feed-health-actions">
+          <div class="feed-health-count" id="feed-health-count">No failing sources tracked yet.</div>
+          <button class="btn" id="reenable-all-btn" disabled>Re-enable All</button>
+        </div>
+      </div>
+
+      <!-- Hard Refresh -->
+      <div class="setting-group">
+        <label class="setting-label">Hard Refresh</label>
+        <p class="setting-desc">Clear all cached articles and reset the app state while keeping your sign-in session.</p>
+        <button class="btn btn-danger" id="hard-refresh-btn">Hard Refresh</button>
+      </div>
+
+      <!-- Custom Feed Sources -->
+      <div class="setting-group">
+        <label class="setting-label">Custom Feed Sources</label>
+        <p class="setting-desc">Add a new RSS feed source.</p>
+        <div class="feed-input-row">
+          <input type="url" id="feed-url-input" placeholder="https://example.com/rss">
+          <button class="btn btn-ghost" id="feed-validate-btn">Validate</button>
+        </div>
+        <div class="feed-input-row">
+          <input type="text" id="feed-name-input" placeholder="Feed name">
+          <div class="select-wrapper">
+            <select id="feed-scope-select">
+              <option value="global">Global</option>
+              <option value="nation">Nation</option>
+            </select>
+          </div>
+          <div class="select-wrapper">
+            <select id="feed-nation-select"></select>
+          </div>
+        </div>
+        <div class="feed-input-row">
+          <div class="select-wrapper" style="flex:1">
+            <select id="feed-subcat-select"></select>
+          </div>
+          <button class="btn btn-primary" id="feed-add-btn">Add</button>
+        </div>
+        <div id="feed-validate-msg" class="feed-validate-msg"></div>
+        <div id="feed-custom-list"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="page-container">
+      Invisible Broadcast &mdash; Aggregated from global sources.
+      <div class="footer-links">
+        <a href="explore.html">Explore</a>
+        <a href="activity.html">Activity</a>
+        <a href="settings.html">Settings</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modals -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><circle cx="8" cy="8" r="6.5"/><path d="M8 10a3 3 0 100-6 3 3 0 000 6z"/><path d="M2 13.5a7 7 0 0112 0"/></svg>
+          <span id="auth-modal-title">Sign In</span>
+        </h2>
+        <button class="modal-close" id="auth-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="auth-modal-body">
+        <div class="auth-mode-tabs">
+          <button class="auth-mode-tab active" data-authtab="signin">Sign In</button>
+          <button class="auth-mode-tab" data-authtab="signup">Sign Up</button>
+        </div>
+        <form id="auth-form-fields" novalidate autocomplete="on">
+          <div id="auth-name-field" style="display:none">
+            <input type="text" id="auth-name" placeholder="Full Name" required minlength="2" autocomplete="name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          </div>
+          <input type="email" id="auth-email" placeholder="Email" required autocomplete="email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="auth-password" placeholder="Password (min 6 chars)" required minlength="6" autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <div id="auth-repeat-field" style="display:none">
+            <input type="password" id="auth-password-repeat" placeholder="Repeat Password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          </div>
+          <button type="submit" class="btn btn-primary" id="auth-submit-btn" style="width:100%;justify-content:center;padding:12px;position:relative;">
+            <span class="auth-submit-text">Sign In</span>
+            <span class="auth-submit-spinner" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">&#x21BB;</span>
+          </button>
+        </form>
+        <div id="auth-msg" class="auth-msg" style="margin-top:12px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="change-name-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Name</h2>
+        <button class="modal-close" id="change-name-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="change-name-form" novalidate>
+          <input type="text" id="change-name-input" placeholder="Your name" required minlength="2" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <button type="submit" class="btn btn-primary" id="change-name-submit-btn" style="width:100%;justify-content:center;padding:10px;">Save</button>
+        </form>
+        <div id="change-name-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="change-password-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Password</h2>
+        <button class="modal-close" id="change-password-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="change-password-form" novalidate>
+          <input type="password" id="change-password-current" placeholder="Current password" required autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="change-password-new" placeholder="New password (min 6 chars)" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="password" id="change-password-repeat" placeholder="Repeat new password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <button type="submit" class="btn btn-primary" id="change-password-submit-btn" style="width:100%;justify-content:center;padding:10px;">Update Password</button>
+        </form>
+        <div id="change-password-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="change-avatar-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Change Avatar</h2>
+        <button class="modal-close" id="change-avatar-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align:center;">
+        <div class="change-avatar-preview-wrap">
+          <img class="auth-avatar" id="change-avatar-preview" src="" alt="" style="position:relative;width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-primary);">
+          <span class="auth-avatar-fallback" id="change-avatar-fallback" style="position:relative;font-size:2rem;width:80px;height:80px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg, #ff2929, #ff6b6b);color:#fff;">&#x1F464;</span>
+        </div>
+        <input type="file" id="change-avatar-input" accept="image/*" style="display:none;">
+        <button type="button" class="btn" id="change-avatar-pick-btn" style="width:100%;justify-content:center;padding:10px;margin-top:12px;">Choose Image</button>
+        <button type="button" class="btn btn-primary" id="change-avatar-upload-btn" style="width:100%;justify-content:center;padding:10px;margin-top:8px;" disabled>Upload</button>
+        <div id="change-avatar-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/source-health.js"></script>
+  <script src="js/supabase-store.js"></script>
+  <script src="js/feeds.js"></script>
+  <script src="js/article-archive.js"></script>
+  <script src="js/fetcher.js"></script>
+  <script src="js/translator.js"></script>
+  <script src="js/subjects.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/twitter-fetcher.js"></script>
+  <script src="js/scoring-engine.js"></script>
+  <script src="js/analyze-modal.js"></script>
+  <script src="js/filter-modal.js"></script>
+  <script src="js/categories-modal.js"></script>
+  <script src="js/lib/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder-lite@1.0.0/dist/universal-sentence-encoder-lite.min.js"></script>
+  <script src="js/embeddings.js"></script>
+  <script src="js/clustering.js"></script>
+  <script src="js/publisher.js"></script>
+  <script src="js/shared-state.js"></script>
+  <script src="js/app-settings.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

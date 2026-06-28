@@ -23,7 +23,8 @@
   <meta property="og:description" content="Global & Local News Aggregator with deterministic ranking and cross-source conflict detection.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
-  <title>Invisible Broadcast — Home</title>
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Invisible Broadcast — Explore</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -101,49 +102,68 @@
         <input type="text" id="search-input" placeholder="Search articles…">
       </div>
     </div>
-
-    <!-- Top Navigation Tabs -->
-    <nav class="top-tabs-row" id="top-tabs-row">
-      <div class="page-container">
-        <ul class="tab-list" id="top-tab-list">
-          <li class="tab-item active" data-scope="global">Global</li>
-          <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-        </ul>
-      </div>
-    </nav>
-    <div class="sub-tabs-row" id="sub-tabs-row">
-      <div class="page-container">
-        <div class="tab-list" id="sub-tab-list" hidden></div>
-      </div>
-    </div>
-    <div class="explore-inner-tabs" id="explore-inner-tabs" hidden>
-      <div class="page-container" id="explore-inner-tabs-container"></div>
-    </div>
   </div>
 
   <!-- Main Content Area -->
   <main class="app-main page-enter" id="main-content">
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Loading news feeds&hellip;</p>
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Explore</h1>
+      </div>
+
+      <!-- Categories Grid -->
+      <section class="explore-section" id="categories-section">
+        <div class="explore-section-header">
+          <h2>Categories</h2>
+        </div>
+        <div class="cat-grid" id="explore-categories-grid">
+          <button class="cat-grid-item" data-category="all">All</button>
+          <button class="cat-grid-item" data-category="politics">Politics</button>
+          <button class="cat-grid-item" data-category="business">Business</button>
+          <button class="cat-grid-item" data-category="technology">Technology</button>
+          <button class="cat-grid-item" data-category="science">Science</button>
+          <button class="cat-grid-item" data-category="health">Health</button>
+          <button class="cat-grid-item" data-category="sports">Sports</button>
+          <button class="cat-grid-item" data-category="entertainment">Entertainment</button>
+          <button class="cat-grid-item" data-category="environment">Environment</button>
+          <button class="cat-grid-item" data-category="education">Education</button>
+        </div>
+      </section>
+
+      <!-- Parliament Feeds -->
+      <section class="explore-section" id="parliament-section">
+        <div class="explore-section-header">
+          <h2>Parliament Feeds</h2>
+        </div>
+        <div id="explore-parliament"></div>
+      </section>
+
+      <!-- Topics -->
+      <section class="explore-section" id="topics-section">
+        <div class="explore-section-header">
+          <h2>Topics</h2>
+        </div>
+        <div class="explore-card">
+          <p>Discover trending story clusters — groups of articles from multiple sources covering the same topic, with critical and recency ratings.</p>
+          <a href="index.html?section=explore&exploreTab=topics" class="btn btn-primary btn-sm">View Topics</a>
+        </div>
+      </section>
+
+      <!-- Conflicts -->
+      <section class="explore-section" id="conflicts-section">
+        <div class="explore-section-header">
+          <h2>Conflicts</h2>
+        </div>
+        <div class="explore-card">
+          <p>See cross-source disagreements on numbers and claims — detected by analyzing article content across your loaded feeds.</p>
+          <a href="index.html?section=explore&exploreTab=conflicts" class="btn btn-primary btn-sm">View Conflicts</a>
+        </div>
+      </section>
+
     </div>
   </main>
 
-  <!-- Section Footer Bar (title + view toggle, always fixed at bottom) -->
-  <div class="section-footer-bar" id="section-footer-bar">
-    <div class="section-footer-inner">
-      <div class="section-footer-left">
-        <span class="section-meta" id="section-meta"></span>
-        <h2 id="section-title"></h2>
-      </div>
-      <div class="section-footer-right">
-        <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Footer -->
   <footer class="app-footer">
     <div class="page-container">
       Invisible Broadcast &mdash; Aggregated from global sources.
@@ -155,7 +175,7 @@
     </div>
   </footer>
 
-  <!-- Modals (preserved from original SPA) -->
+  <!-- Modals -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal">
       <div class="modal-header">
@@ -166,6 +186,14 @@
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
       <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label">Tweets (via Nitter)</label>
+          <p class="setting-desc">Tweets for the Analyze feature are fetched from public Nitter instances.</p>
+          <p class="setting-desc" id="settings-nitter-hint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-tertiary);word-break:break-word;"></p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-ghost" id="settings-nitter-clear" type="button">Clear tweet cache</button>
+          </div>
+        </div>
         <div class="setting-group">
           <label class="setting-label" for="settings-language">Translation Language</label>
           <p class="setting-desc">Translate articles to your preferred language.</p>
@@ -233,12 +261,6 @@
           </div>
           <div id="feed-validate-msg" class="feed-validate-msg"></div>
           <div id="feed-custom-list"></div>
-        </div>
-        <div class="setting-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
-          <button class="btn" id="hard-refresh-btn" style="width:100%;justify-content:center;color:var(--accent-red) !important;border-color:var(--accent-red) !important;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Hard Refresh — Clear Cache &amp; Reset
-          </button>
         </div>
       </div>
       <div class="modal-footer">
@@ -521,7 +543,9 @@
         <div class="acf-section">
           <label class="acf-label">Data Source</label>
           <div class="acf-source-row">
-            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds" checked><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="twitter" id="acf-source-twitter"><span>Twitter Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="feeds" id="acf-source-feeds"><span>Feeds Only</span></label>
+            <label class="acf-radio"><input type="radio" name="acf-source" value="both" id="acf-source-both" checked><span>Both</span></label>
           </div>
         </div>
         <div class="acf-section">
@@ -721,7 +745,7 @@
   <script src="js/clustering.js"></script>
   <script src="js/publisher.js"></script>
   <script src="js/shared-state.js"></script>
-  <script src="js/app-home.js?v=6"></script>
+  <script src="js/app-explore.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
