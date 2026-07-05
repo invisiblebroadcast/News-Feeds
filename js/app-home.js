@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -7214,6 +7214,13 @@ const APP_VERSION = 14;
             submitBtn.addEventListener('click', e => {
                 e.preventDefault();
                 handleAuthSubmit();
+            });
+        }
+        // Google OAuth button
+        const googleBtn = $('#auth-google-btn');
+        if (googleBtn) {
+            googleBtn.addEventListener('click', () => {
+                client.auth.signInWithOAuth({ provider: 'google' });
             });
         }
         // Clear error styling when user starts typing
