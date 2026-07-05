@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -5522,15 +5522,8 @@ const APP_VERSION = 7;
 
   // Use TF.js to extract the most "central" sentence from the
   // summary. We build TF-IDF vectors for each sentence, use
-  // tf.tensor2d(...).mean(0) to get the centroid, and pick the
-  // sentence with the highest cosine similarity to the centroid.
-  // This is essentially TextRank but the centroid computation
-  // runs on TF.js tensors (not a plain JS loop).
-  //
-  // Returns the most central sentence, compressed to ≤120 chars,
-  // or null if there's nothing usable.
-  async function extractKeyFactWithTF(summary) {
-    if (!summary || !window.tf || !window.tf.tensor2d) return null;
+  async function extractKeyFact(summary) {
+    if (!summary) return null;
     const sentences = summary
       .split(/(?<=[.!?])\s+/)
       .map(s => s.trim())
@@ -5538,18 +5531,15 @@ const APP_VERSION = 7;
     if (!sentences.length) return null;
     if (sentences.length === 1) return compressSentence(sentences[0], 120);
 
-    // Tokenize each sentence (lowercase, words ≥3 chars).
     const tokenized = sentences.map(s =>
       (s.toLowerCase().match(/\b[a-z]{3,}\b/g) || [])
     );
 
-    // Build vocabulary from all sentences.
     const vocab = new Set();
     for (const tokens of tokenized) for (const t of tokens) vocab.add(t);
     const vocabList = Array.from(vocab);
     if (!vocabList.length) return compressSentence(sentences[0], 120);
 
-    // Document frequency for IDF.
     const N = sentences.length;
     const docFreq = {};
     for (const term of vocabList) {
@@ -5558,7 +5548,6 @@ const APP_VERSION = 7;
       docFreq[term] = c;
     }
 
-    // Build TF-IDF vectors as plain JS arrays.
     const vectors = tokenized.map(tokens => {
       const tf = {};
       for (const t of tokens) tf[t] = (tf[t] || 0) + 1;
@@ -5572,32 +5561,20 @@ const APP_VERSION = 7;
       return v;
     });
 
-    // The actual TF.js usage: build a 2-D tensor of all sentence
-    // vectors and compute the centroid (mean across axis 0).
-    const tf = window.tf;
-    let tensor = null, centroid = null;
-    try {
-      tensor   = tf.tensor2d(vectors);
-      centroid = tensor.mean(0);
-      const centroidArr = await centroid.data();
-
-      // Find the sentence with highest cosine similarity to the
-      // centroid. This is the "most representative" sentence.
-      let bestIdx = 0;
-      let bestSim = -1;
-      for (let i = 0; i < N; i++) {
-        const sim = _cosineSim(vectors[i], centroidArr);
-        if (sim > bestSim) { bestSim = sim; bestIdx = i; }
-      }
-      return compressSentence(sentences[bestIdx], 120);
-    } catch (err) {
-      console.warn('TF.js centroid failed:', err && err.message);
-      return null;
-    } finally {
-      // Free GPU/CPU memory — small, but keeps TF.js tidy.
-      try { if (tensor)   tensor.dispose();   } catch {}
-      try { if (centroid) centroid.dispose(); } catch {}
+    const dim = vectors[0].length;
+    const centroid = new Array(dim).fill(0);
+    for (const v of vectors) {
+      for (let i = 0; i < dim; i++) centroid[i] += v[i];
     }
+    for (let i = 0; i < dim; i++) centroid[i] /= vectors.length;
+
+    let bestIdx = 0;
+    let bestSim = -1;
+    for (let i = 0; i < N; i++) {
+      const sim = _cosineSim(vectors[i], centroid);
+      if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+    }
+    return compressSentence(sentences[bestIdx], 120);
   }
 
   // Build the rephrased body. This is the main rephraser.
@@ -5617,7 +5594,7 @@ const APP_VERSION = 7;
     //    similarity to the TF-IDF centroid).
     let keyFact = null;
     if (summary) {
-      try { keyFact = await extractKeyFactWithTF(summary); } catch {}
+      try { keyFact = await extractKeyFact(summary); } catch {}
       // Fallback: first sentence of the summary, compressed.
       if (!keyFact) {
         const sentences = summary
@@ -6981,20 +6958,7 @@ const APP_VERSION = 7;
     startAutoRefresh();
     window.addEventListener('beforeunload', stopAutoRefresh);
 
-    // TensorFlow.js is loaded as a UMD bundle before this script
-    // runs, so `tf` is on window synchronously. Log a one-line
-    // status so we can confirm the bundle is reachable on first
-    // boot. No TF.js features are currently active — the app
-    // relies on the existing TF-IDF scoring (ai.js) and
-    // heuristics. TF.js is here as a foundation for a future
-    // ML pass. Critically, this NEVER creates a dialog, progress
-    // bar, or any DOM that could block clicks.
-    if (window.tf) {
-      try { console.log('[ML] TensorFlow.js ready:', tf.version_core); }
-      catch {}
-    } else {
-      console.warn('[ML] TensorFlow.js not loaded — js/lib/tf.min.js missing or blocked?');
-    }
+
   }
 
   init();
