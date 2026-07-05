@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -889,7 +889,33 @@ const APP_VERSION = 10;
                 return;
             const scope = tab.dataset.scope;
             const nation = tab.dataset.nation || 'india';
-            openSectionSelection(scope, nation, currentSection, currentSubcat);
+            const prevKey = scopeKey();
+            if (typeof abortBackgroundFetch === 'function')
+                abortBackgroundFetch(prevKey);
+            currentScope = scope;
+            currentNation = nation;
+            FeedManager.setSelectedNation(currentNation);
+            if (isParliamentSubcat(currentSubcat)) {
+                currentSubcat = 'all';
+            }
+            currentSearch = '';
+            if (el.searchInput)
+                el.searchInput.value = '';
+            _persist();
+            loadedCount = 0;
+            hasFreshBackground = false;
+            liveAllLoaded = false;
+            loadAllState = 'idle';
+            liveAllArticles = null;
+            lastRenderedCount = 0;
+            $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
+            const activeTab = el.topTabs && el.topTabs.querySelector('.tab-item[data-scope="' + currentScope + '"]' + (currentScope === 'nation' ? '[data-nation="' + currentNation + '"]' : ''));
+            if (activeTab)
+                activeTab.classList.add('active');
+            renderSectionTabs();
+            if (window.CategoriesModal) {
+                CategoriesModal.openModal();
+            }
         });
     }
     /* ── Subcategory Tabs ── */
@@ -946,14 +972,14 @@ const APP_VERSION = 10;
     // subcat and starts a fresh render.
     function selectCategory(sub) {
         if (sub == null || sub === currentSubcat) {
-            // Even on a no-op, re-render so the section title / hint
-            // text reflects the current selection — the modal can
-            // re-open after a scope change and the title should always
-            // be in sync.
             if (sub != null && sub === currentSubcat) {
                 updateStickyHeader();
             }
             return;
+        }
+        if (currentSection !== 'feeds') {
+            currentSection = 'feeds';
+            renderSectionTabs();
         }
         const prevKey = scopeKey();
         if (typeof abortBackgroundFetch === 'function')
@@ -962,6 +988,12 @@ const APP_VERSION = 10;
         currentSearch = '';
         if (el.searchInput)
             el.searchInput.value = '';
+        // Reset trending mode
+        if (currentMode === 'top' && currentRankType === 'keyword') {
+            currentMode = 'live';
+            currentRankType = 'ai';
+        }
+        updateRankControls();
         _persist();
         hasFreshBackground = false;
         loadedCount = 0;
@@ -1448,6 +1480,10 @@ const APP_VERSION = 10;
                 return;
             currentReelIndex = idx;
             closeClusterModal();
+            document.body.classList.remove('modal-open');
+            const cIdx = modalStack.findIndex(m => m.name === 'cluster');
+            if (cIdx !== -1)
+                modalStack.splice(cIdx, 1);
         }
         else {
             _reelsArticles = null;
