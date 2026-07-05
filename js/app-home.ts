@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -1399,6 +1399,9 @@ const APP_VERSION = 9;
 
   /* ── Reels View ── */
   let currentReelIndex = 0;
+  let _reelsArticles = null;
+  let _reelsExitRestore = null;
+  function reelsArticles() { return _reelsArticles || currentArticles; }
   // Fullscreen removed — swipe always works in cards view (no fullscreen gate)
 
   function updateNavArrows(container) {
@@ -1419,12 +1422,23 @@ const APP_VERSION = 9;
     }
   }
 
-  function openReelsForArticle(link) {
-    const article = findArticleByLink(link);
-    if (!article) return;
-    const idx = currentArticles.indexOf(article);
-    if (idx === -1) return;
-    currentReelIndex = idx;
+  function openReelsForArticle(link, articles, exitRestore) {
+    if (articles) {
+      _reelsArticles = articles;
+      _reelsExitRestore = exitRestore || null;
+      const idx = articles.findIndex(a => a.link === link);
+      if (idx === -1) return;
+      currentReelIndex = idx;
+      closeClusterModal();
+    } else {
+      _reelsArticles = null;
+      _reelsExitRestore = null;
+      const article = findArticleByLink(link);
+      if (!article) return;
+      const idx = currentArticles.indexOf(article);
+      if (idx === -1) return;
+      currentReelIndex = idx;
+    }
     currentView = 'reels';
     _persist();
     document.body.classList.add('cards-view');
@@ -1645,7 +1659,7 @@ const APP_VERSION = 9;
   }
 
   function showReel() {
-    const articles = currentArticles;
+    const articles = reelsArticles();
     const idx = currentReelIndex;
     const article = articles[idx];
     const total = articles.length;
@@ -1672,7 +1686,7 @@ const APP_VERSION = 9;
 
       // Event delegation on stack for card button actions (using closest)
       stack.addEventListener('click', e => {
-        const currentArticle = currentArticles[currentReelIndex];
+        const currentArticle = reelsArticles()[currentReelIndex];
 
         const readBtn = e.target.closest('.reels-read-btn');
         if (readBtn) {
@@ -1897,17 +1911,19 @@ const APP_VERSION = 9;
   }
 
   function prevReel() {
+    const articles = reelsArticles();
     if (currentReelIndex < 1) return;
     currentReelIndex--;
-    const a = currentArticles[currentReelIndex];
+    const a = articles[currentReelIndex];
     if (a) trackView(a.link);
     showReel();
   }
 
   function nextReel() {
-    if (currentReelIndex >= currentArticles.length - 1) return;
+    const articles = reelsArticles();
+    if (currentReelIndex >= articles.length - 1) return;
     currentReelIndex++;
-    const a = currentArticles[currentReelIndex];
+    const a = articles[currentReelIndex];
     if (a) trackView(a.link);
     showReel();
   }
@@ -2008,6 +2024,9 @@ const APP_VERSION = 9;
   // to close an already-gone reels frame.
   function exitReels() {
     if (currentView !== 'reels') return;
+    const restore = _reelsExitRestore;
+    _reelsExitRestore = null;
+    _reelsArticles = null;
     currentView = 'list';
     _persist();
     document.body.classList.remove('cards-view');
@@ -2020,7 +2039,11 @@ const APP_VERSION = 9;
     }
     reelsFrameId = -1;
     updateStickyHeader();
-    displayCurrentSubcat();
+    if (restore) {
+      try { restore(); } catch(e) { console.warn('reels exit restore failed', e); }
+    } else {
+      displayCurrentSubcat();
+    }
   }
 
   /* ── Categories view ──
@@ -2917,6 +2940,9 @@ const APP_VERSION = 9;
   // gesture on mobile).
   function exitReelsFromBack() {
     if (currentView !== 'reels') return;
+    const restore = _reelsExitRestore;
+    _reelsExitRestore = null;
+    _reelsArticles = null;
     currentView = 'list';
     _persist();
     document.body.classList.remove('cards-view');
@@ -2929,6 +2955,10 @@ const APP_VERSION = 9;
     }
     reelsFrameId = -1;
     updateStickyHeader();
+    if (restore) {
+      try { restore(); } catch(e) { console.warn('reels exit restore failed', e); }
+      return;
+    }
     setTopListStatus('Loading list view…');
     showLoadingInline('Loading list view…');
     const token = ++pendingViewSwitch;
@@ -5870,8 +5900,17 @@ const APP_VERSION = 9;
     if (articleModalCardsBtn) {
       articleModalCardsBtn.addEventListener('click', () => {
         const url = el.articleModalRead.dataset.url;
-        if (url) {
-          closeArticleModal();
+        if (!url) return;
+        closeArticleModal();
+        const cluster = _topicsClusters.find(c => c.articles.some(a => a.link === url));
+        if (cluster) {
+          const clusterId = cluster.id;
+          const restore = () => {
+            closeClusterModal();
+            openClusterModal(clusterId);
+          };
+          openReelsForArticle(url, cluster.articles, restore);
+        } else {
           openReelsForArticle(url);
         }
       });
