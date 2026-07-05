@@ -24,7 +24,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
   <title>Invisible Broadcast — Home</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=1">
 </head>
 <body>
   <script>
@@ -111,13 +111,14 @@
         </ul>
       </div>
     </nav>
-    <div class="sub-tabs-row" id="sub-tabs-row">
+    <div class="section-tabs-row" id="section-tabs-row">
       <div class="page-container">
-        <div class="tab-list" id="sub-tab-list" hidden></div>
+        <div class="section-tab-list" id="section-tab-list">
+          <button class="section-tab active" data-section="feeds">Feeds</button>
+          <button class="section-tab" data-section="topics">Topics</button>
+          <button class="section-tab" data-section="conflicts">Conflicts</button>
+        </div>
       </div>
-    </div>
-    <div class="explore-inner-tabs" id="explore-inner-tabs" hidden>
-      <div class="page-container" id="explore-inner-tabs-container"></div>
     </div>
   </div>
 
@@ -282,6 +283,7 @@
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" id="article-modal-read">Read Article</button>
+          <button class="btn btn-ghost" id="article-modal-cards-btn" title="Cards View"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:4px;"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg> Cards</button>
           <button class="btn btn-danger" id="article-modal-ext-link">Open in Browser</button>
         </div>
         <div class="modal-watermark"><span class="wm-brand">Invisible Broadcast</span></div>
@@ -696,6 +698,74 @@
     </div>
   </div>
 
+  <!-- Floating Action Button (visible only when signed in) -->
+  <button class="fab fab-hidden" id="publish-fab" title="Publish a post">&#x270E;</button>
+
+  <!-- Publish Modal -->
+  <div class="modal-overlay publish-modal" id="publish-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2><span style="margin-right:6px;">&#x270E;</span><span>Publish a Post</span></h2>
+        <button class="modal-close" id="publish-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="publish-tabs">
+          <button class="publish-tab active" data-publish-tab="youtube">YouTube</button>
+          <button class="publish-tab" data-publish-tab="audio">Audio</button>
+        </div>
+
+        <!-- YouTube Tab -->
+        <div class="publish-pane active" data-publish-pane="youtube">
+          <div class="publish-field">
+            <label for="publish-url">YouTube Video URL</label>
+            <div class="publish-url-row">
+              <input type="url" id="publish-url" placeholder="https://youtube.com/watch?v=...">
+              <button class="btn btn-ghost" id="publish-fetch-btn">Fetch Transcript</button>
+            </div>
+          </div>
+          <div class="publish-field">
+            <label for="publish-title">Title</label>
+            <input type="text" id="publish-title" placeholder="Post title">
+          </div>
+          <div class="publish-field">
+            <label for="publish-desc">Description (Markdown supported)</label>
+            <textarea id="publish-desc" placeholder="Post content..."></textarea>
+          </div>
+
+          <!-- GitHub Configuration (collapsible) -->
+          <details class="publish-github-config" id="publish-github-config">
+            <summary>GitHub Configuration</summary>
+            <div class="publish-github-fields">
+              <input type="text" id="publish-github-owner" placeholder="GitHub username / org">
+              <input type="text" id="publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
+              <input type="password" id="publish-github-token" placeholder="Personal access token (classic, repo scope)">
+              <p style="font-size:0.72rem;color:var(--text-tertiary);margin:4px 0 0;">Settings stored locally. Token needs <code>repo</code> scope.</p>
+            </div>
+          </details>
+
+          <div class="publish-msg" id="publish-msg"></div>
+
+          <div class="publish-actions">
+            <button class="btn btn-primary" id="publish-btn">Publish</button>
+          </div>
+
+          <!-- My Posts Section -->
+          <div class="my-posts-section" id="my-posts-section">
+            <div class="my-posts-header">My Published Posts</div>
+            <div class="my-posts-list" id="my-posts-list">
+              <div style="color:var(--text-tertiary);font-size:0.82rem;">Configure GitHub to see your posts.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Tab (placeholder) -->
+        <div class="publish-pane" data-publish-pane="audio">
+          <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;padding:40px 0;">Audio upload and transcription coming soon.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -721,7 +791,8 @@
   <script src="js/clustering.js"></script>
   <script src="js/publisher.js"></script>
   <script src="js/shared-state.js"></script>
-  <script src="js/app-home.js?v=6"></script>
+  <script src="js/publish-modal.js"></script>
+  <script src="js/app-home.js?v=7"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

@@ -1,0 +1,14 @@
+{
+  "name": "news-feeds",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Invisible Broadcast — Global & Local News Aggregator",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -f js/*.js js/*.d.ts js/**/*.js js/**/*.d.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

@@ -2209,13 +2209,10 @@ body.cards-view {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 0;
   opacity: 0;
   visibility: hidden;
   transition: all var(--transition);
-  /* Default to "off" so the dimmed area doesn't steal clicks
-     from elements behind the overlay. The .open override below
-     re-enables clicks for the visible modal. */
   pointer-events: none;
 }
 .modal-overlay.open {
@@ -2223,15 +2220,20 @@ body.cards-view {
   visibility: visible;
   pointer-events: auto;
 }
+#article-modal.open {
+  z-index: 300;
+}
 
 .modal {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
+  border: none;
+  border-radius: 0;
+  width: 100vw;
+  max-width: none;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   transform: scale(0.95);
   transition: transform var(--transition);
@@ -2241,13 +2243,14 @@ body.cards-view {
 }
 
 .modal-header {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   padding: 0;
   border-bottom: 1px solid var(--border-primary);
-  position: sticky;
-  top: 0;
-  z-index: 5;
   background: var(--bg-secondary);
 }
 .modal-header .modal-close {
@@ -2272,6 +2275,9 @@ body.cards-view {
 }
 
 .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
   padding: 24px;
 }
 
@@ -2357,6 +2363,7 @@ body.cards-view {
 }
 
 .modal-footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -2366,9 +2373,6 @@ body.cards-view {
 
 /* ─── Wide modal (for sources config) ─── */
 .modal-wide {
-  max-width: 720px;
-  width: 92vw;
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
 }
@@ -2712,14 +2716,7 @@ body.cards-view {
 }
 
 /* ─── Article Detail & Source Modals ─── */
-.modal-lg {
-  max-width: 920px;
-  width: 95vw;
-}
-.modal-article {
-  max-width: 960px;
-  width: 96vw;
-}
+
 .modal-article .modal-body {
   padding: 24px 28px;
 }
@@ -2730,9 +2727,7 @@ body.cards-view {
   overflow-wrap: anywhere;
 }
 .modal-full {
-  max-width: 95vw;
-  width: 95vw;
-  height: 90vh;
+  height: 100vh;
 }
 .modal-full .modal-body-full {
   flex: 1;
@@ -2792,7 +2787,6 @@ body.cards-view {
 .modal-full {
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
 }
 
 /* ─── Red accents (selective use) ─── */
@@ -3924,9 +3918,6 @@ body.cards-view {
 }
 
 /* Analyze config modal (Milestone 2) */
-#analyze-config-modal .modal {
-  max-width: 480px;
-}
 .acf-section {
   margin-bottom: 18px;
 }
@@ -5819,6 +5810,48 @@ a.nav-icon-only svg {
   font-weight: 500;
 }
 
+/* ── Section Tabs (Feeds / Topics / Conflicts) ── */
+.section-tabs-row {
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.section-tabs-row .page-container {
+  display: flex;
+  gap: 0;
+}
+.section-tab-list {
+  display: flex;
+  width: 100%;
+}
+.section-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+.section-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+.section-tab.active {
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
 .explore-cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -6168,9 +6201,6 @@ a.nav-icon-only svg {
 
 /* ─── Enhanced Modal ─── */
 .modal.modal-xl {
-  max-width: 960px;
-  width: 95vw;
-  max-height: 92vh;
   display: flex;
   flex-direction: column;
 }
@@ -6859,4 +6889,211 @@ a.nav-icon-only svg {
 
 .header-search input::placeholder {
   color: var(--text-tertiary);
+}
+
+/* ─── FAB (Floating Action Button) ─── */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255,41,41,0.4);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: all var(--transition);
+  line-height: 1;
+}
+.fab:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px rgba(255,41,41,0.5);
+}
+.fab-hidden { display: none !important; }
+
+/* ─── Publish Modal ─── */
+
+.publish-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-primary);
+  padding-bottom: 8px;
+}
+
+.publish-tab {
+  padding: 6px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+.publish-tab:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.publish-tab.active { color: var(--accent); background: rgba(255,41,41,0.1); }
+
+.publish-pane { display: none; }
+.publish-pane.active { display: block; }
+
+.publish-field {
+  margin-bottom: 12px;
+}
+
+.publish-field label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.publish-field input,
+.publish-field textarea {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border var(--transition);
+}
+
+.publish-field input:focus,
+.publish-field textarea:focus {
+  border-color: var(--accent);
+}
+
+.publish-field textarea {
+  min-height: 200px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.publish-url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.publish-url-row input { flex: 1; }
+
+.publish-msg {
+  font-size: 0.82rem;
+  min-height: 1.2em;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.publish-msg.error { color: var(--accent); }
+.publish-msg.success { color: var(--success); }
+
+.publish-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.publish-github-config {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.publish-github-config summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.publish-github-fields {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.publish-github-fields input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font);
+  outline: none;
+}
+
+.publish-github-fields input:focus {
+  border-color: var(--accent);
+}
+
+/* ─── My Posts Section ─── */
+.my-posts-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-primary);
+  padding-top: 12px;
+}
+
+.my-posts-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.my-posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.my-post-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+
+.my-post-title {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-post-edit-btn {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.my-post-edit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
