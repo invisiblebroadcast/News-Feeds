@@ -6733,6 +6733,14 @@ const APP_VERSION = 14;
       });
     }
 
+    // Google OAuth button
+    const googleBtn = $('#auth-google-btn');
+    if (googleBtn) {
+      googleBtn.addEventListener('click', () => {
+        client.auth.signInWithOAuth({ provider: 'google' });
+      });
+    }
+
     // Clear error styling when user starts typing
     $$('#auth-form-fields input').forEach(input => {
       input.addEventListener('input', () => {
