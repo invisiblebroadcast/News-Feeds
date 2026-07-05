@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -3963,12 +3963,14 @@ const APP_VERSION = 15;
         if (isBackgroundRefreshing)
             return;
         isBackgroundRefreshing = true;
+        showLoadingOverlay('Refreshing feeds\u2026');
         showRefreshSpinner();
         try {
             const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
             if (!feeds.length) {
                 isBackgroundRefreshing = false;
                 hideRefreshStatus();
+                hideLoadingOverlay();
                 return;
             }
             const subs = FeedManager.subcategoriesForScope(currentScope);
@@ -4007,11 +4009,13 @@ const APP_VERSION = 15;
             hasFreshBackground = true;
             isBackgroundRefreshing = false;
             showRecentButton();
+            hideLoadingOverlay();
         }
         catch (err) {
             console.error('Background refresh failed:', err);
             isBackgroundRefreshing = false;
             hideRefreshStatus();
+            hideLoadingOverlay();
         }
     }
     // Called when user clicks the "show recent" button. Re-renders the
@@ -7377,6 +7381,50 @@ const APP_VERSION = 15;
                 }
             });
     }
+    /* ── Loading Overlay ── */
+    function showLoadingOverlay(status) {
+        const overlay = $('#app-loading-overlay');
+        const sp = $('#app-loading-spinner');
+        const statusEl = $('#app-loading-status');
+        const progressWrap = $('#app-loading-progress-wrap');
+        const confirm = $('#app-loading-confirm');
+        if (overlay)
+            overlay.classList.add('open');
+        if (sp)
+            sp.style.display = 'block';
+        if (statusEl)
+            statusEl.textContent = status || 'Loading\u2026';
+        if (progressWrap)
+            progressWrap.style.display = 'none';
+        if (confirm)
+            confirm.style.display = 'none';
+    }
+    function updateLoadingStatus(status) {
+        const el = $('#app-loading-status');
+        if (el)
+            el.textContent = status;
+    }
+    function showLoadingProgress(pct) {
+        const wrap = $('#app-loading-progress-wrap');
+        const bar = $('#app-loading-progress-bar');
+        if (wrap)
+            wrap.style.display = 'block';
+        if (bar)
+            bar.style.width = Math.round(pct * 100) + '%';
+    }
+    function showLoadingConfirm() {
+        const sp = $('#app-loading-spinner');
+        const confirm = $('#app-loading-confirm');
+        if (sp)
+            sp.style.display = 'none';
+        if (confirm)
+            confirm.style.display = 'flex';
+    }
+    function hideLoadingOverlay() {
+        const overlay = $('#app-loading-overlay');
+        if (overlay)
+            overlay.classList.remove('open');
+    }
     /* ── Init ── */
     async function init() {
         try {
@@ -7484,16 +7532,72 @@ const APP_VERSION = 15;
         if (window.ArticleArchive && ArticleArchive.init)
             ArticleArchive.init();
         bindAuth();
-        // Kick off the USE model load in the background. The full
-        // version is ~25MB so this can take 5–15s on a fresh device
-        // and we don't want to block app startup on it. The model
-        // is only used for semantic re-ranking of search results;
-        // substring search works perfectly well without it, so a
-        // slow or failed model load never affects the core UX.
-        if (window.Embeddings && Embeddings.loadModel) {
-            Embeddings.loadModel().catch(err => {
-                console.warn('Embeddings.loadModel failed:', err && err.message);
-            });
+        // Check if user has consented to the AI model download.
+        // On first visit we show a prompt; subsequent visits use the
+        // stored preference. The model (~25MB) is only used for
+        // semantic re-ranking of search results; substring search
+        // works perfectly well without it, so skipping is always safe.
+        if (window.Embeddings && Embeddings.needsConsent) {
+            if (Embeddings.needsConsent()) {
+                showLoadingOverlay('Loading feeds\u2026');
+                // Bind the prompt buttons once
+                const skipBtn = $('#app-loading-skip-btn');
+                const dlBtn = $('#app-loading-download-btn');
+                if (skipBtn)
+                    skipBtn.onclick = () => {
+                        Embeddings.setConsent(false);
+                        hideLoadingOverlay();
+                    };
+                if (dlBtn)
+                    dlBtn.onclick = () => {
+                        Embeddings.setConsent(true);
+                        updateLoadingStatus('Downloading AI library\u2026');
+                        showLoadingProgress(0);
+                        Embeddings.loadModelWithProgress(p => {
+                            if (p.status === 'download') {
+                                if (p.phase === 'library')
+                                    updateLoadingStatus('Downloading AI library\u2026');
+                                else
+                                    updateLoadingStatus('Downloading AI model\u2026');
+                                if (typeof p.progress === 'number')
+                                    showLoadingProgress(p.progress);
+                            }
+                            else if (p.status === 'ready') {
+                                updateLoadingStatus('AI model ready');
+                                setTimeout(hideLoadingOverlay, 400);
+                            }
+                            else if (p.status === 'error') {
+                                updateLoadingStatus('AI model failed: ' + (p.error || 'unknown error'));
+                                setTimeout(hideLoadingOverlay, 2000);
+                            }
+                        }).catch(() => { });
+                    };
+                // Show the confirm prompt after a brief delay so the
+                // initial feed render can start.
+                setTimeout(showLoadingConfirm, 600);
+            }
+            else if (Embeddings.hasConsent()) {
+                // Already consented — load in the background with
+                // progress shown in the overlay.
+                showLoadingOverlay('Downloading AI model\u2026');
+                showLoadingProgress(0);
+                Embeddings.loadModelWithProgress(p => {
+                    if (p.status === 'download') {
+                        if (p.phase === 'library')
+                            updateLoadingStatus('Downloading AI library\u2026');
+                        else
+                            updateLoadingStatus('Downloading AI model\u2026');
+                        if (typeof p.progress === 'number')
+                            showLoadingProgress(p.progress);
+                    }
+                    else if (p.status === 'ready') {
+                        hideLoadingOverlay();
+                    }
+                    else if (p.status === 'error') {
+                        hideLoadingOverlay();
+                    }
+                }).catch(() => { hideLoadingOverlay(); });
+            }
         }
         renderTopTabs();
         bindTopTabs();

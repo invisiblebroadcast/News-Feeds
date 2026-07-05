@@ -5,11 +5,35 @@ const Embeddings = (() => {
     let loadPromise = null;
     let loadError = null;
     const cache = new Map();
+    let _userConsented = null;
+    function setConsent(val) {
+        _userConsented = val;
+        localStorage.setItem('embeddings_consent', val ? '1' : '0');
+    }
+    function needsConsent() {
+        if (_userConsented !== null)
+            return false;
+        const stored = localStorage.getItem('embeddings_consent');
+        if (stored === '1') {
+            _userConsented = true;
+            return false;
+        }
+        if (stored === '0') {
+            _userConsented = false;
+            return false;
+        }
+        return true;
+    }
+    function hasConsent() {
+        return _userConsented === true;
+    }
     async function loadModel() {
         if (model)
             return model;
         if (loadPromise)
             return loadPromise;
+        if (!hasConsent())
+            return null;
         loadPromise = (async () => {
             try {
                 const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
@@ -19,6 +43,53 @@ const Embeddings = (() => {
             }
             catch (e) {
                 loadError = e;
+                console.warn('[Embeddings] all-MiniLM-L6-v2 load failed:', e && e.message);
+                return null;
+            }
+        })().finally(() => {
+            loadPromise = null;
+        });
+        return loadPromise;
+    }
+    async function loadModelWithProgress(onProgress) {
+        if (model) {
+            if (onProgress)
+                onProgress({ status: 'ready', progress: 1 });
+            return model;
+        }
+        if (loadPromise)
+            return loadPromise;
+        if (!hasConsent())
+            return null;
+        if (onProgress)
+            onProgress({ status: 'download', phase: 'library', progress: 0 });
+        loadPromise = (async () => {
+            try {
+                if (onProgress)
+                    onProgress({ status: 'download', phase: 'library', progress: 0.1 });
+                const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
+                if (onProgress)
+                    onProgress({ status: 'download', phase: 'model', progress: 0.15 });
+                model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+                    progress_callback: (p) => {
+                        if (!onProgress)
+                            return;
+                        if (p.status === 'progress') {
+                            const base = 0.15;
+                            const range = 0.85;
+                            onProgress({ status: 'download', phase: 'model', progress: base + p.progress * range, loaded: p.loaded, total: p.total });
+                        }
+                    }
+                });
+                isReady = true;
+                if (onProgress)
+                    onProgress({ status: 'ready', progress: 1 });
+                return model;
+            }
+            catch (e) {
+                loadError = e;
+                if (onProgress)
+                    onProgress({ status: 'error', error: e && e.message });
                 console.warn('[Embeddings] all-MiniLM-L6-v2 load failed:', e && e.message);
                 return null;
             }
@@ -99,6 +170,10 @@ const Embeddings = (() => {
     }
     return {
         loadModel,
+        loadModelWithProgress,
+        setConsent,
+        needsConsent,
+        hasConsent,
         embed,
         embedBatch,
         cosineSimilarity,
