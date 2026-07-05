@@ -1,2 +1,4 @@
 js/config.js
 js/gemini-key.js
+node_modules/
+package-lock.json
