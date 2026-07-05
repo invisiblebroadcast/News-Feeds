@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -4698,7 +4698,17 @@ const APP_VERSION = 8;
 
   /* ── Article & Source Modals ── */
   function findArticleByLink(link) {
-    return currentArticles.find(a => a.link === link);
+    if (currentArticles) {
+      const found = currentArticles.find(a => a.link === link);
+      if (found) return found;
+    }
+    for (const key of Object.keys(scopeCache)) {
+      const cached = scopeCache[key];
+      if (!cached || !cached.articles) continue;
+      const found = cached.articles.find(a => a.link === link);
+      if (found) return found;
+    }
+    return null;
   }
 
   function openArticleDetail(link) {
