@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -930,7 +930,9 @@ const APP_VERSION = 11;
             }
         }
         else {
-            articles = cached.groups[subcat] || [];
+            const subcatArticles = cached.groups[subcat] || [];
+            const allArticles = cached.groups['all'] || [];
+            articles = subcatArticles.concat(allArticles);
         }
         if (!articles.length)
             return [];
@@ -4936,13 +4938,13 @@ const APP_VERSION = 11;
         });
     }
     function bindFeedControls() {
-        if (el.feedValidateBtn)
-            el.feedValidateBtn.addEventListener('click', handleValidateFeed);
-        if (el.feedAddBtn)
-            el.feedAddBtn.addEventListener('click', handleAddFeed);
-        if (el.feedUrlInput)
-            el.feedUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter')
-                handleValidateFeed(); });
+        const openBtn = $('#open-custom-sources-btn');
+        if (openBtn) {
+            openBtn.addEventListener('click', () => {
+                if (window.CustomSourcesModal)
+                    CustomSourcesModal.openModal();
+            });
+        }
     }
     function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -7544,6 +7546,9 @@ const APP_VERSION = 11;
             // 'parliament:<id>').
             CategoriesModal.setOnSelect(sub => selectCategory(sub));
             CategoriesModal.bindAll();
+        }
+        if (window.CustomSourcesModal) {
+            CustomSourcesModal.bindAll();
         }
         if (currentSection === 'topics') {
             renderTopicsView();

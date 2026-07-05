@@ -209,31 +209,8 @@
         </div>
         <div class="setting-group">
           <label class="setting-label">Custom Feed Sources</label>
-          <p class="setting-desc">Add a new RSS feed source.</p>
-          <div class="feed-input-row">
-            <input type="url" id="feed-url-input" placeholder="https://example.com/rss">
-            <button class="btn btn-ghost" id="feed-validate-btn">Validate</button>
-          </div>
-          <div class="feed-input-row">
-            <input type="text" id="feed-name-input" placeholder="Feed name">
-            <div class="select-wrapper">
-              <select id="feed-scope-select">
-                <option value="global">Global</option>
-                <option value="nation">Nation</option>
-              </select>
-            </div>
-            <div class="select-wrapper">
-              <select id="feed-nation-select"></select>
-            </div>
-          </div>
-          <div class="feed-input-row">
-            <div class="select-wrapper" style="flex:1">
-              <select id="feed-subcat-select"></select>
-            </div>
-            <button class="btn btn-primary" id="feed-add-btn">Add</button>
-          </div>
-          <div id="feed-validate-msg" class="feed-validate-msg"></div>
-          <div id="feed-custom-list"></div>
+          <p class="setting-desc">Add RSS feeds that aren't in our default directory.</p>
+          <button class="btn" id="open-custom-sources-btn" style="width:100%;justify-content:center;">Open Custom Sources Manager</button>
         </div>
         <div class="setting-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
           <button class="btn" id="hard-refresh-btn" style="width:100%;justify-content:center;color:var(--accent-red) !important;border-color:var(--accent-red) !important;">
@@ -504,6 +481,49 @@
         <button class="modal-close" id="build-modal-close">&times;</button>
       </div>
       <div class="modal-body" id="build-modal-body" style="padding:0;"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="custom-sources-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Custom Feed Sources</h2>
+        <button class="modal-close" id="custom-sources-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">
+          Add RSS feeds that aren't in our default directory. Sources are stored in your account when signed in, or locally otherwise.
+        </p>
+        <div class="feed-input-row">
+          <input type="url" id="cs-url-input" placeholder="https://example.com/rss">
+          <button class="btn btn-ghost" id="cs-validate-btn">Validate</button>
+        </div>
+        <div class="feed-input-row">
+          <input type="text" id="cs-name-input" placeholder="Feed name">
+          <div class="select-wrapper">
+            <select id="cs-scope-select">
+              <option value="global">Global</option>
+              <option value="nation">Nation</option>
+            </select>
+          </div>
+          <div class="select-wrapper">
+            <select id="cs-nation-select"></select>
+          </div>
+        </div>
+        <div class="feed-input-row">
+          <div class="select-wrapper" style="flex:1">
+            <select id="cs-subcat-select"></select>
+          </div>
+          <button class="btn btn-primary" id="cs-add-btn">Add</button>
+        </div>
+        <div id="cs-validate-msg" class="feed-validate-msg"></div>
+        <div style="margin-top:16px;border-top:1px solid var(--border-primary);padding-top:12px;">
+          <label style="font-size:0.85rem;font-weight:600;color:var(--text-primary);display:block;margin-bottom:8px;">Your Custom Feeds</label>
+          <div id="cs-feed-list">
+            <p style="color:var(--text-tertiary);font-size:0.82rem;padding:12px;">No custom feeds added yet.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -790,7 +810,8 @@
   <script src="js/publisher.js"></script>
   <script src="js/shared-state.js"></script>
   <script src="js/publish-modal.js"></script>
-  <script src="js/app-home.js?v=11"></script>
+  <script src="js/custom-sources-modal.js"></script>
+  <script src="js/app-home.js?v=12"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
