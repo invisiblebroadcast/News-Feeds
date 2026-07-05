@@ -13,7 +13,7 @@ const Embeddings = (() => {
 
     loadPromise = (async () => {
       try {
-        const { pipeline } = window.transformers;
+        const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
         model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         isReady = true;
         return model;

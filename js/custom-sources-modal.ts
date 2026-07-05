@@ -1,5 +1,9 @@
 // @ts-nocheck
 window.CustomSourcesModal = (() => {
+  function $(s, c) { return (c || document).querySelector(s); }
+  function $$(s, c) { return [...(c || document).querySelectorAll(s)]; }
+  function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   let validatedFeed = null;
 
   function openModal() {
