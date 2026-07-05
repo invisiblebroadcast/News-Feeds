@@ -493,6 +493,7 @@
       <div class="modal-body">
         <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">
           Add RSS feeds that aren't in our default directory. Sources are stored in your account when signed in, or locally otherwise.
+          <span style="display:block;margin-top:6px;color:var(--accent-red-hover);font-size:0.82rem;">Note: Google Alerts feeds require authentication and cannot be fetched by this app.</span>
         </p>
         <div class="feed-input-row">
           <input type="url" id="cs-url-input" placeholder="https://example.com/rss">
@@ -810,7 +811,7 @@
   <script src="js/shared-state.js"></script>
   <script src="js/publish-modal.js"></script>
   <script src="js/custom-sources-modal.js"></script>
-  <script src="js/app-home.js?v=13"></script>
+  <script src="js/app-home.js?v=14"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

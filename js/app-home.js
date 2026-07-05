@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -3642,10 +3642,6 @@ const APP_VERSION = 13;
     function bindSearch() {
         if (!el.searchInput)
             return;
-        // Debounce so a fast typist doesn't fire a re-render (and
-        // the O(N²) conflict detection it triggers) on every key.
-        // 120 ms is short enough to feel instant and long enough to
-        // collapse bursts of keystrokes into a single render.
         let searchTimer = null;
         el.searchInput.addEventListener('input', () => {
             currentSearch = el.searchInput.value.trim().toLowerCase();
@@ -3658,23 +3654,10 @@ const APP_VERSION = 13;
                 const cached = scopeCache[key];
                 if (!cached)
                     return;
-                // Re-arm the heavy-work flag so the next render runs
-                // conflict detection against the search-filtered pool.
-                // (Otherwise the background-fetch skip would persist and
-                // the user would see stale data after typing.)
-                skipHeavyWork = false;
                 const articles = getFilteredArticles(currentSubcat, cached);
                 renderTranslated(articles);
-                // If USE is ready, re-rank the substring-filtered results
-                // by semantic similarity. Runs in the background; a
-                // newer search will cancel the in-flight ranking via
-                // _searchVersion.
-                if (currentSearch)
-                    applySemanticRank(articles);
-            }, 120);
+            }, 250);
         });
-        // Clear the debounce on Enter / Escape so the user gets
-        // immediate feedback for those keys.
         el.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === 'Escape') {
                 if (searchTimer) {
@@ -3683,7 +3666,6 @@ const APP_VERSION = 13;
                 }
                 currentSearch = el.searchInput.value.trim().toLowerCase();
                 _persist();
-                skipHeavyWork = false;
                 const key = scopeKey();
                 const cached = scopeCache[key];
                 if (!cached)

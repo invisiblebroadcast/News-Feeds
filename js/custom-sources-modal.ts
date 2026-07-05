@@ -94,6 +94,11 @@ window.CustomSourcesModal = (() => {
     if (!url) return;
     const msg = $('#cs-validate-msg');
     if (msg) { msg.textContent = 'Validating\u2026'; msg.className = 'feed-validate-msg'; }
+    if (/google\.(com|co\.[a-z]{2})\/alerts\//i.test(url)) {
+      if (msg) { msg.textContent = 'Google Alerts feeds require authentication and cannot be fetched. Try a different RSS source.'; msg.className = 'feed-validate-msg error'; }
+      validatedFeed = null;
+      return;
+    }
     try {
       const result = await FeedManager.validateFeed(url);
       if (msg) {
