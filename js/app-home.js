@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -3959,6 +3959,42 @@ const APP_VERSION = 16;
     // Fetch all sources in the background, update the cache silently. The
     // current view is NOT re-rendered. When done, show the "show recent" button
     // so the user can opt to view the new data.
+    // Core fetch logic — no UI side-effects. Callers manage overlay/spinner.
+    async function _fetchAndCache() {
+        const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
+        if (!feeds.length)
+            return;
+        const subs = FeedManager.subcategoriesForScope(currentScope);
+        if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
+            currentSubcat = 'all';
+            _persist();
+        }
+        const perSourceCap = 100;
+        const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
+        const groups = {};
+        for (let j = 0; j < allResults.length; j++) {
+            const result = allResults[j];
+            if (result.status !== 'fulfilled')
+                continue;
+            for (const a of result.value) {
+                a.subcat = a.feedHint || 'politics';
+                const cat = a.subcat;
+                if (!groups[cat])
+                    groups[cat] = [];
+                groups[cat].push(a);
+            }
+        }
+        let allArticles = [];
+        for (const cat of Object.keys(groups))
+            allArticles.push(...groups[cat]);
+        const key = scopeKey();
+        scopeCache[key] = { articles: allArticles, groups };
+        liveAllLoaded = false;
+        loadAllState = 'idle';
+        liveAllArticles = null;
+        loadedCount = 0;
+        hasFreshBackground = true;
+    }
     async function backgroundRefresh() {
         if (isBackgroundRefreshing)
             return;
@@ -3966,47 +4002,7 @@ const APP_VERSION = 16;
         showLoadingOverlay('Refreshing feeds\u2026');
         showRefreshSpinner();
         try {
-            const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
-            if (!feeds.length) {
-                isBackgroundRefreshing = false;
-                hideRefreshStatus();
-                hideLoadingOverlay();
-                return;
-            }
-            const subs = FeedManager.subcategoriesForScope(currentScope);
-            // Parliament subcats are not part of the news subcat list
-            // (and never should be) — keep them. Only snap back to
-            // 'all' if the current subcat is genuinely unknown.
-            if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
-                currentSubcat = 'all';
-                _persist();
-            }
-            const perSourceCap = 100;
-            const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
-            const groups = {};
-            for (let j = 0; j < allResults.length; j++) {
-                const result = allResults[j];
-                if (result.status !== 'fulfilled')
-                    continue;
-                for (const a of result.value) {
-                    a.subcat = a.feedHint || 'politics';
-                    const cat = a.subcat;
-                    if (!groups[cat])
-                        groups[cat] = [];
-                    groups[cat].push(a);
-                }
-            }
-            let allArticles = [];
-            for (const cat of Object.keys(groups))
-                allArticles.push(...groups[cat]);
-            const key = scopeKey();
-            scopeCache[key] = { articles: allArticles, groups };
-            // Reset "Load All" since this is a fresh dataset
-            liveAllLoaded = false;
-            loadAllState = 'idle';
-            liveAllArticles = null;
-            loadedCount = 0;
-            hasFreshBackground = true;
+            await _fetchAndCache();
             isBackgroundRefreshing = false;
             showRecentButton();
             hideLoadingOverlay();
@@ -4015,6 +4011,24 @@ const APP_VERSION = 16;
             console.error('Background refresh failed:', err);
             isBackgroundRefreshing = false;
             hideRefreshStatus();
+            hideLoadingOverlay();
+        }
+    }
+    // Fetch fresh data and immediately apply it (used by the clock icon click).
+    async function fetchAndApplyFresh() {
+        if (isBackgroundRefreshing)
+            return;
+        isBackgroundRefreshing = true;
+        showLoadingOverlay('Loading new feeds\u2026');
+        try {
+            await _fetchAndCache();
+            applyRecentAndShowLive();
+        }
+        catch (err) {
+            console.error('Fetch and apply failed:', err);
+        }
+        finally {
+            isBackgroundRefreshing = false;
             hideLoadingOverlay();
         }
     }
@@ -4042,13 +4056,12 @@ const APP_VERSION = 16;
     function startAutoRefresh() {
         stopAutoRefresh();
         autoRefreshTimer = setInterval(() => {
-            // Don't start another refresh if one is already running, or if the
-            // document is hidden (no point refreshing in the background tab).
-            if (isBackgroundRefreshing)
-                return;
+            // Just show the clock icon every cycle — no background fetch.
+            // The user clicks the icon to trigger the actual refresh
+            // with a loading overlay, avoiding freezes.
             if (document.hidden)
                 return;
-            backgroundRefresh();
+            showRecentButton();
         }, AUTO_REFRESH_INTERVAL_MS);
     }
     function stopAutoRefresh() {
@@ -4078,7 +4091,7 @@ const APP_VERSION = 16;
         }
         const recentBtn = $('#ib-recent-btn');
         if (recentBtn)
-            recentBtn.addEventListener('click', applyRecentAndShowLive);
+            recentBtn.addEventListener('click', fetchAndApplyFresh);
     }
     function bindSourcesConfig() {
         if (el.sourcesConfigModalClose)
