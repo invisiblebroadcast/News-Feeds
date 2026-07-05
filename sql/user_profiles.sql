@@ -19,17 +19,19 @@ create table if not exists user_profiles (
 );
 
 -- 2. Auto-create a profile row when a new user signs up
+-- Google OAuth sends `name` / `picture` while email/password sends `full_name` / `avatar_url`;
+-- handle both so neither provider crashes the trigger.
 create or replace function handle_new_user()
 returns trigger
 language plpgsql
-security definer set search_path = ''
+security definer
 as $$
 begin
-  insert into user_profiles (id, full_name, avatar_url)
+  insert into public.user_profiles (id, full_name, avatar_url)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    coalesce(new.raw_user_meta_data ->> 'avatar_url', '')
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', ''),
+    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture', '')
   );
   return new;
 end;
