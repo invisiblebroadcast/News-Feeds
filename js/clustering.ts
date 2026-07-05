@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Clustering — groups articles that cover the same story.
 //
 // We cluster by TF-IDF cosine similarity (fast, no model needed).

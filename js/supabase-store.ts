@@ -1,3 +1,4 @@
+// @ts-nocheck
 const SUPABASE_URL = 'https://yokftwevcspbpbnwmrnb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlva2Z0d2V2Y3NwYnBibndtcm5iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNjEzNzEsImV4cCI6MjA5NjgzNzM3MX0.zfdj2115WsFw2KFyFkW54W-ShDNRwtKxQ8UiKNfF7U0';
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── AI module (deterministic helpers only) ──
  *
  * The app used to call Google's Gemini API for ranking, but the

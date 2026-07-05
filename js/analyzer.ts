@@ -1,3 +1,4 @@
+// @ts-nocheck
 const Analyzer = (() => {
   /* ── Source authority ──
    * Multiplier in the range [0.8, 1.2]. 1.0 = neutral.

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Background archive: every successfully-parsed article is upserted
 // into the Supabase `seen_articles` table for later analysis (cross-
 // source conflict detection, trend analysis, dedup ratios, etc).

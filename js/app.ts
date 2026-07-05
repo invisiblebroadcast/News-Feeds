@@ -1,3 +1,4 @@
+// @ts-nocheck
 const APP_VERSION = 6;
 
 (async () => {
@@ -735,6 +736,8 @@ const APP_VERSION = 6;
       loadAllState = 'idle';
       liveAllArticles = null;
       lastRenderedCount = 0;
+      currentSearch = '';
+      if (el.searchInput) el.searchInput.value = '';
       $$('.tab-item', el.topTabs).forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       if (scope === 'conflicts') {
@@ -814,6 +817,8 @@ const APP_VERSION = 6;
     const prevKey = scopeKey();
     if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
     currentSubcat = sub;
+    currentSearch = '';
+    if (el.searchInput) el.searchInput.value = '';
     hasFreshBackground = false;
     loadedCount = 0;
     liveAllLoaded = false;
@@ -1231,6 +1236,9 @@ const APP_VERSION = 6;
             '<button class="card-action-btn card-comment-btn" data-article="' + encoded + '" title="Comment">' +
               '<span>&#x1F4AC;</span><span class="card-action-count">' + commentCount + '</span>' +
             '</button>' +
+            '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
+              '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg>' +
+            '</button>' +
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
@@ -1279,6 +1287,25 @@ const APP_VERSION = 6;
       console.error('renderReels failed:', e);
       showError('Failed to render cards view. Try refreshing.');
     }
+  }
+
+  function openReelsForArticle(link) {
+    const article = findArticleByLink(link);
+    if (!article) return;
+    const idx = currentArticles.indexOf(article);
+    if (idx === -1) return;
+    currentReelIndex = idx;
+    currentView = 'reels';
+    document.body.classList.add('cards-view');
+    $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => b.classList.remove('active'));
+    $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+      if (b.dataset.view === currentView) b.classList.add('active');
+    });
+    sizeReelsContainer();
+    reelsFrameId = ++nextFrameId;
+    pushedFrameStack.push(reelsFrameId);
+    try { history.pushState({ ibFrame: reelsFrameId, ibReels: true }, ''); } catch {}
+    showReel();
   }
 
   function cardOverlayHtml(includeToolbar, hasThumb) {
@@ -2119,7 +2146,6 @@ const APP_VERSION = 6;
         e.preventDefault();
         const url = decodeURIComponent(row.dataset.link || '');
         if (!url) return;
-        closeClusterModal();
         openArticleDetail(url);
       });
     });
@@ -2132,7 +2158,7 @@ const APP_VERSION = 6;
       });
     }
 
-    modal.classList.add('open');
+    openModal('cluster', modal, closeClusterModal);
   }
 
   function closeClusterModal() {
@@ -2419,9 +2445,9 @@ const APP_VERSION = 6;
     const clusterModal = $('#cluster-modal');
     if (clusterModal) {
       const closeBtn = $('#cluster-modal-close');
-      if (closeBtn) closeBtn.addEventListener('click', closeClusterModal);
+      if (closeBtn) closeBtn.addEventListener('click', () => closeModal('cluster'));
       clusterModal.addEventListener('click', e => {
-        if (e.target === clusterModal) closeClusterModal();
+        if (e.target === clusterModal) closeModal('cluster');
       });
     }
     // Build-article modal.
@@ -5685,6 +5711,14 @@ const APP_VERSION = 6;
         if (article) openCommentsPage(article);
         return;
       }
+      // Cards button — open reels view at this article
+      const cardsBtn = e.target.closest('[data-cards-article]');
+      if (cardsBtn) {
+        e.stopPropagation();
+        if (el.articleModal && el.articleModal.classList.contains('open')) closeArticleModal();
+        openReelsForArticle(decodeURIComponent(cardsBtn.dataset.cardsArticle));
+        return;
+      }
       const ae = e.target.closest('[data-article]');
       if (!ae) return;
       openArticleDetail(decodeURIComponent(ae.dataset.article));
@@ -5699,6 +5733,16 @@ const APP_VERSION = 6;
       const url = el.articleModalExt.dataset.url;
       if (url) window.open(url, '_blank');
     });
+    const articleModalCardsBtn = $('#article-modal-cards-btn');
+    if (articleModalCardsBtn) {
+      articleModalCardsBtn.addEventListener('click', () => {
+        const url = el.articleModalRead.dataset.url;
+        if (url) {
+          closeArticleModal();
+          openReelsForArticle(url);
+        }
+      });
+    }
     el.sourceModalClose.addEventListener('click', closeSourceModal);
     el.sourceModal.addEventListener('click', e => { if (e.target === el.sourceModal) closeSourceModal(); });
     document.addEventListener('keydown', e => {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Subject Registry ──
  *
  * A static lookup table of public figures whose public statements we

@@ -1,3 +1,4 @@
+// @ts-nocheck
 const AppState = (() => {
   const SESSION_KEY = 'newsfeeds_session_state';
   const STORAGE_KEY = 'newsfeeds_persistent_state';

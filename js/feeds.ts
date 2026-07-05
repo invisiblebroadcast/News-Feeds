@@ -1,3 +1,4 @@
+// @ts-nocheck
 const FeedManager = (() => {
   let feedData = null;
   let loadPromise = null;

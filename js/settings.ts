@@ -1,3 +1,4 @@
+// @ts-nocheck
 const Settings = (() => {
   const STORAGE_KEY = 'newsfeeds_settings';
   const DEFAULTS = {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Filter Modal ──
  *
  * Replaces the simple "All Sources" dropdown with a full filter

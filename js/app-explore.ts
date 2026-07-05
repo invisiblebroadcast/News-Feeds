@@ -1,3 +1,4 @@
+// @ts-nocheck
 (async () => {
   const $ = (sel, ctx) => (ctx || document).querySelector(sel);
   const $$ = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];

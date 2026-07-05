@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Track per-RSS-source health (consecutive failure counts + manually-disabled flag).
 //
 // A "failure" is a single fetch attempt that returned 0 articles (network

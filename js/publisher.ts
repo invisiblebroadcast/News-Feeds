@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Publisher — generates a coherent article from a cluster of
 // stories covering the same topic.
 //

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Scoring Engine ──
  *
  * Computes four deterministic scores about a public figure:

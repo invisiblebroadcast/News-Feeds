@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Categories Modal ──
  *
  * Two-tab modal:

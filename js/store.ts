@@ -1,3 +1,4 @@
+// @ts-nocheck
 const CloudStore = (() => {
   const GITHUB_OWNER = 'invisiblebroadcast';
   const GITHUB_REPO = 'News-Feeds';

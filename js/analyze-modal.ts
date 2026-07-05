@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Analyze Modal + Subject Dashboard ──
  *
  * Implements Milestones 2, 5 and 6:

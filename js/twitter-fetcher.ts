@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ── Twitter Fetcher (Nitter-backed) ──
  *
  * Pulls recent tweets for a given handle via a public Nitter

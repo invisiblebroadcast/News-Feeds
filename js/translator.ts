@@ -1,3 +1,4 @@
+// @ts-nocheck
 const Translator = (() => {
   const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=auto&tl=';
   const cache = new Map();

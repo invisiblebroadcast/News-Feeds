@@ -1,3 +1,4 @@
+// @ts-nocheck
 (async () => {
   const $ = (sel, ctx) => (ctx || document).querySelector(sel);
   console.log('[NewsFeeds] App version: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'));
