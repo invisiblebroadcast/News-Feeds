@@ -205,8 +205,42 @@ const FeedFetcher = (() => {
                 return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
             }
             catch (err) {
-                afterFetch(feed, [], err);
-                return [];
+                // Fall back to rss2json if the CORS proxy fails for Google News
+                const encodedUrl = encodeURIComponent(feed.url);
+                const proxyMessage = err && err.message ? err.message : 'Proxy fetch failed';
+                const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
+                try {
+                    const res = await fetchWithTimeout(rss2jsonUrl);
+                    if (!res.ok)
+                        throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    if (data.status !== 'ok')
+                        throw new Error(data.message || 'Unknown RSS2JSON error');
+                    const allItems = (data.items || []).map(item => {
+                        let imageUrl = item.thumbnail || '';
+                        if (!imageUrl && item.description) {
+                            imageUrl = extractImageFromHtml(item.description);
+                        }
+                        return {
+                            title: (item.title || '').trim(),
+                            link: (item.link || '').trim(),
+                            summary: smartTruncate((item.description || '').replace(/<[^>]*>/g, '').trim(), 300),
+                            pubDate: correctPubDateTimezone(item.pubDate || '', feed),
+                            author: item.author || '',
+                            imageUrl,
+                            source: feed.name,
+                            feedUrl: feed.url,
+                            feedHint: feed.hint || 'politics',
+                            guid: item.guid || item.link || ''
+                        };
+                    });
+                    afterFetch(feed, allItems);
+                    return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
+                }
+                catch (rssErr) {
+                    afterFetch(feed, [], rssErr || new Error(proxyMessage));
+                    return [];
+                }
             }
         }
         // For non-Google feeds, prefer raw RSS XML via the CORS proxy because it
