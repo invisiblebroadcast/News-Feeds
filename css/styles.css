@@ -5520,8 +5520,7 @@ body:not(.modal-open) #main-content {
 .build-loading p { margin: 0; font-size: 0.92rem; }
 
 .build-headline-wrap,
-.build-body-wrap,
-.build-sources-wrap {
+.build-body-wrap {
   padding: 14px 20px;
   border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
 }
@@ -5566,11 +5565,6 @@ body:not(.modal-open) #main-content {
   outline: none;
   border-color: var(--accent, #4dabf7);
 }
-.build-sources-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .build-source-row {
   display: block;
   padding: 8px 10px;
@@ -5609,6 +5603,31 @@ body:not(.modal-open) #main-content {
   color: var(--text-tertiary);
   font-style: italic;
   padding: 6px 0;
+}
+.build-sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.build-sources-header:hover {
+  opacity: 0.8;
+}
+.build-sources-arrow {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+}
+.build-sources-wrap {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+.build-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
 }
 .build-actions {
   display: flex;

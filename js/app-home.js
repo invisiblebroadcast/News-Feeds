@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 22;
+const APP_VERSION = 23;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -2541,15 +2541,17 @@ const APP_VERSION = 22;
         if (_topicsBuilding)
             return;
         _topicsBuilding = true;
-        body.innerHTML = '<div class="build-loading"><div class="ce-icon">⏳</div>' +
-            '<h3>Composing article…</h3>' +
-            '<p>Reading ' + cluster.articles.length + ' source' + (cluster.articles.length === 1 ? '' : 's') + ' and selecting the most central sentences.</p></div>';
+        // Show loading overlay while the publisher composes the article
+        showLoadingOverlay('Composing article\u2026');
+        updateLoadingStatus('Reading ' + cluster.articles.length + ' sources and selecting key sentences\u2026');
         modal.classList.add('open');
         try {
             const article = await Publisher.buildArticle(cluster);
+            hideLoadingOverlay();
             renderBuildArticle(article, cluster);
         }
         catch (err) {
+            hideLoadingOverlay();
             console.warn('Build article failed:', err && err.message);
             body.innerHTML = '<div class="build-loading"><div class="ce-icon">⚠️</div>' +
                 '<h3>Couldn\'t build article</h3>' +
@@ -2599,14 +2601,17 @@ const APP_VERSION = 22;
                 escHtml(fullText) +
                 '</textarea>' +
                 '</div>' +
-                '<div class="build-sources-wrap">' +
-                '<label class="build-label">Sources (' + (article.sources || []).length + ')</label>' +
-                '<div class="build-sources-list">' + (sourceRows || '<div class="build-no-sources">No source links available.</div>') + '</div>' +
-                '</div>' +
                 '<div class="build-actions">' +
-                '<button class="btn btn-ghost" id="build-copy-btn">📋 Copy text</button>' +
-                '<button class="btn btn-ghost" id="build-copy-md-btn">📋 Copy as Markdown</button>' +
-                '<button class="btn btn-primary" id="build-regen-btn">↻ Regenerate</button>' +
+                '<button class="btn btn-ghost" id="build-copy-btn">\uD83D\uDCCB Copy text</button>' +
+                '<button class="btn btn-ghost" id="build-copy-md-btn">\uD83D\uDCCB Copy as Markdown</button>' +
+                '<button class="btn btn-primary" id="build-regen-btn">\u21BB Regenerate</button>' +
+                '</div>' +
+                '<div class="build-sources-wrap">' +
+                '<div class="build-sources-header" id="build-sources-toggle">' +
+                '<label class="build-label">Sources (' + (article.sources || []).length + ')</label>' +
+                '<span class="build-sources-arrow">\u25B6</span>' +
+                '</div>' +
+                '<div class="build-sources-list" id="build-sources-list" style="display:none">' + (sourceRows || '<div class="build-no-sources">No source links available.</div>') + '</div>' +
                 '</div>';
         // Wire buttons.
         const copyBtn = body.querySelector('#build-copy-btn');
@@ -2671,10 +2676,22 @@ const APP_VERSION = 22;
                 finally {
                     if (regenBtn) {
                         regenBtn.disabled = false;
-                        regenBtn.textContent = '↻ Regenerate';
+                        regenBtn.textContent = '\u21BB Regenerate';
                     }
                 }
             });
+        // Wire collapsible sources toggle
+        const sourcesToggle = body.querySelector('#build-sources-toggle');
+        const sourcesList = body.querySelector('#build-sources-list');
+        if (sourcesToggle && sourcesList) {
+            sourcesToggle.addEventListener('click', () => {
+                const isOpen = sourcesList.style.display !== 'none';
+                sourcesList.style.display = isOpen ? 'none' : 'block';
+                const arrow = sourcesToggle.querySelector('.build-sources-arrow');
+                if (arrow)
+                    arrow.textContent = isOpen ? '\u25B6' : '\u25BC';
+            });
+        }
     }
     // Build the plain-text version of the article for the
     // textarea + clipboard copy. ONE description (no per-
