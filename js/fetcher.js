@@ -154,8 +154,29 @@ const FeedFetcher = (() => {
         catch { }
         return parseRssXml(xmlText, feed);
     }
+    function cleanGoogleNewsUrl(url) {
+        // Google blocks automated requests with regional params (hl, gl, ceid).
+        // Strip them so the CF Worker / proxies can fetch the feed.
+        try {
+            const u = new URL(url);
+            if (u.hostname.includes('news.google.com') && u.pathname.startsWith('/rss/')) {
+                // Strip everything except the search query
+                const q = u.searchParams.get('q');
+                if (q)
+                    return 'https://news.google.com/rss/search?q=' + encodeURIComponent(q);
+                // For topic URLs, strip regional params but keep the topic path
+                u.searchParams.delete('hl');
+                u.searchParams.delete('gl');
+                u.searchParams.delete('ceid');
+                return u.toString();
+            }
+        }
+        catch { }
+        return url;
+    }
     async function proxyFetchViaWorker(feed) {
-        const proxyUrl = CORS_PROXY_CF + encodeURIComponent(feed.url);
+        const cleanUrl = cleanGoogleNewsUrl(feed.url);
+        const proxyUrl = CORS_PROXY_CF + encodeURIComponent(cleanUrl);
         const res = await fetchWithTimeout(proxyUrl);
         if (!res.ok)
             throw new Error('CF Worker HTTP ' + res.status);
