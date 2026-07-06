@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 20;
+const APP_VERSION = 21;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);

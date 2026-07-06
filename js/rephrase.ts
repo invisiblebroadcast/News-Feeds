@@ -113,7 +113,8 @@ const Rephrase = (() => {
 
   /** Rewrite a single text string with fresh wording. */
   async function rewrite(text, options = {}) {
-    const prompt = `Rewrite the following text in a fresh way, changing sentence structure and word choice while keeping all key facts:\n\n${text}`;
+    // Completion-style prompt works for GPT-2 and instruct models alike
+    const prompt = `Original:\n${text}\n\nRewritten version (different words, same meaning):\n`;
     return generate(prompt, options);
   }
 
@@ -131,24 +132,19 @@ const Rephrase = (() => {
     const sourceTexts = articles.slice(0, 8).map((a, i) => {
       const t = a.title || 'Untitled';
       const s = (a.summary || a.snippet || '').trim();
-      return `[Article ${i + 1}] ${t}\n${s ? s.slice(0, 300) : '(no summary)'}`;
+      return `SOURCE ${i + 1}: ${t}\n${s ? s.slice(0, 300) : '(no summary)'}`;
     }).join('\n\n');
 
     const uniquenessHint = previousHeadline
-      ? `The PREVIOUS version of this article was titled "${previousHeadline}". Write a completely different version — different angle, different structure, different headline.`
-      : 'Write a compelling news-style article.';
+      ? `\n\nPREVIOUS VERSION headline was: "${previousHeadline}". Write a COMPLETELY DIFFERENT version.`
+      : '';
 
-    const prompt = `You are a news editor. Given the following source article summaries, write a single cohesive news article that synthesises them into one clear story.
-
-${sourceTexts}
-
-${uniquenessHint}
-
-Write a headline on the first line, then a blank line, then 2-3 paragraphs of body text. Use neutral, journalistic tone. Do NOT label the headline — just write it.`;
+    // Completion-style: GPT-2 naturally continues text after "ARTICLE:".
+    const prompt = `Synthesize the following news sources into one clear article.\n\n${sourceTexts}${uniquenessHint}\n\nARTICLE:\nHeadline: `;
 
     return generate(prompt, {
       maxTokens: 400,
-      temperature: 0.85 + Math.random() * 0.15, // 0.85-1.0 varies each click
+      temperature: 0.85 + Math.random() * 0.15,
     });
   }
 

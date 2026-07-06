@@ -111,7 +111,7 @@ const Embeddings = (() => {
     try {
       const result = await m(texts.map(t => String(t || '')), { pooling: 'mean', normalize: true });
       const dim = result.dims && result.dims[result.dims.length - 1] || 384;
-      const data = await result.data();
+      const data = await result.data;
       const out = new Array(texts.length);
       for (let i = 0; i < texts.length; i++) {
         const start = i * dim;

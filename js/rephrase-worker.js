@@ -23,7 +23,7 @@
         self.postMessage({ id, status: 'loading', message: 'Downloading AI model (~500MB, one-time\u2026)' });
 
         const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
-        generator = await pipeline('text-generation', 'Xenova/Qwen2-0.5B-Instruct', {
+        generator = await pipeline('text-generation', 'Xenova/gpt2', {
           max_new_tokens: options?.maxTokens || 300,
           do_sample: true,
         });
