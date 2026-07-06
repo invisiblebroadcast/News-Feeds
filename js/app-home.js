@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 29;
+const APP_VERSION = 30;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -7333,27 +7333,25 @@ const APP_VERSION = 29;
                 handleAuthSubmit();
             });
         }
-        // Google OAuth button — uses a full-page redirect so it works
-        // reliably on all platforms (desktop, mobile, localhost, HTTPS).
-        // bindAuth() above handles the return tokens from the URL hash.
+        // Google OAuth button — full-page redirect with PKCE flow.
+        // PKCE is the standard for SPAs and doesn't require a client secret.
         const googleBtn = $('#auth-google-btn');
         if (googleBtn) {
             googleBtn.addEventListener('click', () => {
-                // file:// protocol can't support OAuth redirects
                 if (window.location.protocol === 'file:') {
-                    const msg = $('#auth-error-msg');
+                    const msg = $('#auth-msg');
                     if (msg) {
-                        msg.textContent = 'Google sign-in requires a web server. Open this page via a local server or the live site.';
-                        msg.className = 'auth-error-msg';
+                        msg.textContent = 'Google sign-in requires a web server (http:// or https://).';
+                        msg.style.color = 'var(--error, #e03131)';
                     }
                     return;
                 }
                 client.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: window.location.origin + window.location.pathname,
+                        redirectTo: window.location.origin,
                         queryParams: {
-                            prompt: 'select_account', // Always show the account picker
+                            prompt: 'select_account',
                             access_type: 'offline',
                         },
                     },
