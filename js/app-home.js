@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -7195,9 +7195,39 @@ const APP_VERSION = 17;
     }
     function bindAuth() {
         const client = SupabaseStore.getClient();
-        client.auth.getSession().then(({ data }) => {
-            handleAuthChange(null, data.session);
-        });
+        // Resolve the current session. If the URL has OAuth tokens (redirect
+        // from Google) and getSession() returns null due to a race in the
+        // Supabase client's async initialisation, we manually extract them
+        // and call setSession so the user is signed in immediately.
+        (async () => {
+            const { data } = await client.auth.getSession();
+            if (data?.session) {
+                handleAuthChange(null, data.session);
+                return;
+            }
+            // Fallback: manually process OAuth tokens from the URL hash
+            const hash = window.location.hash;
+            if (hash && hash.includes('access_token=')) {
+                try {
+                    const p = new URLSearchParams(hash.replace(/^#/, ''));
+                    const at = p.get('access_token');
+                    const rt = p.get('refresh_token');
+                    if (at && rt) {
+                        const { data: sd, error: se } = await client.auth.setSession({ access_token: at, refresh_token: rt });
+                        if (!se && sd?.session) {
+                            handleAuthChange(null, sd.session);
+                            // Clean up the URL so the tokens aren't visible
+                            history.replaceState(history.state, '', location.pathname + location.search);
+                            return;
+                        }
+                    }
+                }
+                catch (e) {
+                    console.warn('OAuth fallback failed:', e);
+                }
+            }
+            handleAuthChange(null, null);
+        })();
         client.auth.onAuthStateChange((event, session) => {
             handleAuthChange(event, session);
         });
