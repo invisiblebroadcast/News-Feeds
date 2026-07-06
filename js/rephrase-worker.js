@@ -25,7 +25,15 @@
         const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
         generator = await pipeline('text-generation', 'Xenova/gpt2', {
           max_new_tokens: options?.maxTokens || 300,
-          do_sample: true,
+          progress_callback: (p) => {
+            if (p.status === 'progress' && typeof p.progress === 'number') {
+              self.postMessage({ id, status: 'download-progress', progress: p.progress, message: `Downloading model: ${Math.round(p.progress * 100)}%` });
+            } else if (p.status === 'initiate') {
+              self.postMessage({ id, status: 'loading', message: 'Loading model files\u2026' });
+            } else if (p.status === 'done') {
+              self.postMessage({ id, status: 'loading', message: 'Processing model\u2026' });
+            }
+          },
         });
         modelLoading = false;
         self.postMessage({ id, status: 'ready', message: 'AI model ready' });

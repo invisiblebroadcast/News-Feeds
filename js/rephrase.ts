@@ -58,8 +58,8 @@ const Rephrase = (() => {
       const { id, status, text, error, message } = e.data;
       const p = _pending.get(id);
       if (!p) return;
-      if (status === 'loading' || status === 'ready' || status === 'generating') {
-        if (p.onProgress) p.onProgress({ status, message });
+      if (status === 'loading' || status === 'ready' || status === 'generating' || status === 'download-progress') {
+        if (p.onProgress) p.onProgress({ status, message, progress: e.data.progress });
         return;
       }
       _pending.delete(id);
@@ -115,7 +115,7 @@ const Rephrase = (() => {
   async function rewrite(text, options = {}) {
     // Completion-style prompt works for GPT-2 and instruct models alike
     const prompt = `Original:\n${text}\n\nRewritten version (different words, same meaning):\n`;
-    return generate(prompt, options);
+    return generate(prompt, { ...options, onProgress: options.onProgress || null });
   }
 
   /** Generate text from a prompt. */
@@ -127,7 +127,7 @@ const Rephrase = (() => {
   }
 
   /** Build a synthesised article from a topic cluster. */
-  async function buildArticle(cluster, previousHeadline = '') {
+  async function buildArticle(cluster, previousHeadline = '', options = {}) {
     const articles = cluster.articles || [];
     const sourceTexts = articles.slice(0, 8).map((a, i) => {
       const t = a.title || 'Untitled';
@@ -145,6 +145,7 @@ const Rephrase = (() => {
     return generate(prompt, {
       maxTokens: 400,
       temperature: 0.85 + Math.random() * 0.15,
+      onProgress: options.onProgress || null,
     });
   }
 

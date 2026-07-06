@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -2618,27 +2618,36 @@ const APP_VERSION = 21;
         const regenBtn = body.querySelector('#build-regen-btn');
         if (regenBtn)
             regenBtn.addEventListener('click', async () => {
-                // AI-powered regeneration — runs off the main thread
-                // via Web Worker so the UI never freezes.
+                // Show full-screen loading overlay while AI works
+                showLoadingOverlay('Preparing AI model\u2026');
                 if (!window.Rephrase) {
                     console.warn('[Build] Rephrase module not loaded, falling back to publisher');
+                    hideLoadingOverlay();
                     regenBtn.disabled = true;
-                    regenBtn.textContent = '⏳ Regenerating…';
+                    regenBtn.textContent = '\u23F3 Regenerating\u2026';
                     openBuildModal(cluster.id).finally(() => {
                         if (regenBtn) {
                             regenBtn.disabled = false;
-                            regenBtn.textContent = '↻ Regenerate';
+                            regenBtn.textContent = '\u21BB Regenerate';
                         }
                     });
                     return;
                 }
                 regenBtn.disabled = true;
-                regenBtn.textContent = '⏳ AI Generating…';
+                regenBtn.textContent = '\u23F3 AI Generating\u2026';
                 const headlineInput = body.querySelector('#build-headline-input');
                 const textarea = body.querySelector('#build-article-textarea');
                 try {
                     const currentHeadline = headlineInput ? headlineInput.value : '';
-                    const result = await window.Rephrase.buildArticle(cluster, currentHeadline);
+                    const result = await window.Rephrase.buildArticle(cluster, currentHeadline, {
+                        onProgress: (p) => {
+                            updateLoadingStatus(p.message || 'Working\u2026');
+                            if (p.status === 'download-progress' && typeof p.progress === 'number') {
+                                showLoadingProgress(p.progress);
+                            }
+                        },
+                    });
+                    hideLoadingOverlay();
                     // Parse: first line = headline, rest = body
                     const lines = result.split('\n');
                     const newHeadline = lines[0].replace(/^["\s]+|["\s]+$/g, '') || currentHeadline || 'Untitled';
@@ -2656,6 +2665,7 @@ const APP_VERSION = 21;
                 }
                 catch (err) {
                     console.warn('[Build] AI regeneration failed, falling back to publisher:', err);
+                    hideLoadingOverlay();
                     openBuildModal(cluster.id);
                 }
                 finally {
