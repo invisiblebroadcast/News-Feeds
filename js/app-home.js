@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];

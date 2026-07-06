@@ -3,6 +3,7 @@ const FeedFetcher = (() => {
   const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json?rss_url=';
   const CORS_PROXY = 'https://corsproxy.io/?url=';
   const CORS_PROXY_2 = 'https://api.allorigins.win/raw?url=';
+  const CORS_PROXY_CF = 'https://news-feeds.theinvisiblebroadcast.workers.dev/?url=';
   // Generous timeout because some feeds publish thousands of items in 10 days
   // and the proxy has to fetch + transfer the entire XML payload.
   const FETCH_TIMEOUT = 30000;
@@ -162,6 +163,17 @@ const FeedFetcher = (() => {
     return parseRssXml(xmlText, feed);
   }
 
+  async function proxyFetchViaWorker(feed) {
+    const proxyUrl = CORS_PROXY_CF + encodeURIComponent(feed.url);
+    const res = await fetchWithTimeout(proxyUrl);
+    if (!res.ok) throw new Error('CF Worker HTTP ' + res.status);
+    const xmlText = await res.text();
+    if (!xmlText || !xmlText.includes('<')) {
+      throw new Error('CF Worker returned empty or non-XML content');
+    }
+    return parseRssXml(xmlText, feed);
+  }
+
   // Some RSS feeds (WordPress-style, BlogEngine, etc.) support pagination via
   // `?p=N` or `?page=N`. When a feed has exactly the typical cap (50-100 items),
   // we try fetching the next page(s) to pull more history. This can multiply
@@ -207,7 +219,14 @@ const FeedFetcher = (() => {
 
     if (isGoogleNewsUrl(feed.url)) {
       let items = null;
-      // Try direct browser fetch first — the user may be logged
+      // Try Cloudflare Worker first (fastest, most reliable)
+      try {
+        items = await proxyFetchViaWorker(feed);
+        afterFetch(feed, items);
+        return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
+      } catch (_cf) {}
+
+      // Try direct browser fetch — the user may be logged
       // into Google and their session cookies could allow access
       // to the RSS endpoint. This only works if Google News sets
       // CORS headers for /rss/ (which it sometimes does).
@@ -281,7 +300,15 @@ const FeedFetcher = (() => {
       }
     }
 
-    // For non-Google feeds, prefer raw RSS XML via the CORS proxy because it
+    // For non-Google feeds, try the Cloudflare Worker first,
+    // then fall back to the CORS proxy with pagination.
+    try {
+      const items = await proxyFetchViaWorker(feed);
+      afterFetch(feed, items);
+      return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
+    } catch (_cf) {}
+
+    // Fall back to raw RSS XML via the CORS proxy because it
     // returns ALL items the feed publishes (no rss2json-style 100-item cap).
     // We also try paginated fetching (?p=2, ?p=3) to go beyond the publisher's
     // default cap, which is critical for top-mode ranking.
