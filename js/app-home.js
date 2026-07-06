@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -2617,19 +2617,53 @@ const APP_VERSION = 19;
             copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
         const regenBtn = body.querySelector('#build-regen-btn');
         if (regenBtn)
-            regenBtn.addEventListener('click', () => {
-                // Regenerate = re-run the publisher. The publisher
-                // already picks a new random title template and new
-                // random lead/closing sentences, so the user gets a
-                // visibly different article on every click.
+            regenBtn.addEventListener('click', async () => {
+                // AI-powered regeneration — runs off the main thread
+                // via Web Worker so the UI never freezes.
+                if (!window.Rephrase) {
+                    console.warn('[Build] Rephrase module not loaded, falling back to publisher');
+                    regenBtn.disabled = true;
+                    regenBtn.textContent = '⏳ Regenerating…';
+                    openBuildModal(cluster.id).finally(() => {
+                        if (regenBtn) {
+                            regenBtn.disabled = false;
+                            regenBtn.textContent = '↻ Regenerate';
+                        }
+                    });
+                    return;
+                }
                 regenBtn.disabled = true;
-                regenBtn.textContent = '⏳ Regenerating…';
-                openBuildModal(cluster.id).finally(() => {
+                regenBtn.textContent = '⏳ AI Generating…';
+                const headlineInput = body.querySelector('#build-headline-input');
+                const textarea = body.querySelector('#build-article-textarea');
+                try {
+                    const currentHeadline = headlineInput ? headlineInput.value : '';
+                    const result = await window.Rephrase.buildArticle(cluster, currentHeadline);
+                    // Parse: first line = headline, rest = body
+                    const lines = result.split('\n');
+                    const newHeadline = lines[0].replace(/^["\s]+|["\s]+$/g, '') || currentHeadline || 'Untitled';
+                    const bodyText = lines.slice(1).join('\n').trim().replace(/^["\s]+|["\s]+$/g, '');
+                    // Update the DOM
+                    if (headlineInput)
+                        headlineInput.value = newHeadline;
+                    if (textarea)
+                        textarea.value = (newHeadline + '\n\n' + bodyText).trim();
+                    article.headline = newHeadline;
+                    // Update the modal title
+                    const titleEl = $('#build-modal-title');
+                    if (titleEl)
+                        titleEl.textContent = newHeadline;
+                }
+                catch (err) {
+                    console.warn('[Build] AI regeneration failed, falling back to publisher:', err);
+                    openBuildModal(cluster.id);
+                }
+                finally {
                     if (regenBtn) {
                         regenBtn.disabled = false;
                         regenBtn.textContent = '↻ Regenerate';
                     }
-                });
+                }
             });
     }
     // Build the plain-text version of the article for the
