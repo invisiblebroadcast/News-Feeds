@@ -2,6 +2,7 @@
 const FeedFetcher = (() => {
     const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json?rss_url=';
     const CORS_PROXY = 'https://corsproxy.io/?url=';
+    const CORS_PROXY_2 = 'https://api.allorigins.win/raw?url=';
     // Generous timeout because some feeds publish thousands of items in 10 days
     // and the proxy has to fetch + transfer the entire XML payload.
     const FETCH_TIMEOUT = 30000;
@@ -199,18 +200,50 @@ const FeedFetcher = (() => {
             return [];
         }
         if (isGoogleNewsUrl(feed.url)) {
+            let items = null;
+            // Try direct browser fetch first — the user may be logged
+            // into Google and their session cookies could allow access
+            // to the RSS endpoint. This only works if Google News sets
+            // CORS headers for /rss/ (which it sometimes does).
             try {
-                const items = await proxyFetch(feed);
+                const direct = await fetchWithTimeout(feed.url);
+                if (direct.ok) {
+                    const xmlText = await direct.text();
+                    if (xmlText && xmlText.includes('<')) {
+                        items = parseRssXml(xmlText, feed);
+                        afterFetch(feed, items);
+                        return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
+                    }
+                }
+            }
+            catch (_d) { }
+            // Try primary CORS proxy
+            try {
+                items = await proxyFetch(feed);
                 afterFetch(feed, items);
                 return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
             }
-            catch (err) {
-                // Fall back to rss2json if the CORS proxy fails for Google News
-                const encodedUrl = encodeURIComponent(feed.url);
-                const proxyMessage = err && err.message ? err.message : 'Proxy fetch failed';
-                const rss2jsonUrl = RSS2JSON_API + encodedUrl + '&count=100';
+            catch (e1) {
+                // Try secondary CORS proxy
                 try {
-                    const res = await fetchWithTimeout(rss2jsonUrl);
+                    const proxyUrl = CORS_PROXY_2 + encodeURIComponent(feed.url);
+                    const res = await fetchWithTimeout(proxyUrl);
+                    if (res.ok) {
+                        const xmlText = await res.text();
+                        if (xmlText && xmlText.includes('<')) {
+                            items = parseRssXml(xmlText, feed);
+                            afterFetch(feed, items);
+                            return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
+                        }
+                    }
+                }
+                catch (e2) {
+                    // Both proxies failed — fall back to rss2json
+                }
+                // Fall back to rss2json
+                const encodedUrl = encodeURIComponent(feed.url);
+                try {
+                    const res = await fetchWithTimeout(RSS2JSON_API + encodedUrl + '&count=100');
                     if (!res.ok)
                         throw new Error('HTTP ' + res.status);
                     const data = await res.json();
@@ -238,7 +271,7 @@ const FeedFetcher = (() => {
                     return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
                 }
                 catch (rssErr) {
-                    afterFetch(feed, [], rssErr || new Error(proxyMessage));
+                    afterFetch(feed, [], rssErr || new Error('All fetchers failed for Google News feed'));
                     return [];
                 }
             }
