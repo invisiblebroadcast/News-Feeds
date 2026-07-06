@@ -36,6 +36,7 @@ const Embeddings = (() => {
         const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
         model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         isReady = true;
+        console.log('[Embeddings] all-MiniLM-L6-v2 model loaded');
         return model;
       } catch (e) {
         loadError = e;
@@ -76,6 +77,7 @@ const Embeddings = (() => {
 
         isReady = true;
         if (onProgress) onProgress({ status: 'ready', progress: 1 });
+        console.log('[Embeddings] all-MiniLM-L6-v2 model loaded');
         return model;
       } catch (e) {
         loadError = e;
