@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 28;
+const APP_VERSION = 29;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -7268,23 +7268,32 @@ const APP_VERSION = 28;
             }
             // Fallback: manually process OAuth tokens from the URL hash
             const hash = window.location.hash;
-            if (hash && hash.includes('access_token=')) {
-                try {
-                    const p = new URLSearchParams(hash.replace(/^#/, ''));
-                    const at = p.get('access_token');
-                    const rt = p.get('refresh_token');
-                    if (at && rt) {
-                        const { data: sd, error: se } = await client.auth.setSession({ access_token: at, refresh_token: rt });
-                        if (!se && sd?.session) {
-                            handleAuthChange(null, sd.session);
-                            // Clean up the URL so the tokens aren't visible
-                            history.replaceState(history.state, '', location.pathname + location.search);
-                            return;
+            if (hash) {
+                if (hash.includes('access_token=')) {
+                    try {
+                        const p = new URLSearchParams(hash.replace(/^#/, ''));
+                        const at = p.get('access_token');
+                        const rt = p.get('refresh_token');
+                        if (at && rt) {
+                            const { data: sd, error: se } = await client.auth.setSession({ access_token: at, refresh_token: rt });
+                            if (!se && sd?.session) {
+                                handleAuthChange(null, sd.session);
+                                // Clean up the URL so the tokens aren't visible
+                                history.replaceState(history.state, '', location.pathname + location.search);
+                                return;
+                            }
                         }
                     }
+                    catch (e) {
+                        console.warn('OAuth fallback failed:', e);
+                    }
                 }
-                catch (e) {
-                    console.warn('OAuth fallback failed:', e);
+                else if (hash.includes('error=')) {
+                    const p = new URLSearchParams(hash.replace(/^#/, ''));
+                    const errDesc = p.get('error_description') || p.get('error') || 'OAuth error';
+                    console.warn('[Auth] OAuth error in URL hash:', errDesc);
+                    // Clean the hash
+                    history.replaceState(history.state, '', location.pathname + location.search);
                 }
             }
             handleAuthChange(null, null);
@@ -7324,82 +7333,31 @@ const APP_VERSION = 28;
                 handleAuthSubmit();
             });
         }
-        // Google OAuth button — uses a popup window so the main
-        // page stays on localhost and we can extract tokens
-        // without relying on a full-page redirect back.
+        // Google OAuth button — uses a full-page redirect so it works
+        // reliably on all platforms (desktop, mobile, localhost, HTTPS).
+        // bindAuth() above handles the return tokens from the URL hash.
         const googleBtn = $('#auth-google-btn');
         if (googleBtn) {
-            googleBtn.addEventListener('click', async () => {
-                try {
-                    const { data, error } = await client.auth.signInWithOAuth({
-                        provider: 'google',
-                        options: {
-                            redirectTo: window.location.origin,
-                            skipBrowserRedirect: true,
+            googleBtn.addEventListener('click', () => {
+                // file:// protocol can't support OAuth redirects
+                if (window.location.protocol === 'file:') {
+                    const msg = $('#auth-error-msg');
+                    if (msg) {
+                        msg.textContent = 'Google sign-in requires a web server. Open this page via a local server or the live site.';
+                        msg.className = 'auth-error-msg';
+                    }
+                    return;
+                }
+                client.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin + window.location.pathname,
+                        queryParams: {
+                            prompt: 'select_account', // Always show the account picker
+                            access_type: 'offline',
                         },
-                    });
-                    if (error || !data?.url) {
-                        console.warn('[Auth] Failed to get OAuth URL:', error?.message || 'No URL');
-                        return;
-                    }
-                    // Open the OAuth flow in a popup so the main app stays put
-                    const popup = window.open(data.url, 'google-oauth', 'width=600,height=700,menubar=no,toolbar=no,location=yes,status=yes');
-                    if (!popup) {
-                        // Popup blocked — fall back to direct redirect
-                        console.warn('[Auth] Popup blocked, falling back to redirect');
-                        window.location.href = data.url;
-                        return;
-                    }
-                    // Poll the popup for the redirect back to our origin
-                    // (which carries the access_token in the URL hash)
-                    let pollCount = 0;
-                    const pollTimer = setInterval(async () => {
-                        pollCount++;
-                        // Give up after 90 seconds
-                        if (pollCount > 225) {
-                            clearInterval(pollTimer);
-                            if (!popup.closed)
-                                popup.close();
-                            console.warn('[Auth] OAuth popup timed out');
-                            return;
-                        }
-                        try {
-                            if (popup.closed) {
-                                clearInterval(pollTimer);
-                                return;
-                            }
-                            const popupUrl = popup.location.href;
-                            if (!popupUrl)
-                                return;
-                            // Once the popup lands on our origin, extract tokens
-                            if (popupUrl.startsWith(window.location.origin)) {
-                                clearInterval(pollTimer);
-                                const hash = popup.location.hash || '';
-                                if (hash.includes('access_token=')) {
-                                    const p = new URLSearchParams(hash.replace(/^#/, ''));
-                                    const at = p.get('access_token');
-                                    const rt = p.get('refresh_token');
-                                    if (at && rt) {
-                                        const { data: sd, error: se } = await client.auth.setSession({
-                                            access_token: at, refresh_token: rt,
-                                        });
-                                        if (!se && sd?.session) {
-                                            handleAuthChange(null, sd.session);
-                                        }
-                                    }
-                                }
-                                popup.close();
-                            }
-                        }
-                        catch (_e) {
-                            // Cross-origin errors during the Google/Supabase redirect
-                            // chain are expected; we keep polling until it's our origin.
-                        }
-                    }, 400);
-                }
-                catch (err) {
-                    console.warn('[Auth] Google sign-in failed:', err);
-                }
+                    },
+                });
             });
         }
         // Clear error styling when user starts typing

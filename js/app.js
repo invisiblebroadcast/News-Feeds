@@ -6983,22 +6983,30 @@ const APP_VERSION = 6;
                 return;
             }
             const hash = window.location.hash;
-            if (hash && hash.includes('access_token=')) {
-                try {
-                    const p = new URLSearchParams(hash.replace(/^#/, ''));
-                    const at = p.get('access_token');
-                    const rt = p.get('refresh_token');
-                    if (at && rt) {
-                        const { data: sd, error: se } = await client.auth.setSession({ access_token: at, refresh_token: rt });
-                        if (!se && sd?.session) {
-                            handleAuthChange(null, sd.session);
-                            history.replaceState(history.state, '', location.pathname + location.search);
-                            return;
+            if (hash) {
+                if (hash.includes('access_token=')) {
+                    try {
+                        const p = new URLSearchParams(hash.replace(/^#/, ''));
+                        const at = p.get('access_token');
+                        const rt = p.get('refresh_token');
+                        if (at && rt) {
+                            const { data: sd, error: se } = await client.auth.setSession({ access_token: at, refresh_token: rt });
+                            if (!se && sd?.session) {
+                                handleAuthChange(null, sd.session);
+                                history.replaceState(history.state, '', location.pathname + location.search);
+                                return;
+                            }
                         }
                     }
+                    catch (e) {
+                        console.warn('OAuth fallback failed:', e);
+                    }
                 }
-                catch (e) {
-                    console.warn('OAuth fallback failed:', e);
+                else if (hash.includes('error=')) {
+                    const p = new URLSearchParams(hash.replace(/^#/, ''));
+                    const errDesc = p.get('error_description') || p.get('error') || 'OAuth error';
+                    console.warn('[Auth] OAuth error in URL hash:', errDesc);
+                    history.replaceState(history.state, '', location.pathname + location.search);
                 }
             }
             handleAuthChange(null, null);
