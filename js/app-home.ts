@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -7047,15 +7047,12 @@ const APP_VERSION = 18;
     if (window.ArticleArchive && ArticleArchive.init) ArticleArchive.init();
     bindAuth();
 
-    // Check if user has consented to the AI model download.
-    // On first visit we show a prompt; subsequent visits use the
-    // stored preference. The model (~25MB) is only used for
-    // semantic re-ranking of search results; substring search
-    // works perfectly well without it, so skipping is always safe.
+    // AI model consent flow. First visit → prompt. Subsequent loads
+    // with consent → background load (no overlay since the model is
+    // already locally cached by the browser). Declined → silent no-op.
     if (window.Embeddings && Embeddings.needsConsent) {
       if (Embeddings.needsConsent()) {
         showLoadingOverlay('Loading feeds\u2026');
-        // Bind the prompt buttons once
         const skipBtn = $('#app-loading-skip-btn');
         const dlBtn = $('#app-loading-download-btn');
         if (skipBtn) skipBtn.onclick = () => {
@@ -7080,25 +7077,12 @@ const APP_VERSION = 18;
             }
           }).catch(() => {});
         };
-        // Show the confirm prompt after a brief delay so the
-        // initial feed render can start.
         setTimeout(showLoadingConfirm, 600);
       } else if (Embeddings.hasConsent()) {
-        // Already consented — load in the background with
-        // progress shown in the overlay.
-        showLoadingOverlay('Downloading AI model\u2026');
-        showLoadingProgress(0);
-        Embeddings.loadModelWithProgress(p => {
-          if (p.status === 'download') {
-            if (p.phase === 'library') updateLoadingStatus('Downloading AI library\u2026');
-            else updateLoadingStatus('Downloading AI model\u2026');
-            if (typeof p.progress === 'number') showLoadingProgress(p.progress);
-          } else if (p.status === 'ready') {
-            hideLoadingOverlay();
-          } else if (p.status === 'error') {
-            hideLoadingOverlay();
-          }
-        }).catch(() => { hideLoadingOverlay(); });
+        // Already consented — load silently in the background.
+        // The model is cached locally so this is fast and never
+        // freezes the UI.
+        Embeddings.loadModelWithProgress().catch(() => {});
       }
     }
 
