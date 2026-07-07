@@ -13,6 +13,7 @@ const APP_VERSION = 30;
   let currentMode = 'live';
   let currentRankType = 'ai'; // legacy — kept for compatibility; always ignored
   let currentView = 'list';
+  let sourceFilter = 'all';
   let scopeCache = {};
   let isFetching = false;
   let currentArticles = [];
@@ -82,6 +83,7 @@ const APP_VERSION = 30;
     AppState.set('currentMode', currentMode);
     AppState.set('currentView', currentView);
     AppState.set('currentSort', currentSort);
+    AppState.set('sourceFilter', sourceFilter);
   }
 
   /* ── Modal / "deeper view" history stack ──
@@ -1285,12 +1287,13 @@ const APP_VERSION = 30;
   }
 
   function renderCard(article, index) {
-    const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+    const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+    const hasThumb = imgUrl && imgUrl.startsWith('http');
     const encoded = encodeURIComponent(article.link);
 
     const thumbHtml = hasThumb
       ? '<div class="article-thumb" style="cursor:pointer" data-article="' + encoded + '">' +
-          '<img src="' + escAttr(enhanceImageUrl(imgUrl) || imgUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+          '<img src="' + escAttr(enhanceImageUrl(imgUrl) || imgUrl) + '" alt="" loading="lazy" onerror="var fb=this.dataset.fb;if(fb){this.src=fb;this.dataset.fb=\'\'}else{this.style.display=\'none\'}" data-fb="' + escAttr('https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg') + '">' +
         '</div>'
       : '';
 
@@ -1399,9 +1402,15 @@ const APP_VERSION = 30;
             '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
               '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg>' +
             '</button>' +
-            '<button class="card-action-btn card-publish-btn" data-publish-article="' + encoded + '" title="Publish to blog">' +
+            (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-edit-btn" data-publish-article="' + encoded + '" title="Edit IB post">' +
+              '<span>&#x270F;</span>' +
+            '</button>' : '') +
+            (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-delete-btn" data-publish-article="' + encoded + '" title="Delete IB post">' +
+              '<span>&#x1F5D1;</span>' +
+            '</button>' : '') +
+            (!article._isPublished && currentUser ? '<button class="card-action-btn card-publish-btn" data-publish-article="' + encoded + '" title="Publish to blog">' +
               '<span>&#x1F4E4;</span>' +
-            '</button>' +
+            '</button>' : '') +
           '</div>' +
           '<div class="article-watermark">' +
             '<span class="wm-brand">Invisible Broadcast</span>' +
@@ -1526,6 +1535,18 @@ const APP_VERSION = 30;
           '<span class="reels-action-icon">&#x1F4AC;</span>' +
           '<span class="reels-action-label">Comment</span>' +
         '</button>' +
+        '<button class="reels-action-btn reels-reel-publish-btn" title="Publish to blog">' +
+          '<span class="reels-action-icon">&#x1F4E4;</span>' +
+          '<span class="reels-action-label">Publish</span>' +
+        '</button>' +
+        '<button class="reels-action-btn reels-reel-edit-btn" style="display:none" title="Edit IB post">' +
+          '<span class="reels-action-icon">&#x270F;</span>' +
+          '<span class="reels-action-label">Edit</span>' +
+        '</button>' +
+        '<button class="reels-action-btn reels-reel-del-btn" style="display:none" title="Delete IB post">' +
+          '<span class="reels-action-icon">&#x1F5D1;</span>' +
+          '<span class="reels-action-label">Delete</span>' +
+        '</button>' +
       '</div>';
     }
     html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
@@ -1590,15 +1611,20 @@ const APP_VERSION = 30;
 
   function updateCard(cardEl, article, idx, total) {
     if (!cardEl || !article) return;
-    const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+    const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+    const hasThumb = imgUrl && imgUrl.startsWith('http');
     cardEl.classList.toggle('has-image', !!hasThumb);
     const imgWrap = cardEl.querySelector('.reels-img-wrap');
     const imgEl = cardEl.querySelector('.reels-img');
     if (hasThumb && imgEl && imgWrap) {
-      imgEl.src = enhanceImageUrl(article.imageUrl) || article.imageUrl;
+      imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;
       imgWrap.classList.remove('no-image');
       imgWrap.style.display = '';
-      imgEl.onerror = function() { imgWrap.classList.add('no-image'); };
+      imgEl.dataset.fb = 'https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg';
+      imgEl.onerror = function() {
+        if (this.dataset.fb) { this.src = this.dataset.fb; this.dataset.fb = ''; }
+        else { imgWrap.classList.add('no-image'); }
+      };
     } else {
       if (imgWrap) { imgWrap.classList.add('no-image'); imgWrap.style.display = ''; }
       if (imgEl) imgEl.src = '';
@@ -1678,6 +1704,15 @@ const APP_VERSION = 30;
     if (likeBtn) likeBtn.classList.toggle('active', !!ad.like);
     const dislikeBtn = cardEl.querySelector('.reels-dislike-btn');
     if (dislikeBtn) dislikeBtn.classList.toggle('active', !!ad.dislike);
+    // Show/hide edit/delete for IB posts
+    const editBtn = cardEl.querySelector('.reels-reel-edit-btn');
+    const delBtn = cardEl.querySelector('.reels-reel-del-btn');
+    const publishBtnReel = cardEl.querySelector('.reels-reel-publish-btn');
+    const isIbPost = article._isPublished && article._pubId;
+    const isOwner = currentUser && article._pubUserEmail === currentUser.email;
+    if (editBtn) editBtn.style.display = (isIbPost && isOwner) ? '' : 'none';
+    if (delBtn) delBtn.style.display = (isIbPost && isOwner) ? '' : 'none';
+    if (publishBtnReel) publishBtnReel.style.display = isIbPost ? 'none' : '';
   }
 
   function sizeReelsContainer() {
@@ -1707,7 +1742,8 @@ const APP_VERSION = 30;
     if (!existing) {
       // Build the toolbar with awareness of whether the current article has a
       // source image (so the "share with image" button is conditionally shown).
-      const hasThumb = article && article.imageUrl && article.imageUrl.startsWith('http');
+      const reelsImgUrl = article && article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+      const hasThumb = reelsImgUrl && reelsImgUrl.startsWith('http');
       el.main.innerHTML =
         '<div class="reels-container">' +
           '<div class="reels-progress"></div>' +
@@ -1818,6 +1854,27 @@ const APP_VERSION = 30;
           const dBtn = stack.querySelector('.reels-dislike-btn');
           if (dBtn) dBtn.classList.toggle('active', !!ad.dislike);
           if (lBtn) lBtn.classList.toggle('active', !!ad.like);
+          return;
+        }
+        const reelPublishBtn = e.target.closest('.reels-reel-publish-btn');
+        if (reelPublishBtn) {
+          e.stopPropagation();
+          if (!requireAuth()) return;
+          if (currentArticle) openPublishModal(currentArticle);
+          return;
+        }
+        const reelEditBtn = e.target.closest('.reels-reel-edit-btn');
+        if (reelEditBtn) {
+          e.stopPropagation();
+          if (!requireAuth()) return;
+          if (currentArticle && currentArticle._isPublished && currentArticle._pubId) editPublishedArticle(currentArticle._pubId);
+          return;
+        }
+        const reelDelBtn = e.target.closest('.reels-reel-del-btn');
+        if (reelDelBtn) {
+          e.stopPropagation();
+          if (!requireAuth()) return;
+          if (currentArticle && currentArticle._isPublished && currentArticle._pubId) deletePublishedArticle(currentArticle._pubId);
           return;
         }
         const commentBtn = e.target.closest('.reels-comment-btn');
@@ -2504,6 +2561,7 @@ const APP_VERSION = 30;
       '<div class="build-actions">' +
         '<button class="btn btn-ghost" id="build-copy-btn">\uD83D\uDCCB Copy text</button>' +
         '<button class="btn btn-ghost" id="build-copy-md-btn">\uD83D\uDCCB Copy as Markdown</button>' +
+        (currentUser ? '<button class="btn btn-primary" id="build-publish-btn">\uD83D\uDCE4 Publish</button>' : '') +
       '</div>' +
       '<div class="build-sources-wrap">' +
         '<div class="build-sources-header" id="build-sources-toggle">' +
@@ -2518,6 +2576,23 @@ const APP_VERSION = 30;
     if (copyBtn) copyBtn.addEventListener('click', () => copyBuildArticle(article, 'text'));
     const copyMdBtn = body.querySelector('#build-copy-md-btn');
     if (copyMdBtn) copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
+    const publishBtn = body.querySelector('#build-publish-btn');
+    if (publishBtn) {
+      publishBtn.addEventListener('click', () => {
+        const headline = $('#build-headline-input')?.value?.trim() || article.headline || '';
+        const textarea = $('#build-article-textarea');
+        const desc = textarea?.value?.trim() || '';
+        const fakeArticle = {
+          title: headline,
+          summary: desc,
+          link: '',
+          source: 'Built Article',
+          _clusterSources: article.sources || [],
+          subject: { display_name: headline }
+        };
+        openPublishModal(fakeArticle, article.sources || []);
+      });
+    }
     // Wire collapsible sources toggle
     const sourcesToggle = body.querySelector('#build-sources-toggle');
     const sourcesList = body.querySelector('#build-sources-list');
@@ -2592,194 +2667,335 @@ const APP_VERSION = 30;
     if (modal) modal.classList.remove('open');
   }
 
-  /* ── Published articles storage ── */
-  const PUBLISHED_KEY = 'newsfeeds_published';
-  function getPublishedArticles() {
-    try { return JSON.parse(localStorage.getItem(PUBLISHED_KEY) || '[]'); }
-    catch { return []; }
+  /* ── Published articles storage (Supabase) ── */
+  let _publishedCache = [];
+  let _publishedFetchPromise = null;
+
+  function getSupabaseClient() {
+    try { return SupabaseStore.getClient(); } catch { return null; }
   }
-  function savePublishedArticle(article) {
-    const list = getPublishedArticles();
-    list.unshift({ ...article, _publishedAt: new Date().toISOString() });
-    localStorage.setItem(PUBLISHED_KEY, JSON.stringify(list.slice(0, 200)));
+
+  async function fetchPublishedArticlesFromSupabase() {
+    if (_publishedFetchPromise) return _publishedFetchPromise;
+    _publishedFetchPromise = (async () => {
+      try {
+        const client = getSupabaseClient();
+        if (!client) return [];
+        const { data, error } = await client
+          .from('published_articles')
+          .select('*')
+          .order('date_published', { ascending: false });
+        if (error) throw error;
+        _publishedCache = (data || []).map(r => ({
+          id: r.id,
+          title: r.title || '',
+          link: r.source_link || 'pub_' + r.id,
+          summary: r.body || '',
+          source: 'IB · ' + (r.author || r.user_email || 'Published'),
+          pubDate: r.date_published || r.created_at || new Date().toISOString(),
+          feedUrl: 'published',
+          feedHint: r.category || 'all',
+          imageUrl: '',
+          author: r.author || r.user_email || '',
+          guid: 'pub_' + r.id,
+          _isPublished: true,
+          _pubScope: r.scope || 'global',
+          _pubNation: r.nation || '',
+          _pubCategory: r.category || 'all',
+          _pubUserEmail: r.user_email || '',
+          _pubId: r.id
+        }));
+        return _publishedCache;
+      } catch (err) {
+        console.warn('[Publish] Failed to fetch from Supabase:', err.message);
+        return [];
+      } finally {
+        _publishedFetchPromise = null;
+      }
+    })();
+    return _publishedFetchPromise;
   }
+
+  function getCachedPublished() {
+    return _publishedCache;
+  }
+
+  function applySourceFilter(articles) {
+    if (sourceFilter === 'ib') {
+      return articles.filter(a => a._isPublished);
+    }
+    if (sourceFilter === 'feeds') {
+      return articles.filter(a => !a._isPublished);
+    }
+    return articles;
+  }
+
   function addPublishedToFeed(articles) {
-    const published = getPublishedArticles();
-    if (!published.length) return articles;
-    const pub = published.map(a => ({
-      title: a._pubTitle || a.title || '',
-      link: a._pubUrl || a.link || '',
-      summary: a._pubDesc || a.summary || '',
-      source: '📤 Published',
-      pubDate: a._publishedAt || a.pubDate || new Date().toISOString(),
-      feedUrl: 'published',
-      feedHint: 'politics',
-      imageUrl: '',
-      author: '',
-      guid: a._pubUrl || a.link || 'pub_' + Date.now(),
-      _isPublished: true
-    }));
-    return [...pub, ...articles];
+    const published = getCachedPublished();
+    if (!published.length || sourceFilter === 'feeds') return articles;
+    if (sourceFilter === 'ib') return published;
+    return [...published, ...articles];
   }
 
-  const GITHUB_CONFIG_KEY = 'newsfeeds_github_config';
-  function loadGithubConfig() {
-    try { return JSON.parse(localStorage.getItem(GITHUB_CONFIG_KEY) || '{}'); }
-    catch { return {}; }
-  }
-  function saveGithubConfig(config) {
-    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(config));
-  }
-  async function githubRequest(path, method, body, token) {
-    const res = await fetch(`https://api.github.com${path}`, {
-      method: method || 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `GitHub API error: ${res.status}`);
-    return data;
-  }
-  function base64Encode(str) {
-    return btoa(unescape(encodeURIComponent(str)));
-  }
-  function slugify(text) {
-    return text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 80) || 'post';
-  }
-  function formatUtcDate(date) {
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    const hh = String(date.getUTCHours()).padStart(2, '0');
-    const mm = String(date.getUTCMinutes()).padStart(2, '0');
-    const ss = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${y}-${m}-${d} ${hh}:${mm}:${ss} +0000`;
+  function getUserDisplayName() {
+    if (!currentUser) return 'Unknown Author';
+    return currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.email || 'Unknown Author';
   }
 
-  async function publishToGithub(title, description, sourceLink, sourceName) {
-    const config = loadGithubConfig();
-    if (!config.owner || !config.repo || !config.token) {
-      throw new Error('Please configure your GitHub repository in the settings above');
-    }
-    const now = new Date();
-    const dateStr = formatUtcDate(now);
-    const slug = slugify(title);
-    const filename = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}-${slug}.md`;
-    const filePath = `_posts/${filename}`;
-    const escapedTitle = (title || '').replace(/"/g, '\\"');
-    let desc = (description || '');
-    if (sourceLink) {
-      desc += `\n\n_Source: [${escHtml(sourceName || 'Original')}](${sourceLink})_`;
-    }
-    const content = '---\n' +
-      `title: "${escapedTitle}"\n` +
-      `date: ${dateStr}\n` +
-      `source: ${sourceName || ''}\n` +
-      `source_link: ${sourceLink || ''}\n` +
-      `layout: post\n` +
-      '---\n' +
-      '\n' +
-      desc;
-    const body = {
-      message: `New post: ${title}`,
-      content: base64Encode(content),
-      branch: 'main'
-    };
-    await githubRequest(`/repos/${config.owner}/${config.repo}/contents/${filePath}`, 'PUT', body, config.token);
-    const pagesUrl = `https://${config.owner}.github.io/${config.repo}/`;
-    const postUrl = pagesUrl + filename.replace('.md', '');
-    return { filename, path: filePath, url: postUrl, pagesUrl };
-  }
-
-  function openPublishModal(article) {
+  function openPublishModal(article, sources) {
+    if (!currentUser) return;
     const modal = $('#publish-modal');
     const body = $('#publish-modal-body');
     if (!modal || !body) return;
     modal.classList.add('open');
     const titleInput = $('#publish-title-input');
     const descInput = $('#publish-desc-textarea');
-    const sourceCheck = $('#publish-include-source');
     const status = $('#publish-status');
+    const authorInput = $('#publish-author-input');
+    const sourcesContainer = $('#publish-sources-list');
     if (titleInput) titleInput.value = article.subject?.display_name || article.title || '';
     if (descInput) descInput.value = article.summary || '';
-    if (sourceCheck) sourceCheck.checked = true;
     if (status) status.textContent = '';
-    const config = loadGithubConfig();
-    const ownerInput = $('#publish-github-owner');
-    const repoInput = $('#publish-github-repo');
-    const tokenInput = $('#publish-github-token');
-    if (ownerInput) ownerInput.value = config.owner || '';
-    if (repoInput) repoInput.value = config.repo || '';
-    if (tokenInput) tokenInput.value = config.token || '';
+    if (authorInput) authorInput.value = getUserDisplayName();
+
+    // Build sources list
+    const sourceList = sources || (article._clusterSources) || (article.link ? [{ name: article.source || 'Source', link: article.link, title: article.title }] : []);
+    if (sourcesContainer) {
+      if (sourceList.length) {
+        sourcesContainer.innerHTML = sourceList.map(s =>
+          '<label class="publish-source-item">' +
+            '<input type="checkbox" class="publish-source-cb" value="' + escAttr(s.link || '') + '" checked data-name="' + escAttr(s.name || '') + '" data-title="' + escAttr(s.title || '') + '">' +
+            '<span class="publish-source-name">' + escHtml(s.name || 'Unknown') + '</span>' +
+            '<span class="publish-source-title">' + escHtml((s.title || '').substring(0, 80)) + '</span>' +
+          '</label>'
+        ).join('');
+      } else {
+        sourcesContainer.innerHTML = '<div style="color:var(--text-tertiary);font-size:0.82rem;padding:8px;">No sources available.</div>';
+      }
+    }
 
     body._article = article;
+    body._sources = sourceList;
     const closeBtn = $('#publish-modal-close');
     if (closeBtn) closeBtn.onclick = () => { modal.classList.remove('open'); };
 
-    const configToggle = $('#publish-config-toggle');
-    const configBody = $('#publish-config-body');
-    const configArrow = $('#publish-config-arrow');
-    if (configToggle && configBody) {
-      configToggle.onclick = () => {
-        const open = configBody.style.display !== 'none';
-        configBody.style.display = open ? 'none' : 'block';
-        if (configArrow) configArrow.textContent = open ? '\u25B6' : '\u25BC';
+    // Pre-fill scope/category
+    const scopeSelect = $('#publish-scope-select');
+    const nationSelect = $('#publish-nation-select');
+    const categorySelect = $('#publish-category-select');
+    if (scopeSelect) {
+      scopeSelect.value = article._pubScope || currentScope || 'global';
+      scopeSelect.onchange = () => {
+        const wrap = document.getElementById('publish-nation-wrap');
+        if (wrap) wrap.style.display = scopeSelect.value === 'nation' ? '' : 'none';
       };
+      scopeSelect.onchange();
     }
+    if (nationSelect) nationSelect.value = article._pubNation || currentNation || 'india';
+    if (categorySelect) categorySelect.value = article._pubCategory || article.feedHint || currentSubcat || 'all';
 
     const submitBtn = $('#publish-submit-btn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\uD83D\uDCE4 Publish'; }
     if (submitBtn) submitBtn.onclick = async () => {
       const titleInput = $('#publish-title-input');
       const descInput = $('#publish-desc-textarea');
-      const sourceCheck = $('#publish-include-source');
-      const ownerInput = $('#publish-github-owner');
-      const repoInput = $('#publish-github-repo');
-      const tokenInput = $('#publish-github-token');
+      const authorInput = $('#publish-author-input');
       const status = $('#publish-status');
-      const art = body._article;
+      const checkedSources = [...document.querySelectorAll('.publish-source-cb:checked')].map(cb => ({
+        name: cb.dataset.name || 'Source',
+        link: cb.value,
+        title: cb.dataset.title || ''
+      }));
       if (!titleInput || !descInput) return;
       if (!titleInput.value.trim()) {
         if (status) status.textContent = 'Please enter a title.';
         return;
       }
-      const sourceLink = sourceCheck?.checked ? art?.link : '';
-      const sourceName = art?.source || '';
-
-      saveGithubConfig({
-        owner: ownerInput?.value?.trim() || '',
-        repo: repoInput?.value?.trim() || '',
-        token: tokenInput?.value?.trim() || ''
-      });
-
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '\u23F3 Publishing\u2026'; }
-      if (status) status.textContent = 'Publishing to GitHub\u2026';
+      if (status) status.textContent = 'Publishing\u2026';
       try {
-        const result = await publishToGithub(
-          titleInput.value.trim(),
-          descInput.value.trim(),
-          sourceLink,
-          sourceName
-        );
-        savePublishedArticle({
-          ...art,
-          _pubTitle: titleInput.value.trim(),
-          _pubDesc: descInput.value.trim(),
-          _pubUrl: result.url
-        });
+        const authorName = authorInput?.value?.trim() || getUserDisplayName();
+        const client = getSupabaseClient();
+        if (!client) throw new Error('Supabase not available');
+        const scopeVal = scopeSelect?.value || currentScope;
+        const nationVal = scopeVal === 'nation' ? (nationSelect?.value || currentNation) : '';
+        const categoryVal = categorySelect?.value || currentSubcat || 'all';
+        const sourceName = checkedSources.map(s => s.name).join(', ') || article.source || '';
+        const sourceLink = checkedSources.map(s => s.link).filter(Boolean).join(', ') || article.link || '';
+        const { error } = await client
+          .from('published_articles')
+          .insert({
+            user_id: currentUser.id,
+            user_email: currentUser.email || '',
+            author: authorName,
+            date_published: new Date().toISOString(),
+            title: titleInput.value.trim(),
+            body: descInput.value.trim(),
+            source_name: sourceName,
+            source_link: sourceLink,
+            scope: scopeVal,
+            nation: nationVal,
+            category: categoryVal,
+            last_modified: new Date().toISOString()
+          });
+        if (error) throw error;
+        // Refresh published cache
+        _publishedCache = [];
+        await fetchPublishedArticlesFromSupabase();
         if (status) {
-          status.innerHTML = '\u2705 Published! <a href="' + escHtml(result.url) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">View post</a>';
+          status.innerHTML = '\u2705 Published! <span style="color:var(--text-secondary);font-size:0.82rem;">Article saved to Supabase.</span>';
         }
         if (submitBtn) { submitBtn.textContent = '\u2705 Published'; }
+        renderPublishedFeed();
       } catch (err) {
         console.warn('[Publish] Failed:', err);
         if (status) status.textContent = '\u274c ' + (err.message || 'Publish failed');
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\uD83D\uDCE4 Publish'; }
       }
     };
+  }
+
+  function renderPublishedFeed() {
+    const published = getCachedPublished();
+    if (published.length) {
+      const container = $('#published-feed');
+      if (container) {
+        container.innerHTML = published.slice(0, 5).map(p =>
+          '<div class="published-item">' +
+            '<div class="published-title">' + escHtml(p.title || '') + '</div>' +
+            '<div class="published-meta">' + escHtml(p.author || '') + ' · ' + (p.pubDate ? formatDateShort(p.pubDate) : '') + '</div>' +
+          '</div>'
+        ).join('');
+      }
+    }
+  }
+
+  async function editPublishedArticle(pubId) {
+    if (!currentUser) return;
+    try {
+      const client = getSupabaseClient();
+      if (!client) return;
+      const { data, error } = await client
+        .from('published_articles')
+        .select('*')
+        .eq('id', pubId)
+        .single();
+      if (error || !data) throw error || new Error('Not found');
+      // Check 3-day edit window
+      const pubDate = new Date(data.date_published);
+      const diffDays = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 3) { alert('Edit window expired (3 days from publishing)'); return; }
+      if (data.user_email !== currentUser.email) { alert('Only the author can edit this post'); return; }
+      // Open publish modal pre-filled
+      const modal = $('#publish-modal');
+      const body = $('#publish-modal-body');
+      if (!modal || !body) return;
+      modal.classList.add('open');
+      const titleInput = $('#publish-title-input');
+      const descInput = $('#publish-desc-textarea');
+      const authorInput = $('#publish-author-input');
+      const status = $('#publish-status');
+      const scopeSelect = $('#publish-scope-select');
+      const nationSelect = $('#publish-nation-select');
+      const categorySelect = $('#publish-category-select');
+      const sourcesContainer = $('#publish-sources-list');
+      if (titleInput) titleInput.value = data.title || '';
+      if (descInput) descInput.value = data.body || '';
+      if (authorInput) authorInput.value = data.author || '';
+      if (status) status.textContent = '';
+      if (scopeSelect) { scopeSelect.value = data.scope || 'global'; scopeSelect.onchange(); }
+      if (nationSelect) nationSelect.value = data.nation || '';
+      if (categorySelect) categorySelect.value = data.category || 'all';
+      if (sourcesContainer) {
+        const srcNames = (data.source_name || '').split(', ').filter(Boolean);
+        const srcLinks = (data.source_link || '').split(', ').filter(Boolean);
+        sourcesContainer.innerHTML = srcNames.map((n, i) =>
+          '<label class="publish-source-item">' +
+            '<input type="checkbox" class="publish-source-cb" value="' + escAttr(srcLinks[i] || '') + '" checked data-name="' + escAttr(n) + '" data-title="' + escAttr(n) + '">' +
+            '<span class="publish-source-name">' + escHtml(n) + '</span>' +
+          '</label>'
+        ).join('') || '<div style="color:var(--text-tertiary);font-size:0.82rem;padding:8px;">No sources.</div>';
+      }
+      body._editId = pubId;
+      body._article = { link: data.source_link || '', source: data.source_name || '' };
+      const closeBtn = $('#publish-modal-close');
+      if (closeBtn) closeBtn.onclick = () => { modal.classList.remove('open'); body._editId = null; };
+      const submitBtn = $('#publish-submit-btn');
+      if (submitBtn) {
+        submitBtn.onclick = async () => {
+          const t = $('#publish-title-input')?.value?.trim();
+          const d = $('#publish-desc-textarea')?.value?.trim();
+          const a = $('#publish-author-input')?.value?.trim();
+          const s = $('#publish-status');
+          const scopeV = scopeSelect?.value || 'global';
+          const nationV = scopeV === 'nation' ? (nationSelect?.value || '') : '';
+          const catV = categorySelect?.value || 'all';
+          if (!t) { if (s) s.textContent = 'Please enter a title.'; return; }
+          if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '\u23F3 Updating\u2026'; }
+          try {
+            const client2 = getSupabaseClient();
+            if (!client2) throw new Error('Supabase not available');
+            const { error: updErr } = await client2
+              .from('published_articles')
+              .update({
+                title: t,
+                body: d || '',
+                author: a || data.author,
+                scope: scopeV,
+                nation: nationV,
+                category: catV,
+                last_modified: new Date().toISOString()
+              })
+              .eq('id', pubId);
+            if (updErr) throw updErr;
+            _publishedCache = [];
+            await fetchPublishedArticlesFromSupabase();
+            if (s) s.innerHTML = '\u2705 Updated!';
+            if (submitBtn) submitBtn.textContent = '\u2705 Updated';
+            body._editId = null;
+            displayCurrentSubcat();
+          } catch (err) {
+            if (s) s.textContent = '\u274c ' + (err.message || 'Update failed');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\uD83D\uDCE4 Update'; }
+          }
+        };
+        submitBtn.textContent = '\uD83D\uDCE4 Update';
+      }
+    } catch (err) {
+      console.warn('[Publish] Edit failed:', err.message);
+      alert('Failed to load article for editing');
+    }
+  }
+
+  async function deletePublishedArticle(pubId) {
+    if (!currentUser) return;
+    if (!confirm('Delete this IB post? This cannot be undone.')) return;
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase not available');
+      // Verify ownership and 3-day window
+      const { data, error } = await client
+        .from('published_articles')
+        .select('user_email, date_published')
+        .eq('id', pubId)
+        .single();
+      if (error || !data) throw error || new Error('Not found');
+      if (data.user_email !== currentUser.email) { alert('Only the author can delete this post'); return; }
+      const pubDate = new Date(data.date_published);
+      const diffDays = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 3) { alert('Delete window expired (3 days from publishing)'); return; }
+      const { error: delErr } = await client
+        .from('published_articles')
+        .delete()
+        .eq('id', pubId);
+      if (delErr) throw delErr;
+      _publishedCache = [];
+      await fetchPublishedArticlesFromSupabase();
+      displayCurrentSubcat();
+    } catch (err) {
+      console.warn('[Publish] Delete failed:', err.message);
+      alert('Delete failed: ' + (err.message || 'Unknown error'));
+    }
   }
 
   function forceExitToHome() {
@@ -3072,6 +3288,24 @@ const APP_VERSION = 30;
   // there — it only kicks in when the underlying work was faster
   // than the minimum.
   const MIN_VIEW_LOADING_MS = 220;
+
+  function bindSourceFilter() {
+    const btn = document.getElementById('source-filter-btn');
+    if (!btn) return;
+    const update = () => {
+      btn.className = 'btn btn-ghost btn-icon source-filter-btn filter-' + sourceFilter;
+      const titles = { all: 'All sources (IB + Feeds)', ib: 'Invisible Broadcast only', feeds: 'Feeds only' };
+      btn.title = titles[sourceFilter] || 'Toggle source filter';
+    };
+    btn.addEventListener('click', () => {
+      const next = { all: 'ib', ib: 'feeds', feeds: 'all' };
+      sourceFilter = next[sourceFilter] || 'all';
+      update();
+      _persist();
+      displayCurrentSubcat();
+    });
+    update();
+  }
 
   function bindViewToggle() {
     const footerBtn = document.getElementById('view-toggle-btn');
@@ -3387,25 +3621,18 @@ const APP_VERSION = 30;
         }
       }
 
-      const published = getPublishedArticles();
-      if (published.length) {
-        const pubCat = currentSubcat === 'all' ? 'politics' : currentSubcat;
-        if (!groups[pubCat]) groups[pubCat] = [];
-        for (const p of published) {
-          groups[pubCat].push({
-            title: p._pubTitle || p.title || '',
-            link: p._pubUrl || p.link || '',
-            summary: p._pubDesc || p.summary || '',
-            source: '\uD83D\uDCE4 Published',
-            pubDate: p._publishedAt || p.pubDate || new Date().toISOString(),
-            feedUrl: 'published',
-            feedHint: pubCat,
-            imageUrl: '',
-            author: '',
-            guid: p._pubUrl || p.link || 'pub_' + Date.now() + Math.random(),
-            _isPublished: true,
-            subcat: pubCat
-          });
+      if (sourceFilter !== 'feeds') {
+        const allPublished = getCachedPublished();
+        const matchingPub = allPublished.filter(p => {
+          const scopeMatch = p._pubScope === currentScope;
+          const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
+          const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
+          return scopeMatch && nationMatch && subcatMatch;
+        });
+        for (const p of matchingPub) {
+          const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(p);
         }
       }
 
@@ -4035,30 +4262,25 @@ const APP_VERSION = 30;
       }
     }
 
-    const published = getPublishedArticles();
-    if (published.length) {
-      const pubCat = currentSubcat === 'all' ? 'politics' : currentSubcat;
-      if (!groups[pubCat]) groups[pubCat] = [];
-      for (const p of published) {
-        groups[pubCat].push({
-          title: p._pubTitle || p.title || '',
-          link: p._pubUrl || p.link || '',
-          summary: p._pubDesc || p.summary || '',
-          source: '\uD83D\uDCE4 Published',
-          pubDate: p._publishedAt || p.pubDate || new Date().toISOString(),
-          feedUrl: 'published',
-          feedHint: pubCat,
-          imageUrl: '',
-          author: '',
-          guid: p._pubUrl || p.link || 'pub_' + Date.now() + Math.random(),
-          _isPublished: true,
-          subcat: pubCat
-        });
+    if (sourceFilter !== 'feeds') {
+      const allPublished = getCachedPublished();
+      const matchingPub = allPublished.filter(p => {
+        const scopeMatch = p._pubScope === currentScope;
+        const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
+        const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
+        return scopeMatch && nationMatch && subcatMatch;
+      });
+      for (const p of matchingPub) {
+        const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(p);
       }
     }
 
     let allArticles = [];
     for (const cat of Object.keys(groups)) allArticles.push(...groups[cat]);
+    if (sourceFilter === 'ib') allArticles = allArticles.filter(a => a._isPublished);
+    else if (sourceFilter === 'feeds') allArticles = allArticles.filter(a => !a._isPublished);
 
     const key = scopeKey();
     scopeCache[key] = { articles: allArticles, groups };
@@ -4379,10 +4601,10 @@ const APP_VERSION = 30;
     } else if (tab === 'flagged') {
       filtered = items.filter(([, d]) => d.flag);
     } else if (tab === 'failed') {
-      // Render Failed sources via a dedicated renderer — it pulls from
-      // SourceHealth, not from the article activity store, so the logic
-      // doesn't fit the generic "items" pipeline below.
       renderActivityFailed(container);
+      return;
+    } else if (tab === 'myposts') {
+      renderMyPosts(container);
       return;
     }
 
@@ -4513,6 +4735,59 @@ const APP_VERSION = 30;
 
   /* ── Custom Feeds ── */
   let validatedFeed = null;
+
+  function renderMyPosts(container) {
+    if (!currentUser) {
+      container.innerHTML = '<div class="activity-empty">Sign in to see your posts.</div>';
+      return;
+    }
+    const published = getCachedPublished().filter(p => p._pubUserEmail === currentUser.email);
+    if (!published.length) {
+      container.innerHTML = '<div class="activity-empty">No posts yet. Publish an article to see it here.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="activity-list">' + published.map(p =>
+      '<div class="activity-item">' +
+        '<div class="ai-title" data-link="' + encodeURIComponent(p.link || 'pub_' + p._pubId) + '">' +
+          escHtml(p.title || '') +
+          (p.source ? '<div class="ai-source">' + escHtml(p.source) + '</div>' : '') +
+        '</div>' +
+        '<div class="ai-meta">' +
+          '<span>' + (p.pubDate ? formatDateShort(p.pubDate) : '') + '</span>' +
+          '<span>' +
+            '<button class="btn btn-ghost ai-edit-btn" data-pubid="' + p._pubId + '" style="font-size:0.75rem;padding:2px 6px">&#x270F;</button>' +
+            '<button class="btn btn-ghost ai-del-btn" data-pubid="' + p._pubId + '" style="font-size:0.75rem;padding:2px 6px">&#x1F5D1;</button>' +
+          '</span>' +
+        '</div>' +
+      '</div>'
+    ).join('') + '</div>';
+
+    // Click on title to open original article
+    container.querySelectorAll('.ai-title').forEach(el2 => {
+      el2.addEventListener('click', () => {
+        const link = decodeURIComponent(el2.dataset.link);
+        if (!link) return;
+        closeActivity();
+        openArticleDetail(link);
+      });
+    });
+    // Edit button
+    container.querySelectorAll('.ai-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const pubId = btn.dataset.pubid;
+        if (pubId) { closeActivity(); editPublishedArticle(pubId); }
+      });
+    });
+    // Delete button
+    container.querySelectorAll('.ai-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const pubId = btn.dataset.pubid;
+        if (pubId) { closeActivity(); deletePublishedArticle(pubId); }
+      });
+    });
+  }
 
   function populateFeedSelects() {
     const scopeSel = el.feedScopeSelect;
@@ -5022,8 +5297,9 @@ const APP_VERSION = 30;
     el.articleModalSource.textContent = article.source;
     el.articleModalDate.textContent = formatDate(article.pubDate);
     el.articleModalSummary.textContent = cleanSummary(stripHtml(article.summary));
-    if (article.imageUrl && article.imageUrl.startsWith('http')) {
-      el.articleModalImg.src = article.imageUrl;
+    const modalImgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+    if (modalImgUrl && modalImgUrl.startsWith('http')) {
+      el.articleModalImg.src = modalImgUrl;
       el.articleModalImgWrap.style.display = 'block';
     } else {
       el.articleModalImgWrap.style.display = 'none';
@@ -5379,8 +5655,8 @@ const APP_VERSION = 30;
   async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
-    const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
-    const hasThumb = imgUrl && imgUrl.startsWith('http');
+      const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+      const hasThumb = imgUrl && imgUrl.startsWith('http');
       const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
       const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
 
@@ -5399,10 +5675,10 @@ const APP_VERSION = 30;
         // Build a list of candidate image URLs to try, in priority order.
         const candidates = [];
         // 1. Enhanced version of the RSS image (full-size)
-        const enhanced = enhanceImageUrl(article.imageUrl);
-        candidates.push(enhanced || article.imageUrl);
+        const enhanced = enhanceImageUrl(imgUrl);
+        candidates.push(enhanced || imgUrl);
         // 2. Raw RSS image (fallback if enhanced URL fails)
-        if (enhanced) candidates.push(article.imageUrl);
+        if (enhanced) candidates.push(imgUrl);
         // 3. OG image from the article's HTML (sometimes a different image)
         try {
           const og = await fetchOGImage(article.link);
@@ -5924,8 +6200,7 @@ const APP_VERSION = 30;
     //    read like a verbatim copy.
     let body = '';
     if (title) {
-      // "Update: [topic]."
-      body = 'Update: ' + title + '.';
+      body = title + '.';
     } else if (keyFact) {
       body = keyFact;
     } else {
@@ -5956,35 +6231,109 @@ const APP_VERSION = 30;
   // news tags. The function de-duplicates and trims to 5.
   function buildHashtags(article) {
     const tags = ['#invisiblebroadcast'];
+    const title = (article.title || '').toLowerCase();
+    const summary = (article.summary || '').toLowerCase();
+    const combined = title + ' ' + summary;
+
+    // Emotional keyword → hashtag mappings
+    const EMOTION_MAP = [
+      [/\b(breakthrough|milestone|discover|invent|pioneer|first-ever|landmark)\b/, '#breakthrough'],
+      [/\b(victory|triumph|win\b|won\b|champion|success|achievement|accomplish)\b/, '#victory'],
+      [/\b(hope|optimis|promising|encouraging|positive|progress|improve|better)\b/, '#progress'],
+      [/\b(innovation|innovative|cutting-edge|next-gen|futur|revolution)\b/, '#innovation'],
+      [/\b(crisis|emergency|disaster|catastrophe|devastat|tragedy|tragic)\b/, '#crisis'],
+      [/\b(warning|warned|alert|danger|threat|risky|hazard)\b/, '#warning'],
+      [/\b(controversy|controversial|scandal|allegation|probe)\b/, '#controversy'],
+      [/\b(concern|worried|worrying|alarming|fears?|anxiety)\b/, '#concern'],
+      [/\b(deadly|kill|death|fatal|casualt|attack|violen|war\b|collide)\b/, '#tragedy'],
+      [/\b(surge|boost|growth|increase|expand|boom|rally)\b/, '#surge'],
+      [/\b(drop|decline|fall|plunge|slump|slowdown|shrink)\b/, '#decline'],
+      [/\b(agreement|deal\b|treaty|alliance|partnership|coalition)\b/, '#deal'],
+      [/\b(approve|approval|clear|greenlit|sanction|ratify)\b/, '#approved'],
+      [/\b(ban\b|banned|restrict|curb|crackdown|outlaw|prohibit)\b/, '#crackdown'],
+      [/\b(resign|resignation|ousted|fired|sack|dismiss|quit\b)\b/, '#resignation'],
+      [/\b(elected|election|vote|ballot|candidate|campaign|poll)\b/, '#election'],
+      [/\b(court|verdict|judge|sue|lawsuit|legal|convict|sentence)\b/, '#legal'],
+      [/\b(protest|rally|demonstrat|strike|walkout|unrest)\b/, '#protest'],
+      [/\b(release|launch|unveil|introduce|debut|rollout|premier)\b/, '#launch'],
+      [/\b(investigate|probe|inquiry|audit|scrutiny|review)\b/, '#investigation'],
+      [/\b(donate|donation|aid\b|relief|charity|fundraiser|philanthropy)\b/, '#philanthropy'],
+      [/\b(health|disease|virus|vaccine|medical|hospital|surgery|treatment)\b/, '#health'],
+      [/\b(climate|weather|storm|flood|earthquake|wildfire|drought|heatwave)\b/, '#climate'],
+      [/\b(tech|digital|ai\b|robot|cyber|software|startup|app\b)\b/, '#tech'],
+      [/\b(science|research|study|lab\b|experiment|academic|scientist)\b/, '#science'],
+      [/\b(space|nasa|satellite|rocket|orbit|astronaut|cosmic|lunar|mars)\b/, '#space'],
+      [/\b(sport|game\b|match\b|tournament|championship|olymp|league)\b/, '#sports'],
+      [/\b(market|stock|trade|tariff|economy|inflation|gdp|budget)\b/, '#economy'],
+      [/\b(music|film|movie|artist|concert|album|actor|award|festival)\b/, '#culture'],
+      [/\b(education|school|university|college|student|teacher|academy)\b/, '#education'],
+      [/\b(energy|oil\b|gas\b|fuel|renewable|solar|wind|nuclear|power)\b/, '#energy'],
+      [/\b(religion|faith|church|temple|mosque|worship|spirit|divine)\b/, '#faith'],
+      [/\b(housing|rent|mortgage|real-estate|property|homeless|shelter)\b/, '#housing'],
+      [/\b(immigration|migrant|asylum|refugee|border|deportation|visa)\b/, '#immigration'],
+      [/\b(crime|criminal|theft|fraud|robbery|smuggling|gang|mafia)\b/, '#crime'],
+      [/\b(diploma|diplomat|ambassador|summit|bilateral|foreign|geopolitical)\b/, '#diplomacy'],
+      [/\b(infrastructure|bridge|road|railway|highway|tunnel|dam|construction)\b/, '#infrastructure'],
+      [/\b(agriculture|farm|farmer|crop|harvest|food|rural|organic)\b/, '#agriculture'],
+      [/\b(peace|ceasefire|truce|reconciliation|armistice|negotiation)\b/, '#peace'],
+      [/\b(memorial|tribute|honor|remembrance|anniversary|legacy)\b/, '#tribute'],
+      [/\b(sanction|embargo|boycott|freeze|blacklist|penalty)\b/, '#sanctions'],
+      [/\b(privacy|surveillance|encryption|data-breach|hack\b|cyberattack)\b/, '#privacy'],
+    ];
+    for (const [re, tag] of EMOTION_MAP) {
+      if (re.test(combined) && !tags.includes(tag)) tags.push(tag);
+      if (tags.length >= 4) break;
+    }
+
+    // Extract named entities: capitalized multi-word phrases in the title
+    const titleClean = (article.title || '').trim();
+    const entities = [];
+    if (titleClean) {
+      const rawEntities = titleClean.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+      const stopEntities = new Set(['The', 'This', 'That', 'These', 'Those', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'In', 'On', 'At', 'For', 'With', 'By', 'To', 'From', 'As', 'But', 'Not', 'All', 'One', 'Two', 'New', 'After', 'Before', 'Over', 'Under', 'More', 'Most', 'Some', 'Such', 'Than', 'Then', 'Also', 'Very', 'Just', 'About', 'Into', 'Through', 'During', 'Before', 'After', 'Above', 'Below', 'Between', 'Among', 'Without', 'Within', 'Along', 'Across', 'Behind', 'Beyond', 'Upcoming', 'Ongoing', 'Recent', 'Latest', 'Breaking', 'Update', 'Developing', 'Report', 'Exclusive', 'Alert', 'Video', 'Photo', 'Watch', 'Listen', 'Live']);
+      for (const ent of rawEntities) {
+        const clean = ent.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        if (clean.length >= 3 && !stopEntities.has(ent)) {
+          const tag = '#' + clean;
+          if (!tags.includes(tag)) { entities.push(tag); }
+          if (entities.length >= 2) break;
+        }
+      }
+    }
+
+    // Interleave entities first (they're most specific), then emotional tags
+    const result = ['#invisiblebroadcast'];
+    const seen = new Set(result);
+    const interleave = [];
+    const maxE = Math.min(entities.length, 2);
+    for (let i = 0; i < maxE; i++) {
+      if (!seen.has(entities[i])) { interleave.push(entities[i]); seen.add(entities[i]); }
+    }
+    const pool = tags.slice(1); // emotional tags after #invisiblebroadcast
+    for (const t of pool) {
+      if (result.length + interleave.length >= 5) break;
+      if (!seen.has(t)) { interleave.push(t); seen.add(t); }
+    }
+    // Pad with subcat, source, evergreen
+    const fallback = [];
     const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (subcat) tags.push('#' + subcat);
-    const source = (article.source || '').toString().toLowerCase();
-    if (source) {
-      // Use the first word of the source name as a tag (so
-      // "The Hindu — News" becomes #thehindu). Strip common
-      // prefixes and punctuation.
-      const cleaned = source
-        .replace(/^the\s+/, '')
-        .split(/[\s\-—–|]+/)[0]
-        .replace(/[^a-z0-9]/g, '');
-      if (cleaned && cleaned !== subcat) tags.push('#' + cleaned);
+    if (subcat && !seen.has('#' + subcat)) { fallback.push('#' + subcat); seen.add('#' + subcat); }
+    const source = (article.source || '').toString().toLowerCase().replace(/^the\s+/, '').split(/[\s\-—–|]+/)[0].replace(/[^a-z0-9]/g, '');
+    if (source && source !== subcat && !seen.has('#' + source)) { fallback.push('#' + source); seen.add('#' + source); }
+    for (const f of ['#news', '#today', '#breaking', '#worldnews', '#headlines', '#dailynews']) {
+      if (!seen.has(f)) { fallback.push(f); seen.add(f); }
+      if (fallback.length >= 5 - result.length) break;
     }
-    tags.push('#news');
-    tags.push('#today');
-    // De-dupe while preserving order, then cap at 5.
-    const seen = new Set();
-    const out = [];
-    for (const t of tags) {
-      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
-      if (out.length === 5) break;
+    // Build final: first entity, then from interleave pool, then fallback
+    for (const item of interleave) {
+      if (result.length >= 5) break;
+      result.push(item);
     }
-    // If we still don't have 5, pad with evergreen tags.
-    const pad = ['#breaking', '#worldnews', '#headlines', '#dailynews', '#update'];
-    for (const p of pad) {
-      if (out.length === 5) break;
-      if (!seen.has(p)) { seen.add(p); out.push(p); }
+    for (const item of fallback) {
+      if (result.length >= 5) break;
+      result.push(item);
     }
-    return out.slice(0, 5);
+    return result.slice(0, 5);
   }
 
   // Brief "blinking" feedback after a successful copy. We
@@ -6087,7 +6436,8 @@ const APP_VERSION = 30;
         e.stopPropagation();
         const url = decodeURIComponent(se.dataset.url);
         const article = findArticleByLink(url);
-        if (article && article.imageUrl && article.imageUrl.startsWith('http')) {
+        const shareCheckImg = article && article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+        if (shareCheckImg && shareCheckImg.startsWith('http')) {
           handleShareImage(article, se);
         } else {
           handleShare(url, se.dataset.title, se.dataset.source);
@@ -6159,9 +6509,28 @@ const APP_VERSION = 30;
       const publishBtn = e.target.closest('.card-publish-btn');
       if (publishBtn) {
         e.stopPropagation();
+        if (!currentUser) { alert('Please sign in to publish articles'); return; }
         const url = decodeURIComponent(publishBtn.dataset.publishArticle);
         const article = findArticleByLink(url);
         if (article) openPublishModal(article);
+        return;
+      }
+      const editBtn = e.target.closest('.card-edit-btn');
+      if (editBtn) {
+        e.stopPropagation();
+        if (!currentUser) { alert('Please sign in'); return; }
+        const url = decodeURIComponent(editBtn.dataset.publishArticle);
+        const article = findArticleByLink(url);
+        if (article && article._isPublished && article._pubId) editPublishedArticle(article._pubId);
+        return;
+      }
+      const deleteBtn = e.target.closest('.card-delete-btn');
+      if (deleteBtn) {
+        e.stopPropagation();
+        if (!currentUser) { alert('Please sign in'); return; }
+        const url = decodeURIComponent(deleteBtn.dataset.publishArticle);
+        const article = findArticleByLink(url);
+        if (article && article._isPublished && article._pubId) deletePublishedArticle(article._pubId);
         return;
       }
       const ae = e.target.closest('[data-article]');
@@ -7300,6 +7669,7 @@ const APP_VERSION = 30;
       if (s.currentMode) currentMode = s.currentMode;
       if (s.currentView) currentView = s.currentView;
       if (s.currentSort) currentSort = s.currentSort;
+      if (s.sourceFilter) sourceFilter = s.sourceFilter;
     })();
 
     await SupabaseStore.load();
@@ -7315,6 +7685,8 @@ const APP_VERSION = 30;
     // uses SupabaseStore.getClient()) and after FeedManager is
     // loaded (the archive looks up feed lang by URL).
     if (window.ArticleArchive && ArticleArchive.init) ArticleArchive.init();
+    // Pre-fetch published articles from Supabase
+    fetchPublishedArticlesFromSupabase();
     bindAuth();
 
     // AI model consent flow. First visit → prompt. Subsequent loads
@@ -7360,6 +7732,7 @@ const APP_VERSION = 30;
     bindTopTabs();
     bindSectionTabs();
     bindTrendingBtn();
+    bindSourceFilter();
     bindViewToggle();
     syncViewToggleBtn();
     bindTranslate();

@@ -5702,6 +5702,56 @@ body:not(.modal-open) #main-content {
   outline: none;
   border-color: var(--accent);
 }
+.publish-sources-wrap {
+  border-bottom: 1px solid var(--border-secondary);
+  padding: 14px 20px;
+}
+.publish-sources-list {
+  margin-top: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.publish-source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.publish-source-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.publish-source-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  min-width: 80px;
+}
+.publish-source-title {
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.published-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-secondary);
+}
+.published-item:last-child { border-bottom: none; }
+.published-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.published-meta {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
 
 /* ══════════════════════════════════════════════════════════════
    NEW DESIGN SYSTEM — Professional Multi-Page Layout
@@ -6038,7 +6088,8 @@ a.nav-icon-only svg {
   flex-shrink: 0;
 }
 
-.view-toggle-btn {
+.view-toggle-btn,
+.source-filter-btn {
   width: 32px;
   height: 32px;
   padding: 0;
@@ -6049,9 +6100,26 @@ a.nav-icon-only svg {
   color: var(--text-secondary);
 }
 
-.view-toggle-btn:hover {
+.view-toggle-btn:hover,
+.source-filter-btn:hover {
   color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+
+.source-filter-btn.filter-ib {
+  color: var(--accent);
+  background: var(--bg-tertiary);
+}
+.source-filter-btn.filter-feeds {
+  color: var(--accent-green);
+  background: var(--bg-tertiary);
+}
+.source-filter-btn.filter-feeds svg {
+  animation: spin 3s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* ─── Page Header ─── */

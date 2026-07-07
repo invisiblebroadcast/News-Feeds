@@ -138,6 +138,9 @@
         <h2 id="section-title"></h2>
       </div>
       <div class="section-footer-right">
+        <button class="btn btn-ghost btn-icon source-filter-btn" id="source-filter-btn" title="Show: All sources" aria-label="Toggle source filter">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         </button>
@@ -303,6 +306,7 @@
           <button class="activity-tab" data-actab="liked">Liked</button>
           <button class="activity-tab" data-actab="disliked">Disliked</button>
           <button class="activity-tab" data-actab="flagged">Flagged</button>
+          <button class="activity-tab" data-actab="myposts">My Posts</button>
           <button class="activity-tab" data-actab="failed">Failed Sources</button>
         </div>
         <div id="activity-content"></div>
@@ -496,32 +500,48 @@
           <input type="text" id="publish-title-input" class="build-headline" placeholder="Article title">
         </div>
         <div class="publish-field-wrap">
+          <label class="build-label">Author</label>
+          <input type="text" id="publish-author-input" class="build-headline" placeholder="Author name" readonly style="color:var(--text-secondary);">
+        </div>
+        <div class="publish-field-wrap" style="display:flex;gap:10px;">
+          <div style="flex:1;">
+            <label class="build-label">Scope</label>
+            <select id="publish-scope-select" class="build-headline" style="width:100%;">
+              <option value="global">Global</option>
+              <option value="nation">Nation</option>
+            </select>
+          </div>
+          <div style="flex:1;" id="publish-nation-wrap">
+            <label class="build-label">Nation</label>
+            <select id="publish-nation-select" class="build-headline" style="width:100%;">
+              <option value="india">India</option>
+            </select>
+          </div>
+        </div>
+        <div class="publish-field-wrap">
+          <label class="build-label">Category</label>
+          <select id="publish-category-select" class="build-headline" style="width:100%;">
+            <option value="all">General / All</option>
+            <option value="politics">Politics &amp; Governance</option>
+            <option value="business">Business &amp; Economy</option>
+            <option value="technology">Technology &amp; Innovation</option>
+            <option value="science">Science &amp; Research</option>
+            <option value="health">Health &amp; Medicine</option>
+            <option value="sports">Sports &amp; Athletics</option>
+            <option value="entertainment">Culture &amp; Entertainment</option>
+            <option value="environment">Environment &amp; Climate</option>
+            <option value="education">Education &amp; Academia</option>
+          </select>
+        </div>
+        <div class="publish-field-wrap">
           <label class="build-label">Description</label>
           <textarea id="publish-desc-textarea" class="build-textarea" rows="8" placeholder="Article description"></textarea>
-          <label class="publish-checkbox-label">
-            <input type="checkbox" id="publish-include-source" checked>
-            Include source link in description
-          </label>
         </div>
-        <div class="publish-github-config">
-          <div class="build-sources-header" id="publish-config-toggle">
-            <label class="build-label">GitHub Configuration</label>
-            <span class="build-sources-arrow" id="publish-config-arrow">&#x25B6;</span>
+        <div class="publish-sources-wrap">
+          <div class="build-sources-header">
+            <label class="build-label">Sources</label>
           </div>
-          <div class="publish-config-body" id="publish-config-body" style="display:none;">
-            <div class="publish-field">
-              <label>Repository Owner</label>
-              <input type="text" id="publish-github-owner" placeholder="your-username">
-            </div>
-            <div class="publish-field">
-              <label>Repository Name</label>
-              <input type="text" id="publish-github-repo" placeholder="your-repo">
-            </div>
-            <div class="publish-field">
-              <label>GitHub Token (classic, with repo scope)</label>
-              <input type="password" id="publish-github-token" placeholder="ghp_...">
-            </div>
-          </div>
+          <div class="publish-sources-list" id="publish-sources-list"></div>
         </div>
         <div class="build-actions" style="padding:14px 20px;">
           <div id="publish-status" style="flex:1;font-size:0.85rem;color:var(--text-secondary);"></div>
@@ -779,11 +799,11 @@
   <button class="fab fab-hidden" id="publish-fab" title="Publish a post">&#x270E;</button>
 
   <!-- Publish Modal -->
-  <div class="modal-overlay publish-modal" id="publish-modal">
+  <div class="modal-overlay publish-modal" id="yt-publish-modal">
     <div class="modal">
       <div class="modal-header">
         <h2><span style="margin-right:6px;">&#x270E;</span><span>Publish a Post</span></h2>
-        <button class="modal-close" id="publish-modal-close">&times;</button>
+        <button class="modal-close" id="yt-publish-modal-close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="publish-tabs">
@@ -810,12 +830,12 @@
           </div>
 
           <!-- GitHub Configuration (collapsible) -->
-          <details class="publish-github-config" id="publish-github-config">
+          <details class="publish-github-config" id="yt-publish-github-config">
             <summary>GitHub Configuration</summary>
             <div class="publish-github-fields">
-              <input type="text" id="publish-github-owner" placeholder="GitHub username / org">
-              <input type="text" id="publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
-              <input type="password" id="publish-github-token" placeholder="Personal access token (classic, repo scope)">
+              <input type="text" id="yt-publish-github-owner" placeholder="GitHub username / org">
+              <input type="text" id="yt-publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
+              <input type="password" id="yt-publish-github-token" placeholder="Personal access token (classic, repo scope)">
               <p style="font-size:0.72rem;color:var(--text-tertiary);margin:4px 0 0;">Settings stored locally. Token needs <code>repo</code> scope.</p>
             </div>
           </details>
@@ -823,7 +843,7 @@
           <div class="publish-msg" id="publish-msg"></div>
 
           <div class="publish-actions">
-            <button class="btn btn-primary" id="publish-btn">Publish</button>
+            <button class="btn btn-primary" id="yt-publish-btn">Publish</button>
           </div>
 
           <!-- My Posts Section -->
@@ -866,9 +886,9 @@
   <script src="js/clustering.js?v=31"></script>
   <script src="js/publisher.js?v=31"></script>
   <script src="js/shared-state.js?v=31"></script>
-  <script src="js/publish-modal.js?v=31"></script>
+  <script src="js/publish-modal.js?v=32"></script>
   <script src="js/custom-sources-modal.js?v=31"></script>
-  <script src="js/app-home.js?v=31"></script>
+  <script src="js/app-home.js?v=34"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

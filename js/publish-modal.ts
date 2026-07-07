@@ -369,19 +369,19 @@ const PublishModal = (() => {
   }
 
   function openModal() {
-    const modal = $('#publish-modal');
+    const modal = $('#yt-publish-modal');
     if (!modal) return;
 
     editingPost = null;
-    const publishBtn = $('#publish-btn');
+    const publishBtn = $('#yt-publish-btn');
     if (publishBtn) publishBtn.textContent = 'Publish';
     const msg = $('#publish-msg');
     if (msg) { msg.textContent = ''; msg.className = 'publish-msg'; }
 
     const config = loadGithubConfig();
-    const ownerInput = $('#publish-github-owner');
-    const repoInput = $('#publish-github-repo');
-    const tokenInput = $('#publish-github-token');
+    const ownerInput = $('#yt-publish-github-owner');
+    const repoInput = $('#yt-publish-github-repo');
+    const tokenInput = $('#yt-publish-github-token');
     if (ownerInput) ownerInput.value = config.owner || '';
     if (repoInput) repoInput.value = config.repo || '';
     if (tokenInput) tokenInput.value = config.token || '';
@@ -401,7 +401,7 @@ const PublishModal = (() => {
     if (window.appState && typeof window.appState.closeModal === 'function') {
       window.appState.closeModal('publish');
     } else {
-      const modal = $('#publish-modal');
+      const modal = $('#yt-publish-modal');
       if (modal) modal.classList.remove('open');
     }
   }
@@ -422,29 +422,29 @@ const PublishModal = (() => {
       fetchBtn.addEventListener('click', handleFetchTranscript);
     }
 
-    const publishBtn = $('#publish-btn');
+    const publishBtn = $('#yt-publish-btn');
     if (publishBtn) {
       publishBtn.addEventListener('click', handlePublish);
     }
 
-    const closeBtn = $('#publish-modal-close');
+    const closeBtn = $('#yt-publish-modal-close');
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
-    const modal = $('#publish-modal');
+    const modal = $('#yt-publish-modal');
     if (modal) {
       modal.addEventListener('click', e => {
         if (e.target === modal) closeModal();
       });
     }
 
-    ['publish-github-owner', 'publish-github-repo', 'publish-github-token'].forEach(id => {
+    ['yt-publish-github-owner', 'yt-publish-github-repo', 'yt-publish-github-token'].forEach(id => {
       const input = $(`#${id}`);
       if (input) {
         input.addEventListener('input', () => {
           const config = {
-            owner: $('#publish-github-owner')?.value?.trim() || '',
-            repo: $('#publish-github-repo')?.value?.trim() || '',
-            token: $('#publish-github-token')?.value?.trim() || ''
+            owner: $('#yt-publish-github-owner')?.value?.trim() || '',
+            repo: $('#yt-publish-github-repo')?.value?.trim() || '',
+            token: $('#yt-publish-github-token')?.value?.trim() || ''
           };
           saveGithubConfig(config);
         });
