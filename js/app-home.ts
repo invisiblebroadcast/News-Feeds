@@ -944,8 +944,10 @@ const APP_VERSION = 30;
   // CategoriesModal when the user picks a category (or a
   // parliament item). Aborts any in-flight fetch for the old
   // subcat and starts a fresh render.
+  let _lastSelectScopeKey = '';
   function selectCategory(sub) {
-    if (sub == null || sub === currentSubcat) {
+    const curKey = scopeKey();
+    if (sub == null || (sub === currentSubcat && curKey === _lastSelectScopeKey)) {
       if (sub != null && sub === currentSubcat) {
         updateStickyHeader();
       }
@@ -958,6 +960,7 @@ const APP_VERSION = 30;
     const prevKey = scopeKey();
     if (typeof abortBackgroundFetch === 'function') abortBackgroundFetch(prevKey);
     currentSubcat = sub;
+    _lastSelectScopeKey = scopeKey();
     currentSearch = '';
     if (el.searchInput) el.searchInput.value = '';
     // Reset trending mode
@@ -3297,12 +3300,15 @@ const APP_VERSION = 30;
       const titles = { all: 'All sources (IB + Feeds)', ib: 'Invisible Broadcast only', feeds: 'Feeds only' };
       btn.title = titles[sourceFilter] || 'Toggle source filter';
     };
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const next = { all: 'ib', ib: 'feeds', feeds: 'all' };
       sourceFilter = next[sourceFilter] || 'all';
       update();
       _persist();
-      displayCurrentSubcat();
+      const labels = { all: 'Loading feeds & IB\u2026', ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
+      showLoadingOverlay(labels[sourceFilter] || 'Loading\u2026');
+      await displayCurrentSubcat();
+      hideLoadingOverlay();
     });
     update();
   }
