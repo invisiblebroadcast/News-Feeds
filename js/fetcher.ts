@@ -21,7 +21,7 @@ const FeedFetcher = (() => {
 
   function extractImageFromHtml(html) {
     if (!html) return '';
-    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    const match = html.match(/<img\s[^>]*src\s*=\s*["']([^"']+)["']/i);
     return match ? match[1] : '';
   }
 
@@ -104,14 +104,21 @@ const FeedFetcher = (() => {
       const mediaContent = item.querySelector('media\\:content');
       const enclosure = item.querySelector('enclosure');
       const thumbnail = item.querySelector('media\\:thumbnail');
+      const mediaGroup = item.querySelector('media\\:group');
+      const contentEncoded = item.querySelector('content\\:encoded');
 
       let imageUrl = '';
       if (thumbnail?.getAttribute('url')) {
         imageUrl = thumbnail.getAttribute('url');
       } else if (mediaContent?.getAttribute('url')) {
         imageUrl = mediaContent.getAttribute('url');
+      } else if (mediaGroup?.querySelector('media\\:content')?.getAttribute('url')) {
+        imageUrl = mediaGroup.querySelector('media\\:content').getAttribute('url');
       } else if (enclosure?.getAttribute('url') && enclosure?.getAttribute('type')?.startsWith('image')) {
         imageUrl = enclosure.getAttribute('url');
+      }
+      if (!imageUrl && contentEncoded?.textContent) {
+        imageUrl = extractImageFromHtml(contentEncoded.textContent);
       }
       if (!imageUrl && desc) {
         imageUrl = extractImageFromHtml(desc);

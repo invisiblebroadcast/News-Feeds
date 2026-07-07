@@ -2247,7 +2247,6 @@ const APP_VERSION = 6;
       '<div class="build-actions">' +
         '<button class="btn btn-ghost" id="build-copy-btn">📋 Copy text</button>' +
         '<button class="btn btn-ghost" id="build-copy-md-btn">📋 Copy as Markdown</button>' +
-        '<button class="btn btn-primary" id="build-regen-btn">↻ Regenerate</button>' +
       '</div>';
 
     // Wire buttons.
@@ -2255,21 +2254,6 @@ const APP_VERSION = 6;
     if (copyBtn) copyBtn.addEventListener('click', () => copyBuildArticle(article, 'text'));
     const copyMdBtn = body.querySelector('#build-copy-md-btn');
     if (copyMdBtn) copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
-    const regenBtn = body.querySelector('#build-regen-btn');
-    if (regenBtn) regenBtn.addEventListener('click', () => {
-      // Regenerate = re-run the publisher. The publisher
-      // already picks a new random title template and new
-      // random lead/closing sentences, so the user gets a
-      // visibly different article on every click.
-      regenBtn.disabled = true;
-      regenBtn.textContent = '⏳ Regenerating…';
-      openBuildModal(cluster.id).finally(() => {
-        if (regenBtn) {
-          regenBtn.disabled = false;
-          regenBtn.textContent = '↻ Regenerate';
-        }
-      });
-    });
   }
 
   // Build the plain-text version of the article for the

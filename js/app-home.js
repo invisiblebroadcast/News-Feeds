@@ -1325,7 +1325,7 @@ const APP_VERSION = 30;
         const encoded = encodeURIComponent(article.link);
         const thumbHtml = hasThumb
             ? '<div class="article-thumb" style="cursor:pointer" data-article="' + encoded + '">' +
-                '<img src="' + escAttr(enhanceImageUrl(article.imageUrl) || article.imageUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+                '<img src="' + escAttr(enhanceImageUrl(imgUrl) || imgUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
                 '</div>'
             : '';
         const kwText = (article._trendingKeywords && article._trendingKeywords.length) ? article._trendingKeywords.join(', ') : '—';
@@ -2611,7 +2611,6 @@ const APP_VERSION = 30;
                 '<div class="build-actions">' +
                 '<button class="btn btn-ghost" id="build-copy-btn">\uD83D\uDCCB Copy text</button>' +
                 '<button class="btn btn-ghost" id="build-copy-md-btn">\uD83D\uDCCB Copy as Markdown</button>' +
-                '<button class="btn btn-primary" id="build-regen-btn">\u21BB Regenerate</button>' +
                 '</div>' +
                 '<div class="build-sources-wrap">' +
                 '<div class="build-sources-header" id="build-sources-toggle">' +
@@ -2627,66 +2626,6 @@ const APP_VERSION = 30;
         const copyMdBtn = body.querySelector('#build-copy-md-btn');
         if (copyMdBtn)
             copyMdBtn.addEventListener('click', () => copyBuildArticle(article, 'md'));
-        const regenBtn = body.querySelector('#build-regen-btn');
-        if (regenBtn)
-            regenBtn.addEventListener('click', async () => {
-                // Show full-screen loading overlay while AI works
-                showLoadingOverlay('Preparing AI model\u2026');
-                if (!window.Rephrase) {
-                    console.warn('[Build] Rephrase module not loaded, falling back to publisher');
-                    hideLoadingOverlay();
-                    regenBtn.disabled = true;
-                    regenBtn.textContent = '\u23F3 Regenerating\u2026';
-                    openBuildModal(cluster.id).finally(() => {
-                        if (regenBtn) {
-                            regenBtn.disabled = false;
-                            regenBtn.textContent = '\u21BB Regenerate';
-                        }
-                    });
-                    return;
-                }
-                regenBtn.disabled = true;
-                regenBtn.textContent = '\u23F3 AI Generating\u2026';
-                const headlineInput = body.querySelector('#build-headline-input');
-                const textarea = body.querySelector('#build-article-textarea');
-                try {
-                    const currentHeadline = headlineInput ? headlineInput.value : '';
-                    const result = await window.Rephrase.buildArticle(cluster, currentHeadline, {
-                        onProgress: (p) => {
-                            updateLoadingStatus(p.message || 'Working\u2026');
-                            if (p.status === 'download-progress' && typeof p.progress === 'number') {
-                                showLoadingProgress(p.progress);
-                            }
-                        },
-                    });
-                    hideLoadingOverlay();
-                    // Parse: first line = headline, rest = body
-                    const lines = result.split('\n');
-                    const newHeadline = lines[0].replace(/^["\s]+|["\s]+$/g, '') || currentHeadline || 'Untitled';
-                    const bodyText = lines.slice(1).join('\n').trim().replace(/^["\s]+|["\s]+$/g, '');
-                    // Update the DOM
-                    if (headlineInput)
-                        headlineInput.value = newHeadline;
-                    if (textarea)
-                        textarea.value = (newHeadline + '\n\n' + bodyText).trim();
-                    article.headline = newHeadline;
-                    // Update the modal title
-                    const titleEl = $('#build-modal-title');
-                    if (titleEl)
-                        titleEl.textContent = newHeadline;
-                }
-                catch (err) {
-                    console.warn('[Build] AI regeneration failed, falling back to publisher:', err);
-                    hideLoadingOverlay();
-                    openBuildModal(cluster.id);
-                }
-                finally {
-                    if (regenBtn) {
-                        regenBtn.disabled = false;
-                        regenBtn.textContent = '\u21BB Regenerate';
-                    }
-                }
-            });
         // Wire collapsible sources toggle
         const sourcesToggle = body.querySelector('#build-sources-toggle');
         const sourcesList = body.querySelector('#build-sources-list');
@@ -2916,44 +2855,6 @@ const APP_VERSION = 30;
         const closeBtn = $('#publish-modal-close');
         if (closeBtn)
             closeBtn.onclick = () => { modal.classList.remove('open'); };
-        const regenTitleBtn = $('#publish-regen-title-btn');
-        if (regenTitleBtn)
-            regenTitleBtn.onclick = async () => {
-                const input = $('#publish-title-input');
-                if (!input || !input.value.trim())
-                    return;
-                showLoadingOverlay('Regenerating title\u2026');
-                try {
-                    const result = await window.Rephrase?.rewrite(input.value.trim(), { maxTokens: 60 });
-                    if (result)
-                        input.value = result.trim();
-                }
-                catch (err) {
-                    console.warn('[Publish] Title regen failed:', err);
-                }
-                finally {
-                    hideLoadingOverlay();
-                }
-            };
-        const regenDescBtn = $('#publish-regen-desc-btn');
-        if (regenDescBtn)
-            regenDescBtn.onclick = async () => {
-                const input = $('#publish-desc-textarea');
-                if (!input || !input.value.trim())
-                    return;
-                showLoadingOverlay('Regenerating description\u2026');
-                try {
-                    const result = await window.Rephrase?.rewrite(input.value.trim(), { maxTokens: 200 });
-                    if (result)
-                        input.value = result.trim();
-                }
-                catch (err) {
-                    console.warn('[Publish] Description regen failed:', err);
-                }
-                finally {
-                    hideLoadingOverlay();
-                }
-            };
         const configToggle = $('#publish-config-toggle');
         const configBody = $('#publish-config-body');
         const configArrow = $('#publish-config-arrow');
@@ -5737,7 +5638,8 @@ const APP_VERSION = 30;
     async function handleShareImage(article, btn, includeImage) {
         btn && btn.classList.add('btn-busy');
         try {
-            const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
+            const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+            const hasThumb = imgUrl && imgUrl.startsWith('http');
             const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
             const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
             let img = null;
