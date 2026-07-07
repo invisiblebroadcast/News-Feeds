@@ -1059,6 +1059,7 @@ const APP_VERSION = 30;
     const seen = new Set();
     const out = [];
     for (const a of articles) {
+      if (a._isPublished) { out.push(a); continue; }
       const src = a.source || '__none__';
       if (seen.has(src)) continue;
       seen.add(src);
@@ -1397,6 +1398,9 @@ const APP_VERSION = 30;
             '</button>' +
             '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
               '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg>' +
+            '</button>' +
+            '<button class="card-action-btn card-publish-btn" data-publish-article="' + encoded + '" title="Publish to blog">' +
+              '<span>&#x1F4E4;</span>' +
             '</button>' +
           '</div>' +
           '<div class="article-watermark">' +
@@ -2637,6 +2641,226 @@ const APP_VERSION = 30;
     if (modal) modal.classList.remove('open');
   }
 
+  /* ── Published articles storage ── */
+  const PUBLISHED_KEY = 'newsfeeds_published';
+  function getPublishedArticles() {
+    try { return JSON.parse(localStorage.getItem(PUBLISHED_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function savePublishedArticle(article) {
+    const list = getPublishedArticles();
+    list.unshift({ ...article, _publishedAt: new Date().toISOString() });
+    localStorage.setItem(PUBLISHED_KEY, JSON.stringify(list.slice(0, 200)));
+  }
+  function addPublishedToFeed(articles) {
+    const published = getPublishedArticles();
+    if (!published.length) return articles;
+    const pub = published.map(a => ({
+      title: a._pubTitle || a.title || '',
+      link: a._pubUrl || a.link || '',
+      summary: a._pubDesc || a.summary || '',
+      source: '📤 Published',
+      pubDate: a._publishedAt || a.pubDate || new Date().toISOString(),
+      feedUrl: 'published',
+      feedHint: 'politics',
+      imageUrl: '',
+      author: '',
+      guid: a._pubUrl || a.link || 'pub_' + Date.now(),
+      _isPublished: true
+    }));
+    return [...pub, ...articles];
+  }
+
+  const GITHUB_CONFIG_KEY = 'newsfeeds_github_config';
+  function loadGithubConfig() {
+    try { return JSON.parse(localStorage.getItem(GITHUB_CONFIG_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function saveGithubConfig(config) {
+    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(config));
+  }
+  async function githubRequest(path, method, body, token) {
+    const res = await fetch(`https://api.github.com${path}`, {
+      method: method || 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `GitHub API error: ${res.status}`);
+    return data;
+  }
+  function base64Encode(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+  function slugify(text) {
+    return text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 80) || 'post';
+  }
+  function formatUtcDate(date) {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    const hh = String(date.getUTCHours()).padStart(2, '0');
+    const mm = String(date.getUTCMinutes()).padStart(2, '0');
+    const ss = String(date.getUTCSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss} +0000`;
+  }
+
+  async function publishToGithub(title, description, sourceLink, sourceName) {
+    const config = loadGithubConfig();
+    if (!config.owner || !config.repo || !config.token) {
+      throw new Error('Please configure your GitHub repository in the settings above');
+    }
+    const now = new Date();
+    const dateStr = formatUtcDate(now);
+    const slug = slugify(title);
+    const filename = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}-${slug}.md`;
+    const filePath = `_posts/${filename}`;
+    const escapedTitle = (title || '').replace(/"/g, '\\"');
+    let desc = (description || '');
+    if (sourceLink) {
+      desc += `\n\n_Source: [${escHtml(sourceName || 'Original')}](${sourceLink})_`;
+    }
+    const content = '---\n' +
+      `title: "${escapedTitle}"\n` +
+      `date: ${dateStr}\n` +
+      `source: ${sourceName || ''}\n` +
+      `source_link: ${sourceLink || ''}\n` +
+      `layout: post\n` +
+      '---\n' +
+      '\n' +
+      desc;
+    const body = {
+      message: `New post: ${title}`,
+      content: base64Encode(content),
+      branch: 'main'
+    };
+    await githubRequest(`/repos/${config.owner}/${config.repo}/contents/${filePath}`, 'PUT', body, config.token);
+    const pagesUrl = `https://${config.owner}.github.io/${config.repo}/`;
+    const postUrl = pagesUrl + filename.replace('.md', '');
+    return { filename, path: filePath, url: postUrl, pagesUrl };
+  }
+
+  function openPublishModal(article) {
+    const modal = $('#publish-modal');
+    const body = $('#publish-modal-body');
+    if (!modal || !body) return;
+    modal.classList.add('open');
+    const titleInput = $('#publish-title-input');
+    const descInput = $('#publish-desc-textarea');
+    const sourceCheck = $('#publish-include-source');
+    const status = $('#publish-status');
+    if (titleInput) titleInput.value = article.subject?.display_name || article.title || '';
+    if (descInput) descInput.value = article.summary || '';
+    if (sourceCheck) sourceCheck.checked = true;
+    if (status) status.textContent = '';
+    const config = loadGithubConfig();
+    const ownerInput = $('#publish-github-owner');
+    const repoInput = $('#publish-github-repo');
+    const tokenInput = $('#publish-github-token');
+    if (ownerInput) ownerInput.value = config.owner || '';
+    if (repoInput) repoInput.value = config.repo || '';
+    if (tokenInput) tokenInput.value = config.token || '';
+
+    body._article = article;
+    const closeBtn = $('#publish-modal-close');
+    if (closeBtn) closeBtn.onclick = () => { modal.classList.remove('open'); };
+
+    const regenTitleBtn = $('#publish-regen-title-btn');
+    if (regenTitleBtn) regenTitleBtn.onclick = async () => {
+      const input = $('#publish-title-input');
+      if (!input || !input.value.trim()) return;
+      showLoadingOverlay('Regenerating title\u2026');
+      try {
+        const result = await window.Rephrase?.rewrite(input.value.trim(), { maxTokens: 60 });
+        if (result) input.value = result.trim();
+      } catch (err) {
+        console.warn('[Publish] Title regen failed:', err);
+      } finally {
+        hideLoadingOverlay();
+      }
+    };
+
+    const regenDescBtn = $('#publish-regen-desc-btn');
+    if (regenDescBtn) regenDescBtn.onclick = async () => {
+      const input = $('#publish-desc-textarea');
+      if (!input || !input.value.trim()) return;
+      showLoadingOverlay('Regenerating description\u2026');
+      try {
+        const result = await window.Rephrase?.rewrite(input.value.trim(), { maxTokens: 200 });
+        if (result) input.value = result.trim();
+      } catch (err) {
+        console.warn('[Publish] Description regen failed:', err);
+      } finally {
+        hideLoadingOverlay();
+      }
+    };
+
+    const configToggle = $('#publish-config-toggle');
+    const configBody = $('#publish-config-body');
+    const configArrow = $('#publish-config-arrow');
+    if (configToggle && configBody) {
+      configToggle.onclick = () => {
+        const open = configBody.style.display !== 'none';
+        configBody.style.display = open ? 'none' : 'block';
+        if (configArrow) configArrow.textContent = open ? '\u25B6' : '\u25BC';
+      };
+    }
+
+    const submitBtn = $('#publish-submit-btn');
+    if (submitBtn) submitBtn.onclick = async () => {
+      const titleInput = $('#publish-title-input');
+      const descInput = $('#publish-desc-textarea');
+      const sourceCheck = $('#publish-include-source');
+      const ownerInput = $('#publish-github-owner');
+      const repoInput = $('#publish-github-repo');
+      const tokenInput = $('#publish-github-token');
+      const status = $('#publish-status');
+      const art = body._article;
+      if (!titleInput || !descInput) return;
+      if (!titleInput.value.trim()) {
+        if (status) status.textContent = 'Please enter a title.';
+        return;
+      }
+      const sourceLink = sourceCheck?.checked ? art?.link : '';
+      const sourceName = art?.source || '';
+
+      saveGithubConfig({
+        owner: ownerInput?.value?.trim() || '',
+        repo: repoInput?.value?.trim() || '',
+        token: tokenInput?.value?.trim() || ''
+      });
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '\u23F3 Publishing\u2026'; }
+      if (status) status.textContent = 'Publishing to GitHub\u2026';
+      try {
+        const result = await publishToGithub(
+          titleInput.value.trim(),
+          descInput.value.trim(),
+          sourceLink,
+          sourceName
+        );
+        savePublishedArticle({
+          ...art,
+          _pubTitle: titleInput.value.trim(),
+          _pubDesc: descInput.value.trim(),
+          _pubUrl: result.url
+        });
+        if (status) {
+          status.innerHTML = '\u2705 Published! <a href="' + escHtml(result.url) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">View post</a>';
+        }
+        if (submitBtn) { submitBtn.textContent = '\u2705 Published'; }
+      } catch (err) {
+        console.warn('[Publish] Failed:', err);
+        if (status) status.textContent = '\u274c ' + (err.message || 'Publish failed');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '\uD83D\uDCE4 Publish'; }
+      }
+    };
+  }
+
   function forceExitToHome() {
     if (document.fullscreenElement || document.webkitFullscreenElement) {
       if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
@@ -3239,6 +3463,28 @@ const APP_VERSION = 30;
             groups[a.subcat].push(a);
             quickCount++;
           }
+        }
+      }
+
+      const published = getPublishedArticles();
+      if (published.length) {
+        const pubCat = currentSubcat === 'all' ? 'politics' : currentSubcat;
+        if (!groups[pubCat]) groups[pubCat] = [];
+        for (const p of published) {
+          groups[pubCat].push({
+            title: p._pubTitle || p.title || '',
+            link: p._pubUrl || p.link || '',
+            summary: p._pubDesc || p.summary || '',
+            source: '\uD83D\uDCE4 Published',
+            pubDate: p._publishedAt || p.pubDate || new Date().toISOString(),
+            feedUrl: 'published',
+            feedHint: pubCat,
+            imageUrl: '',
+            author: '',
+            guid: p._pubUrl || p.link || 'pub_' + Date.now() + Math.random(),
+            _isPublished: true,
+            subcat: pubCat
+          });
         }
       }
 
@@ -3865,6 +4111,28 @@ const APP_VERSION = 30;
         const cat = a.subcat;
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(a);
+      }
+    }
+
+    const published = getPublishedArticles();
+    if (published.length) {
+      const pubCat = currentSubcat === 'all' ? 'politics' : currentSubcat;
+      if (!groups[pubCat]) groups[pubCat] = [];
+      for (const p of published) {
+        groups[pubCat].push({
+          title: p._pubTitle || p.title || '',
+          link: p._pubUrl || p.link || '',
+          summary: p._pubDesc || p.summary || '',
+          source: '\uD83D\uDCE4 Published',
+          pubDate: p._publishedAt || p.pubDate || new Date().toISOString(),
+          feedUrl: 'published',
+          feedHint: pubCat,
+          imageUrl: '',
+          author: '',
+          guid: p._pubUrl || p.link || 'pub_' + Date.now() + Math.random(),
+          _isPublished: true,
+          subcat: pubCat
+        });
       }
     }
 
@@ -5964,6 +6232,14 @@ const APP_VERSION = 30;
         e.stopPropagation();
         if (el.articleModal && el.articleModal.classList.contains('open')) closeArticleModal();
         openReelsForArticle(decodeURIComponent(cardsBtn.dataset.cardsArticle));
+        return;
+      }
+      const publishBtn = e.target.closest('.card-publish-btn');
+      if (publishBtn) {
+        e.stopPropagation();
+        const url = decodeURIComponent(publishBtn.dataset.publishArticle);
+        const article = findArticleByLink(url);
+        if (article) openPublishModal(article);
         return;
       }
       const ae = e.target.closest('[data-article]');

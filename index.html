@@ -484,6 +484,55 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="publish-modal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Publish Article</h2>
+        <button class="modal-close" id="publish-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="publish-modal-body" style="padding:0;">
+        <div class="publish-field-wrap">
+          <label class="build-label">Title</label>
+          <input type="text" id="publish-title-input" class="build-headline" placeholder="Article title">
+          <button class="btn btn-ghost publish-regen-btn" id="publish-regen-title-btn" style="margin-top:6px;">&#x21BB; Regenerate Title</button>
+        </div>
+        <div class="publish-field-wrap">
+          <label class="build-label">Description</label>
+          <textarea id="publish-desc-textarea" class="build-textarea" rows="8" placeholder="Article description"></textarea>
+          <label class="publish-checkbox-label">
+            <input type="checkbox" id="publish-include-source" checked>
+            Include source link in description
+          </label>
+          <button class="btn btn-ghost publish-regen-btn" id="publish-regen-desc-btn" style="margin-top:6px;">&#x21BB; Regenerate Description</button>
+        </div>
+        <div class="publish-github-config">
+          <div class="build-sources-header" id="publish-config-toggle">
+            <label class="build-label">GitHub Configuration</label>
+            <span class="build-sources-arrow" id="publish-config-arrow">&#x25B6;</span>
+          </div>
+          <div class="publish-config-body" id="publish-config-body" style="display:none;">
+            <div class="publish-field">
+              <label>Repository Owner</label>
+              <input type="text" id="publish-github-owner" placeholder="your-username">
+            </div>
+            <div class="publish-field">
+              <label>Repository Name</label>
+              <input type="text" id="publish-github-repo" placeholder="your-repo">
+            </div>
+            <div class="publish-field">
+              <label>GitHub Token (classic, with repo scope)</label>
+              <input type="password" id="publish-github-token" placeholder="ghp_...">
+            </div>
+          </div>
+        </div>
+        <div class="build-actions" style="padding:14px 20px;">
+          <div id="publish-status" style="flex:1;font-size:0.85rem;color:var(--text-secondary);"></div>
+          <button class="btn btn-primary" id="publish-submit-btn">&#x1F4E4; Publish</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="custom-sources-modal">
     <div class="modal">
       <div class="modal-header">
@@ -804,24 +853,24 @@
   <script src="js/supabase-store.js"></script>
   <script src="js/feeds.js"></script>
   <script src="js/article-archive.js"></script>
-  <script src="js/fetcher.js?v=30"></script>
-  <script src="js/translator.js"></script>
-  <script src="js/subjects.js"></script>
-  <script src="js/analyzer.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/twitter-fetcher.js"></script>
-  <script src="js/scoring-engine.js"></script>
-  <script src="js/analyze-modal.js"></script>
-  <script src="js/filter-modal.js"></script>
-  <script src="js/categories-modal.js"></script>
-  <script src="js/embeddings.js?v=21"></script>
-  <script src="js/rephrase.js?v=30"></script>
-  <script src="js/clustering.js"></script>
-  <script src="js/publisher.js"></script>
-  <script src="js/shared-state.js"></script>
-  <script src="js/publish-modal.js"></script>
-  <script src="js/custom-sources-modal.js"></script>
-  <script src="js/app-home.js?v=30"></script>
+  <script src="js/fetcher.js?v=31"></script>
+  <script src="js/translator.js?v=31"></script>
+  <script src="js/subjects.js?v=31"></script>
+  <script src="js/analyzer.js?v=31"></script>
+  <script src="js/ai.js?v=31"></script>
+  <script src="js/twitter-fetcher.js?v=31"></script>
+  <script src="js/scoring-engine.js?v=31"></script>
+  <script src="js/analyze-modal.js?v=31"></script>
+  <script src="js/filter-modal.js?v=31"></script>
+  <script src="js/categories-modal.js?v=31"></script>
+  <script src="js/embeddings.js?v=31"></script>
+  <script src="js/rephrase.js?v=31"></script>
+  <script src="js/clustering.js?v=31"></script>
+  <script src="js/publisher.js?v=31"></script>
+  <script src="js/shared-state.js?v=31"></script>
+  <script src="js/publish-modal.js?v=31"></script>
+  <script src="js/custom-sources-modal.js?v=31"></script>
+  <script src="js/app-home.js?v=31"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
