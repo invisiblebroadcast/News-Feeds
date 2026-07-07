@@ -7657,7 +7657,7 @@ const APP_VERSION = 30;
                 client.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: window.location.origin,
+                        redirectTo: window.location.origin + '/News-Feeds/',
                         queryParams: {
                             prompt: 'select_account',
                             access_type: 'offline',
