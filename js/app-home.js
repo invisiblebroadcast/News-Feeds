@@ -3547,6 +3547,11 @@ const APP_VERSION = 30;
             console.log('[bindSourceFilter] new sourceFilter=' + sourceFilter);
             update();
             _persist();
+            // Abort any in-flight background fetch for the current scope
+            // so stale feed articles don't leak into the IB view.
+            const prevKey = scopeKey();
+            if (typeof abortBackgroundFetch === 'function')
+                abortBackgroundFetch(prevKey);
             const labels = { ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
             showLoadingOverlay(labels[sourceFilter] || 'Loading\u2026');
             console.log('[bindSourceFilter] overlay shown, calling displayCurrentSubcat');
@@ -3883,20 +3888,23 @@ const APP_VERSION = 30;
                     }
                 }
             }
-            if (sourceFilter !== 'feeds') {
-                const allPublished = getCachedPublished();
-                const matchingPub = allPublished.filter(p => {
-                    const scopeMatch = p._pubScope === currentScope;
-                    const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
-                    const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
-                    return scopeMatch && nationMatch && subcatMatch;
-                });
-                for (const p of matchingPub) {
-                    const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
-                    if (!groups[cat])
-                        groups[cat] = [];
-                    groups[cat].push(p);
-                }
+            // Always merge published articles into groups regardless of
+            // sourceFilter — getFilteredArticles handles the source
+            // filtering at display time.  If we only merged when
+            // sourceFilter !== 'feeds', switching to IB would show 0
+            // articles because groups never contained them.
+            const allPublished = getCachedPublished();
+            const matchingPub = allPublished.filter(p => {
+                const scopeMatch = p._pubScope === currentScope;
+                const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
+                const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
+                return scopeMatch && nationMatch && subcatMatch;
+            });
+            for (const p of matchingPub) {
+                const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
+                if (!groups[cat])
+                    groups[cat] = [];
+                groups[cat].push(p);
             }
             let allArticles = [];
             for (const cat of Object.keys(groups))
@@ -4044,7 +4052,7 @@ const APP_VERSION = 30;
             console.log('[displayCurrentSubcat] total=' + totalArticles + ', ib=' + ibArticles + ', feeds=' + feedArticles);
         }
         if (!cached) {
-            renderContent();
+            await renderContent();
             return;
         }
         updateStickyHeader();
@@ -4558,33 +4566,30 @@ const APP_VERSION = 30;
                 groups[cat].push(a);
             }
         }
-        if (sourceFilter !== 'feeds') {
-            const allPublished = getCachedPublished();
-            console.log('[_fetchAndCache] getCachedPublished returned ' + allPublished.length + ' articles, currentSubcat=' + currentSubcat + ', currentScope=' + currentScope);
-            if (allPublished.length > 0) {
-                console.log('[_fetchAndCache] first published article: _pubScope=' + allPublished[0]._pubScope + ', _pubCategory=' + allPublished[0]._pubCategory + ', _pubNation=' + allPublished[0]._pubNation);
-            }
-            const matchingPub = allPublished.filter(p => {
-                const scopeMatch = p._pubScope === currentScope;
-                const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
-                const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
-                return scopeMatch && nationMatch && subcatMatch;
-            });
-            console.log('[_fetchAndCache] matchingPub after filter: ' + matchingPub.length);
-            for (const p of matchingPub) {
-                const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
-                if (!groups[cat])
-                    groups[cat] = [];
-                groups[cat].push(p);
-            }
+        // Always merge published articles into groups regardless of
+        // sourceFilter — getFilteredArticles handles the source
+        // filtering at display time.
+        const allPublished = getCachedPublished();
+        console.log('[_fetchAndCache] getCachedPublished returned ' + allPublished.length + ' articles, currentSubcat=' + currentSubcat + ', currentScope=' + currentScope);
+        if (allPublished.length > 0) {
+            console.log('[_fetchAndCache] first published article: _pubScope=' + allPublished[0]._pubScope + ', _pubCategory=' + allPublished[0]._pubCategory + ', _pubNation=' + allPublished[0]._pubNation);
+        }
+        const matchingPub = allPublished.filter(p => {
+            const scopeMatch = p._pubScope === currentScope;
+            const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
+            const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
+            return scopeMatch && nationMatch && subcatMatch;
+        });
+        console.log('[_fetchAndCache] matchingPub after filter: ' + matchingPub.length);
+        for (const p of matchingPub) {
+            const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
+            if (!groups[cat])
+                groups[cat] = [];
+            groups[cat].push(p);
         }
         let allArticles = [];
         for (const cat of Object.keys(groups))
             allArticles.push(...groups[cat]);
-        if (sourceFilter === 'ib')
-            allArticles = allArticles.filter(a => a._isPublished);
-        else if (sourceFilter === 'feeds')
-            allArticles = allArticles.filter(a => !a._isPublished);
         const key = scopeKey();
         console.log('[_fetchAndCache] key=' + key + ', sourceFilter=' + sourceFilter + ', totalArticles=' + allArticles.length);
         const ibCount = allArticles.filter(a => a._isPublished).length;
@@ -8395,8 +8400,10 @@ const APP_VERSION = 30;
         // loaded (the archive looks up feed lang by URL).
         if (window.ArticleArchive && ArticleArchive.init)
             ArticleArchive.init();
-        // Pre-fetch published articles from Supabase
-        fetchPublishedArticlesFromSupabase();
+        // Pre-fetch published articles from Supabase — MUST await so
+        // getCachedPublished() returns data when renderContent() merges
+        // IB articles into groups.
+        await fetchPublishedArticlesFromSupabase();
         bindAuth();
         // AI model consent flow. First visit → prompt. Subsequent loads
         // with consent → background load (no overlay since the model is
