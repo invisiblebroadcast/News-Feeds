@@ -913,6 +913,12 @@ const APP_VERSION = 30;
       articles = subcatArticles.concat(allArticles);
     }
     if (!articles.length) return [];
+    // Apply source filter
+    if (sourceFilter === 'ib') {
+      articles = articles.filter(a => a._isPublished);
+    } else if (sourceFilter === 'feeds') {
+      articles = articles.filter(a => !a._isPublished);
+    }
     articles = FeedFetcher.deduplicate(articles);
     articles = FeedFetcher.sortByDate(articles);
     articles = applySearch(articles);
@@ -3307,14 +3313,15 @@ const APP_VERSION = 30;
   const MIN_VIEW_LOADING_MS = 220;
 
   function bindSourceFilter() {
-    const btn = document.getElementById('source-filter-btn');
-    if (!btn) return;
+    const toggle = document.getElementById('source-toggle-switch');
+    if (!toggle) return;
     const update = () => {
-      btn.className = 'btn btn-ghost btn-icon source-filter-btn filter-' + sourceFilter;
-      const titles = { ib: 'IB posts only', feeds: 'Feeds only' };
-      btn.title = titles[sourceFilter] || 'Toggle source filter';
+      const isIb = sourceFilter === 'ib';
+      toggle.setAttribute('aria-checked', isIb ? 'true' : 'false');
+      const wrap = document.getElementById('source-toggle-wrap');
+      if (wrap) wrap.title = isIb ? 'Showing IB posts — click to show Feeds' : 'Showing Feeds — click to show IB';
     };
-    btn.addEventListener('click', async () => {
+    toggle.addEventListener('click', async () => {
       console.log('[bindSourceFilter] clicked, current sourceFilter=' + sourceFilter);
       sourceFilter = sourceFilter === 'ib' ? 'feeds' : 'ib';
       console.log('[bindSourceFilter] new sourceFilter=' + sourceFilter);
@@ -3325,7 +3332,6 @@ const APP_VERSION = 30;
       console.log('[bindSourceFilter] overlay shown, calling displayCurrentSubcat');
       const t0 = performance ? performance.now() : Date.now();
       await displayCurrentSubcat();
-      // Keep overlay visible for at least 300ms so user can see it
       const elapsed = (performance ? performance.now() : Date.now()) - t0;
       const remaining = Math.max(0, 300 - elapsed);
       if (remaining > 0) await new Promise(r => setTimeout(r, remaining));

@@ -6106,6 +6106,50 @@ a.nav-icon-only svg {
   background: var(--bg-tertiary);
 }
 
+/* Source Toggle Switch */
+.source-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.source-toggle-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  user-select: none;
+}
+.source-toggle-label:first-child { color: var(--text-tertiary); }
+.source-toggle-label:last-child { color: var(--accent); font-weight: 600; }
+.source-toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+  outline: none;
+}
+.source-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+.source-toggle-switch[aria-checked="true"] {
+  background: var(--accent-green, #22c55e);
+}
+.source-toggle-switch[aria-checked="true"] .source-toggle-thumb {
+  transform: translateX(16px);
+}
+
 .source-filter-btn.filter-ib {
   color: var(--accent);
   background: var(--bg-tertiary);
