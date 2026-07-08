@@ -2710,7 +2710,7 @@ const APP_VERSION = 30;
           title: r.title || '',
           link: r.source_link || 'pub_' + r.id,
           summary: r.body || '',
-          source: r.source_name || 'Invisible Broadcast',
+          source: 'Invisible Broadcast',
           pubDate: r.date_published || r.created_at || new Date().toISOString(),
           feedUrl: 'published',
           feedHint: r.category || 'all',
@@ -2722,7 +2722,9 @@ const APP_VERSION = 30;
           _pubNation: r.nation || '',
           _pubCategory: r.category || 'all',
           _pubUserEmail: r.user_email || '',
-          _pubId: r.id
+          _pubId: r.id,
+          _pubSourceName: r.source_name || '',
+          _pubSourceLink: r.source_link || ''
         }));
         return _publishedCache;
       } catch (err) {
@@ -6045,9 +6047,10 @@ const APP_VERSION = 30;
     const title = cleanTitleForTopic(article.title);
     const summary = cleanSummary(stripHtml(article.summary || '')).trim();
     const body = await buildRephrasedBody(title, summary);
-    // Build source line: clean source name + article link
-    const sourceClean = (article.source || '').trim();
-    const sourceLine = sourceClean ? sourceClean + '\n' + (article.link || '') : (article.link || '');
+    // Build source line for copied text
+    const sourceName = article._pubSourceName || '';
+    const sourceLink = article._pubSourceLink || article.link || '';
+    const sourceLine = sourceName ? sourceName + '\n' + sourceLink : (sourceLink || '');
     const hashtags = buildHashtags(article).join(' ');
     const footer = sourceLine ? sourceLine + '\n\n' + hashtags : hashtags;
     if (!body) {
