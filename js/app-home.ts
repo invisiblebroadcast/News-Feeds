@@ -833,15 +833,18 @@ const APP_VERSION = 30;
 
   async function renderCurrentSection() {
     const msg = 'Loading ' + currentSection + '…';
+    console.log('[renderCurrentSection] section=' + currentSection + ', sourceFilter=' + sourceFilter);
     setTopListStatus(msg);
     showLoadingInline(msg);
     await new Promise(r => setTimeout(r, 0));
     const t0 = performance ? performance.now() : Date.now();
     try {
       if (currentSection === 'topics') {
-        // Use full-screen overlay for Topics (clustering can freeze)
+        console.log('[renderCurrentSection] showing topics overlay');
         showLoadingOverlay('Loading topics\u2026');
+        console.log('[renderCurrentSection] overlay shown, calling renderTopicsView');
         await renderTopicsView();
+        console.log('[renderCurrentSection] renderTopicsView done, hiding overlay');
         hideLoadingOverlay();
       } else if (currentSection === 'conflicts') {
         await renderConflictsView();
@@ -897,6 +900,7 @@ const APP_VERSION = 30;
   /* ── Subcategory Tabs ── */
   function getFilteredArticles(subcat, cached) {
     if (!cached) return [];
+    console.log('[getFilteredArticles] subcat=' + subcat + ', sourceFilter=' + sourceFilter + ', groups keys=' + Object.keys(cached.groups).join(','));
     let articles;
     if (subcat === 'all') {
       articles = [];
@@ -915,6 +919,7 @@ const APP_VERSION = 30;
     articles = applyFilters(articles);
     const sortMode = currentSort || 'date-desc';
     articles = applySort(articles, sortMode);
+    console.log('[getFilteredArticles] returning ' + articles.length + ' articles');
     return articles;
   }
 
@@ -2693,6 +2698,7 @@ const APP_VERSION = 30;
           .select('*')
           .order('date_published', { ascending: false });
         if (error) throw error;
+        console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
         _publishedCache = (data || []).map(r => ({
           id: r.id,
           title: r.title || '',
@@ -2739,8 +2745,12 @@ const APP_VERSION = 30;
 
   function addPublishedToFeed(articles) {
     const published = getCachedPublished();
+    console.log('[addPublishedToFeed] sourceFilter=' + sourceFilter + ', published=' + published.length + ', articles=' + articles.length);
     if (!published.length || sourceFilter === 'feeds') return articles;
-    if (sourceFilter === 'ib') return published;
+    if (sourceFilter === 'ib') {
+      console.log('[addPublishedToFeed] returning published only:', published.length);
+      return published;
+    }
     return [...published, ...articles];
   }
 
@@ -3305,12 +3315,16 @@ const APP_VERSION = 30;
       btn.title = titles[sourceFilter] || 'Toggle source filter';
     };
     btn.addEventListener('click', async () => {
+      console.log('[bindSourceFilter] clicked, current sourceFilter=' + sourceFilter);
       sourceFilter = sourceFilter === 'ib' ? 'feeds' : 'ib';
+      console.log('[bindSourceFilter] new sourceFilter=' + sourceFilter);
       update();
       _persist();
       const labels = { ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
       showLoadingOverlay(labels[sourceFilter] || 'Loading\u2026');
+      console.log('[bindSourceFilter] overlay shown, calling displayCurrentSubcat');
       await displayCurrentSubcat();
+      console.log('[bindSourceFilter] displayCurrentSubcat done, hiding overlay');
       hideLoadingOverlay();
     });
     update();
@@ -3780,6 +3794,13 @@ const APP_VERSION = 30;
   async function displayCurrentSubcat() {
     const key = scopeKey();
     const cached = scopeCache[key];
+    console.log('[displayCurrentSubcat] key=' + key + ', sourceFilter=' + sourceFilter + ', cached=' + !!cached);
+    if (cached) {
+      const totalArticles = cached.articles ? cached.articles.length : 0;
+      const ibArticles = cached.articles ? cached.articles.filter(a => a._isPublished).length : 0;
+      const feedArticles = cached.articles ? cached.articles.filter(a => !a._isPublished).length : 0;
+      console.log('[displayCurrentSubcat] total=' + totalArticles + ', ib=' + ibArticles + ', feeds=' + feedArticles);
+    }
     if (!cached) { renderContent(); return; }
 
     updateStickyHeader();
@@ -4292,6 +4313,10 @@ const APP_VERSION = 30;
     else if (sourceFilter === 'feeds') allArticles = allArticles.filter(a => !a._isPublished);
 
     const key = scopeKey();
+    console.log('[_fetchAndCache] key=' + key + ', sourceFilter=' + sourceFilter + ', totalArticles=' + allArticles.length);
+    const ibCount = allArticles.filter(a => a._isPublished).length;
+    const feedCount = allArticles.filter(a => !a._isPublished).length;
+    console.log('[_fetchAndCache] after filter: ib=' + ibCount + ', feeds=' + feedCount);
     scopeCache[key] = { articles: allArticles, groups };
     liveAllLoaded = false;
     loadAllState = 'idle';
@@ -7562,12 +7587,18 @@ const APP_VERSION = 30;
 
   /* ── Loading Overlay ── */
   function showLoadingOverlay(status) {
+    console.log('[showLoadingOverlay] status=' + status);
     const overlay = $('#app-loading-overlay');
     const sp = $('#app-loading-spinner');
     const statusEl = $('#app-loading-status');
     const progressWrap = $('#app-loading-progress-wrap');
     const confirm = $('#app-loading-confirm');
-    if (overlay) overlay.classList.add('open');
+    if (overlay) {
+      console.log('[showLoadingOverlay] overlay element found, adding open class');
+      overlay.classList.add('open');
+    } else {
+      console.warn('[showLoadingOverlay] #app-loading-overlay not found in DOM!');
+    }
     if (sp) sp.style.display = 'block';
     if (statusEl) statusEl.textContent = status || 'Loading\u2026';
     if (progressWrap) progressWrap.style.display = 'none';
@@ -7590,6 +7621,7 @@ const APP_VERSION = 30;
     if (confirm) confirm.style.display = 'flex';
   }
   function hideLoadingOverlay() {
+    console.log('[hideLoadingOverlay] removing open class');
     const overlay = $('#app-loading-overlay');
     if (overlay) overlay.classList.remove('open');
   }
