@@ -2852,7 +2852,7 @@ const APP_VERSION = 30;
                     title: r.title || '',
                     link: r.source_link || 'pub_' + r.id,
                     summary: r.body || '',
-                    source: 'Invisible Broadcast',
+                    source: r.source_name || 'Invisible Broadcast',
                     pubDate: r.date_published || r.created_at || new Date().toISOString(),
                     feedUrl: 'published',
                     feedHint: r.category || 'all',
