@@ -3541,7 +3541,13 @@ const APP_VERSION = 30;
             const labels = { ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
             showLoadingOverlay(labels[sourceFilter] || 'Loading\u2026');
             console.log('[bindSourceFilter] overlay shown, calling displayCurrentSubcat');
+            const t0 = performance ? performance.now() : Date.now();
             await displayCurrentSubcat();
+            // Keep overlay visible for at least 300ms so user can see it
+            const elapsed = (performance ? performance.now() : Date.now()) - t0;
+            const remaining = Math.max(0, 300 - elapsed);
+            if (remaining > 0)
+                await new Promise(r => setTimeout(r, remaining));
             console.log('[bindSourceFilter] displayCurrentSubcat done, hiding overlay');
             hideLoadingOverlay();
         });
@@ -4546,12 +4552,17 @@ const APP_VERSION = 30;
         }
         if (sourceFilter !== 'feeds') {
             const allPublished = getCachedPublished();
+            console.log('[_fetchAndCache] getCachedPublished returned ' + allPublished.length + ' articles, currentSubcat=' + currentSubcat + ', currentScope=' + currentScope);
+            if (allPublished.length > 0) {
+                console.log('[_fetchAndCache] first published article: _pubScope=' + allPublished[0]._pubScope + ', _pubCategory=' + allPublished[0]._pubCategory + ', _pubNation=' + allPublished[0]._pubNation);
+            }
             const matchingPub = allPublished.filter(p => {
                 const scopeMatch = p._pubScope === currentScope;
                 const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
                 const subcatMatch = currentSubcat === 'all' || p._pubCategory === 'all' || p._pubCategory === currentSubcat;
                 return scopeMatch && nationMatch && subcatMatch;
             });
+            console.log('[_fetchAndCache] matchingPub after filter: ' + matchingPub.length);
             for (const p of matchingPub) {
                 const cat = p._pubCategory === 'all' ? (currentSubcat === 'all' ? 'general' : currentSubcat) : p._pubCategory;
                 if (!groups[cat])
