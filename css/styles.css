@@ -6292,6 +6292,51 @@ a.nav-icon-only svg {
   overflow: hidden;
 }
 
+/* ─── Quote Card ─── */
+.quote-card .article-body {
+  flex: 1;
+}
+.quote-block {
+  position: relative;
+  padding-left: 0;
+}
+.quote-open {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--accent, #ff2929);
+  line-height: 1;
+  display: block;
+  margin-bottom: -8px;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.quote-text {
+  font-style: italic;
+  font-size: var(--font-size-base) !important;
+  -webkit-line-clamp: unset !important;
+  overflow: visible !important;
+  display: block !important;
+  -webkit-box-orient: unset !important;
+}
+.quote-from {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+.quote-from-label {
+  color: var(--text-tertiary);
+}
+.quote-watermark {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  opacity: 0.6;
+}
+
 @media (max-width: 767px) {
   .article-card {
     flex-direction: column;

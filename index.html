@@ -813,6 +813,7 @@
         <div class="publish-tabs">
           <button class="publish-tab active" data-publish-tab="youtube">YouTube</button>
           <button class="publish-tab" data-publish-tab="audio">Audio</button>
+          <button class="publish-tab" data-publish-tab="quotes">Quotes</button>
         </div>
 
         <!-- YouTube Tab -->
@@ -862,6 +863,39 @@
         <!-- Audio Tab (placeholder) -->
         <div class="publish-pane" data-publish-pane="audio">
           <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;padding:40px 0;">Audio upload and transcription coming soon.</p>
+        </div>
+
+        <!-- Quotes Tab -->
+        <div class="publish-pane" data-publish-pane="quotes">
+          <div class="publish-field">
+            <label for="quote-desc">Quote Text</label>
+            <textarea id="quote-desc" placeholder="Paste or type the quote here..."></textarea>
+          </div>
+          <div class="publish-field">
+            <label for="quote-from">Quote From (who said/wrote this)</label>
+            <input type="text" id="quote-from" placeholder="e.g. Naval Ravikant, Steve Jobs">
+          </div>
+          <div class="publish-field">
+            <label for="quote-source-link">Source Link (optional)</label>
+            <input type="url" id="quote-source-link" placeholder="https://twitter.com/... or https://instagram.com/...">
+          </div>
+
+          <!-- GitHub Configuration (collapsible) -->
+          <details class="publish-github-config" id="quote-publish-github-config">
+            <summary>GitHub Configuration</summary>
+            <div class="publish-github-fields">
+              <input type="text" id="quote-publish-github-owner" placeholder="GitHub username / org">
+              <input type="text" id="quote-publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
+              <input type="password" id="quote-publish-github-token" placeholder="Personal access token (classic, repo scope)">
+              <p style="font-size:0.72rem;color:var(--text-tertiary);margin:4px 0 0;">Settings stored locally. Token needs <code>repo</code> scope.</p>
+            </div>
+          </details>
+
+          <div class="publish-msg" id="quote-publish-msg"></div>
+
+          <div class="publish-actions">
+            <button class="btn btn-primary" id="quote-publish-btn">Publish Quote</button>
+          </div>
         </div>
       </div>
     </div>

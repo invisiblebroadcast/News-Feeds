@@ -296,6 +296,53 @@ const PublishModal = (() => {
     if (type) el.classList.add(type);
   }
 
+  /* ── Quotes: publish to Supabase ── */
+  async function handlePublishQuote() {
+    const desc = $('#quote-desc')?.value?.trim();
+    const quoteFrom = $('#quote-from')?.value?.trim();
+    const sourceLink = $('#quote-source-link')?.value?.trim();
+    const msg = $('#quote-publish-msg');
+
+    if (!currentUser) { setMsg(msg, 'Please sign in first', 'error'); return; }
+    if (!desc) { setMsg(msg, 'Please enter the quote text', 'error'); return; }
+
+    const publishBtn = $('#quote-publish-btn');
+    if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Publishing\u2026'; }
+
+    try {
+      const client = window.SupabaseStore && SupabaseStore.getClient();
+      if (!client) throw new Error('Supabase client not available');
+
+      const { error } = await client
+        .from('published_articles')
+        .insert({
+          user_id: currentUser.id,
+          user_email: currentUser.email || '',
+          author: currentUser.email || '',
+          title: '',
+          body: desc,
+          source_name: quoteFrom || '',
+          source_link: sourceLink || '',
+          scope: 'global',
+          nation: '',
+          category: 'all',
+          type: 'quote',
+          quote_from: quoteFrom || ''
+        });
+
+      if (error) throw error;
+
+      setMsg(msg, 'Quote published successfully!', 'success');
+      if (quoteFrom) $('#quote-from').value = '';
+      if ($('#quote-desc')) $('#quote-desc').value = '';
+      if ($('#quote-source-link')) $('#quote-source-link').value = '';
+    } catch (e) {
+      setMsg(msg, e.message || 'Publish failed', 'error');
+    } finally {
+      if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = 'Publish Quote'; }
+    }
+  }
+
   async function handleFetchTranscript() {
     const urlInput = $('#publish-url');
     const titleInput = $('#publish-title');
@@ -437,6 +484,13 @@ const PublishModal = (() => {
       });
     }
 
+    // Quotes tab: publish button
+    const quotePublishBtn = $('#quote-publish-btn');
+    if (quotePublishBtn) {
+      quotePublishBtn.addEventListener('click', handlePublishQuote);
+    }
+
+    // Sync GitHub config between YouTube and Quotes tabs
     ['yt-publish-github-owner', 'yt-publish-github-repo', 'yt-publish-github-token'].forEach(id => {
       const input = $(`#${id}`);
       if (input) {

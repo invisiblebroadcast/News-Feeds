@@ -1414,6 +1414,35 @@ const APP_VERSION = 30;
                     }).join('') +
                     '</div>';
         }
+        // Quote type: different card layout
+        if (article._pubType === 'quote') {
+            const quoteFrom = article._pubQuoteFrom || '';
+            return '<article class="article-card quote-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
+                '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" data-quote-from="' + escAttr(quoteFrom) + '" title="Share as Image">&#x21AA;</button>' +
+                '<div class="article-body">' +
+                '<div class="quote-block">' +
+                '<span class="quote-open">&ldquo;</span>' +
+                '<p class="article-summary quote-text">' + escHtml(article.summary || '') + '</p>' +
+                '</div>' +
+                (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">—</span> ' + escHtml(quoteFrom) + '</div>' : '') +
+                '<div class="quote-watermark">Invisible Broadcast</div>' +
+                '<div class="article-meta">' +
+                '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
+                '</div>' +
+                '<div class="card-actions">' +
+                '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
+                '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg>' +
+                '</button>' +
+                (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-edit-btn" data-publish-article="' + encoded + '" title="Edit quote">' +
+                    '<span>&#x270F;</span>' +
+                    '</button>' : '') +
+                (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-delete-btn" data-publish-article="' + encoded + '" title="Delete quote">' +
+                    '<span>&#x1F5D1;</span>' +
+                    '</button>' : '') +
+                '</div>' +
+                '</div>' +
+                '</article>';
+        }
         return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
             '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
             thumbHtml +
@@ -1734,24 +1763,40 @@ const APP_VERSION = 30;
             }
         }
         const title = cardEl.querySelector('.reels-title');
-        if (title)
-            title.textContent = article.title;
         const source = cardEl.querySelector('.reels-source');
-        if (source)
-            source.textContent = article.source;
         const date = cardEl.querySelector('.reels-date');
-        if (date)
-            date.textContent = formatDateShort(article.pubDate);
         const summaryText = cleanSummary(stripHtml(article.summary));
         const summary = cardEl.querySelector('.reels-summary');
         const summaryWrap = cardEl.querySelector('.reels-summary-wrap');
         const showDesc = Settings.get('showDescription');
-        if (summary) {
-            summary.textContent = showDesc ? summaryText : '';
+        // Quote type: show quote text with opening quote mark, hide title
+        if (article._pubType === 'quote') {
+            if (title) {
+                title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;">\u201C</span>';
+            }
+            const quoteFrom = article._pubQuoteFrom || '';
+            if (summary) {
+                summary.textContent = (showDesc ? summaryText : '') + (quoteFrom ? '\n\n\u2014 ' + quoteFrom : '');
+            }
+            if (summaryWrap)
+                summaryWrap.style.display = showDesc ? '' : 'none';
+            if (source)
+                source.textContent = 'Invisible Broadcast';
         }
-        if (summaryWrap) {
-            summaryWrap.style.display = showDesc ? '' : 'none';
+        else {
+            if (title)
+                title.textContent = article.title;
+            if (source)
+                source.textContent = article.source;
+            if (summary) {
+                summary.textContent = showDesc ? summaryText : '';
+            }
+            if (summaryWrap) {
+                summaryWrap.style.display = showDesc ? '' : 'none';
+            }
         }
+        if (date)
+            date.textContent = formatDateShort(article.pubDate);
         const ad = getArticleData(article.link);
         const flagEl = cardEl.querySelector('.reels-flag');
         if (flagEl) {
@@ -2865,6 +2910,8 @@ const APP_VERSION = 30;
                     _pubCategory: r.category || 'all',
                     _pubUserEmail: r.user_email || '',
                     _pubId: r.id,
+                    _pubType: r.type || 'feeds',
+                    _pubQuoteFrom: r.quote_from || '',
                     _pubSourceName: r.source_name || '',
                     _pubSourceLink: r.source_link || ''
                 }));
@@ -6116,6 +6163,97 @@ const APP_VERSION = 30;
             const ctx = c.getContext('2d');
             ctx.imageSmoothingQuality = 'high';
             ctx.scale(dpr, dpr);
+            // ── Quote type: separate card layout ──
+            if (article._pubType === 'quote') {
+                const quoteFrom = article._pubQuoteFrom || '';
+                const quoteText = article.summary || article.title || '';
+                const quoteFontSize = Math.round(W * 0.042);
+                const quoteLineH = Math.round(quoteFontSize * 1.55);
+                const fromFontSize = Math.round(W * 0.03);
+                const wmFontSize = Math.round(W * 0.02);
+                const quoteOpenSize = Math.round(W * 0.18);
+                // Measure quote text
+                ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
+                const qLines = wrapText(ctx, quoteText, 0, 0, textW, quoteLineH);
+                const qH = qLines * quoteLineH;
+                // Height: opening quote + quote text + from + gap + watermark
+                const fromH = quoteFrom ? fromFontSize : 0;
+                const totalH = quoteOpenSize + qH + medGap + fromH + medGap + wmFontSize + Math.round(W * 0.06);
+                const canvasH = Math.max(1350, totalH + Math.round(W * 0.08));
+                c.height = canvasH * dpr;
+                ctx.scale(dpr, dpr);
+                ctx.imageSmoothingQuality = 'high';
+                // Black background
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, W, canvasH);
+                let y = Math.round((canvasH - totalH) / 2);
+                // Big red opening quote
+                ctx.fillStyle = '#ff2929';
+                ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText('\u201C', PAD, y + quoteOpenSize);
+                y += quoteOpenSize;
+                // Quote text
+                ctx.fillStyle = '#e6edf3';
+                ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
+                wrapText(ctx, quoteText, PAD, y + quoteLineH, textW, quoteLineH);
+                y += qH + medGap;
+                // Quote from
+                if (quoteFrom) {
+                    ctx.fillStyle = 'rgba(230, 237, 243, 0.85)';
+                    ctx.font = '600 ' + fromFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    ctx.textBaseline = 'alphabetic';
+                    ctx.fillText('\u2014 ' + quoteFrom, PAD, y + fromFontSize);
+                    y += fromH + medGap;
+                }
+                // Grey "Invisible Broadcast" watermark
+                ctx.fillStyle = 'rgba(255,255,255,0.32)';
+                ctx.font = '700 ' + wmFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText('INVISIBLE BROADCAST', PAD, y + wmFontSize);
+                const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+                if (!blob) {
+                    btn && btn.classList.remove('btn-busy');
+                    handleShare(article.link, article.title, article.source);
+                    return;
+                }
+                // Build caption for quote
+                const caption = buildQuoteCaption(article);
+                try {
+                    await navigator.clipboard.writeText(caption);
+                }
+                catch { }
+                const SHARE_MAX_BYTES = 5 * 1024 * 1024;
+                const tooLargeForShare = blob.size > SHARE_MAX_BYTES;
+                const file = new File([blob], 'invisible-broadcast-quote.png', { type: 'image/png' });
+                if (navigator.share && !tooLargeForShare) {
+                    try {
+                        await navigator.share({ files: [file], title: 'Quote', text: caption });
+                        btn && btn.classList.remove('btn-busy');
+                        flashCopyButton(btn, 'Caption copied — share opened');
+                        return;
+                    }
+                    catch (err) {
+                        if (err && err.name === 'AbortError') {
+                            btn && btn.classList.remove('btn-busy');
+                            return;
+                        }
+                    }
+                }
+                try {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'invisible-broadcast-quote.png';
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    flashCopyButton(btn, 'Caption copied — image downloaded');
+                }
+                catch {
+                    flashCopyButton(btn, 'Caption copied');
+                }
+                btn && btn.classList.remove('btn-busy');
+                return;
+            }
             // Measure title and full summary
             ctx.font = 'bold ' + titleFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
             const titleLines = wrapText(ctx, article.title || '', 0, 0, textW, titleLineH);
@@ -6380,6 +6518,31 @@ const APP_VERSION = 30;
                 '\n\n' + footer;
         }
         return body + '\n\n' + footer;
+    }
+    // Build caption for Quote type posts. Format:
+    // "quote text"
+    // — quote_from
+    //
+    // Invisible Broadcast
+    // source link
+    // #invisiblebroadcast
+    function buildQuoteCaption(article) {
+        if (!article)
+            return '';
+        const quoteText = (article.summary || '').trim();
+        const quoteFrom = article._pubQuoteFrom || '';
+        const sourceLink = article._pubSourceLink || article.link || '';
+        const lines = [];
+        lines.push('\u201C' + quoteText + '\u201D');
+        if (quoteFrom)
+            lines.push('\u2014 ' + quoteFrom);
+        lines.push('');
+        lines.push('Invisible Broadcast');
+        if (sourceLink)
+            lines.push(sourceLink);
+        lines.push('');
+        lines.push('#invisiblebroadcast');
+        return lines.join('\n');
     }
     // ── Rephraser internals (no AI, all rule-based + TF.js) ──
     // Clean a title for use as the topic in the caption.
