@@ -2852,7 +2852,7 @@ const APP_VERSION = 30;
                     title: r.title || '',
                     link: r.source_link || 'pub_' + r.id,
                     summary: r.body || '',
-                    source: 'IB · ' + (r.author || r.user_email || 'Published'),
+                    source: 'Invisible Broadcast',
                     pubDate: r.date_published || r.created_at || new Date().toISOString(),
                     feedUrl: 'published',
                     feedHint: r.category || 'all',
@@ -6368,7 +6368,7 @@ const APP_VERSION = 30;
         const summary = cleanSummary(stripHtml(article.summary || '')).trim();
         const body = await buildRephrasedBody(title, summary);
         // Build source line: clean source name + article link
-        const sourceClean = (article.source || '').replace(/^IB\s*·\s*/, '').trim();
+        const sourceClean = (article.source || '').trim();
         const sourceLine = sourceClean ? sourceClean + '\n' + (article.link || '') : (article.link || '');
         const hashtags = buildHashtags(article).join(' ');
         const footer = sourceLine ? sourceLine + '\n\n' + hashtags : hashtags;
