@@ -834,29 +834,10 @@
             <textarea id="publish-desc" placeholder="Post content..."></textarea>
           </div>
 
-          <!-- GitHub Configuration (collapsible) -->
-          <details class="publish-github-config" id="yt-publish-github-config">
-            <summary>GitHub Configuration</summary>
-            <div class="publish-github-fields">
-              <input type="text" id="yt-publish-github-owner" placeholder="GitHub username / org">
-              <input type="text" id="yt-publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
-              <input type="password" id="yt-publish-github-token" placeholder="Personal access token (classic, repo scope)">
-              <p style="font-size:0.72rem;color:var(--text-tertiary);margin:4px 0 0;">Settings stored locally. Token needs <code>repo</code> scope.</p>
-            </div>
-          </details>
-
           <div class="publish-msg" id="publish-msg"></div>
 
           <div class="publish-actions">
             <button class="btn btn-primary" id="yt-publish-btn">Publish</button>
-          </div>
-
-          <!-- My Posts Section -->
-          <div class="my-posts-section" id="my-posts-section">
-            <div class="my-posts-header">My Published Posts</div>
-            <div class="my-posts-list" id="my-posts-list">
-              <div style="color:var(--text-tertiary);font-size:0.82rem;">Configure GitHub to see your posts.</div>
-            </div>
           </div>
         </div>
 
@@ -879,17 +860,14 @@
             <label for="quote-source-link">Source Link (optional)</label>
             <input type="url" id="quote-source-link" placeholder="https://twitter.com/... or https://instagram.com/...">
           </div>
-
-          <!-- GitHub Configuration (collapsible) -->
-          <details class="publish-github-config" id="quote-publish-github-config">
-            <summary>GitHub Configuration</summary>
-            <div class="publish-github-fields">
-              <input type="text" id="quote-publish-github-owner" placeholder="GitHub username / org">
-              <input type="text" id="quote-publish-github-repo" placeholder="Repository name (e.g. username.github.io)">
-              <input type="password" id="quote-publish-github-token" placeholder="Personal access token (classic, repo scope)">
-              <p style="font-size:0.72rem;color:var(--text-tertiary);margin:4px 0 0;">Settings stored locally. Token needs <code>repo</code> scope.</p>
+          <div class="publish-field">
+            <label for="quote-image">Background Image (optional, PNG/JPG, max 2MB)</label>
+            <input type="file" id="quote-image" accept="image/png,image/jpeg">
+            <div id="quote-image-preview" style="display:none;margin-top:8px;">
+              <img id="quote-image-preview-img" style="max-width:100%;max-height:120px;border-radius:4px;">
+              <button class="btn btn-ghost" id="quote-image-remove" style="font-size:0.75rem;margin-top:4px;">Remove</button>
             </div>
-          </details>
+          </div>
 
           <div class="publish-msg" id="quote-publish-msg"></div>
 

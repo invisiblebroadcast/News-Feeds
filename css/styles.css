@@ -6296,6 +6296,21 @@ a.nav-icon-only svg {
 .quote-card .article-body {
   flex: 1;
 }
+.quote-card-bg {
+  position: relative;
+  overflow: hidden;
+}
+.quote-card-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 50%, rgba(0,0,0,0.95) 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+.quote-card-bg .article-body {
+  position: relative;
+  z-index: 1;
+}
 .quote-block {
   position: relative;
   padding-left: 0;

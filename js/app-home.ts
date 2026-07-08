@@ -1390,14 +1390,17 @@ const APP_VERSION = 30;
     // Quote type: different card layout
     if (article._pubType === 'quote') {
       const quoteFrom = article._pubQuoteFrom || '';
-      return '<article class="article-card quote-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
+      const bgUrl = article.imageUrl || '';
+      const bgStyle = bgUrl ? 'background-image:url(' + escAttr(bgUrl) + ');background-size:cover;background-position:center;' : '';
+      return '<article class="article-card quote-card' + (bgUrl ? ' quote-card-bg' : '') + '" style="animation-delay:' + ((index % 10) * 0.04) + 's;' + bgStyle + '">' +
+        (bgUrl ? '<div class="quote-card-bg-overlay"></div>' : '') +
         '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" data-quote-from="' + escAttr(quoteFrom) + '" title="Share as Image">&#x21AA;</button>' +
         '<div class="article-body">' +
           '<div class="quote-block">' +
             '<span class="quote-open">&ldquo;</span>' +
             '<p class="article-summary quote-text">' + escHtml(article.summary || '') + '</p>' +
           '</div>' +
-          (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">—</span> ' + escHtml(quoteFrom) + '</div>' : '') +
+          (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
           '<div class="quote-watermark">Invisible Broadcast</div>' +
           '<div class="article-meta">' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
@@ -2749,29 +2752,37 @@ const APP_VERSION = 30;
           .order('date_published', { ascending: false });
         if (error) throw error;
         console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
-        _publishedCache = (data || []).map(r => ({
-          id: r.id,
-          title: r.title || '',
-          link: r.source_link || 'pub_' + r.id,
-          summary: r.body || '',
-          source: 'Invisible Broadcast',
-          pubDate: r.date_published || r.created_at || new Date().toISOString(),
-          feedUrl: 'published',
-          feedHint: r.category || 'all',
-          imageUrl: '',
-          author: r.author || r.user_email || '',
-          guid: 'pub_' + r.id,
-          _isPublished: true,
-          _pubScope: r.scope || 'global',
-          _pubNation: r.nation || '',
-          _pubCategory: r.category || 'all',
-          _pubUserEmail: r.user_email || '',
-          _pubId: r.id,
-          _pubType: r.type || 'feeds',
-          _pubQuoteFrom: r.quote_from || '',
-          _pubSourceName: r.source_name || '',
-          _pubSourceLink: r.source_link || ''
-        }));
+        _publishedCache = (data || []).map(r => {
+          // Build image URL from post_id if present
+          let imageUrl = '';
+          if (r.post_id && r.type === 'quote') {
+            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + r.post_id + '.jpg';
+          }
+          return {
+            id: r.id,
+            title: r.title || '',
+            link: r.source_link || 'pub_' + r.id,
+            summary: r.body || '',
+            source: 'Invisible Broadcast',
+            pubDate: r.date_published || r.created_at || new Date().toISOString(),
+            feedUrl: 'published',
+            feedHint: r.category || 'all',
+            imageUrl: imageUrl,
+            author: r.author || r.user_email || '',
+            guid: 'pub_' + r.id,
+            _isPublished: true,
+            _pubScope: r.scope || 'global',
+            _pubNation: r.nation || '',
+            _pubCategory: r.category || 'all',
+            _pubUserEmail: r.user_email || '',
+            _pubId: r.id,
+            _pubPostId: r.post_id || null,
+            _pubType: r.type || 'feeds',
+            _pubQuoteFrom: r.quote_from || '',
+            _pubSourceName: r.source_name || '',
+            _pubSourceLink: r.source_link || ''
+          };
+        });
         return _publishedCache;
       } catch (err) {
         console.warn('[Publish] Failed to fetch from Supabase:', err.message);
