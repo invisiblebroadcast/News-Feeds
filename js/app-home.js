@@ -860,7 +860,10 @@ const APP_VERSION = 30;
         const t0 = performance ? performance.now() : Date.now();
         try {
             if (currentSection === 'topics') {
+                // Use full-screen overlay for Topics (clustering can freeze)
+                showLoadingOverlay('Loading topics\u2026');
                 await renderTopicsView();
+                hideLoadingOverlay();
             }
             else if (currentSection === 'conflicts') {
                 await renderConflictsView();
@@ -877,6 +880,7 @@ const APP_VERSION = 30;
             }
         }
         finally {
+            hideLoadingOverlay();
             const elapsed = (performance ? performance.now() : Date.now()) - t0;
             const remaining = Math.max(0, 300 - elapsed);
             if (remaining > 0)
@@ -3516,15 +3520,14 @@ const APP_VERSION = 30;
             return;
         const update = () => {
             btn.className = 'btn btn-ghost btn-icon source-filter-btn filter-' + sourceFilter;
-            const titles = { all: 'All sources (IB + Feeds)', ib: 'Invisible Broadcast only', feeds: 'Feeds only' };
+            const titles = { ib: 'IB posts only', feeds: 'Feeds only' };
             btn.title = titles[sourceFilter] || 'Toggle source filter';
         };
         btn.addEventListener('click', async () => {
-            const next = { all: 'ib', ib: 'feeds', feeds: 'all' };
-            sourceFilter = next[sourceFilter] || 'all';
+            sourceFilter = sourceFilter === 'ib' ? 'feeds' : 'ib';
             update();
             _persist();
-            const labels = { all: 'Loading feeds & IB\u2026', ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
+            const labels = { ib: 'Loading IB posts\u2026', feeds: 'Loading feeds\u2026' };
             showLoadingOverlay(labels[sourceFilter] || 'Loading\u2026');
             await displayCurrentSubcat();
             hideLoadingOverlay();
