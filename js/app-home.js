@@ -6119,21 +6119,16 @@ const APP_VERSION = 30;
             const titleLines = wrapText(ctx, article.title || '', 0, 0, textW, titleLineH);
             ctx.font = bodyFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
             const summaryLines = fullSummary ? wrapText(ctx, fullSummary, 0, 0, textW, bodyLineH) : 0;
-            // Text block height: source + gap + title + gap + summary + gap + divider + gap + watermark
+            // Text block height: source + gap + title + gap + summary
             const titleH = titleLines * titleLineH;
             const summaryH = summaryLines * bodyLineH;
             const sourceH = article.source ? sourceFontSize : 0;
-            const dividerH = Math.max(1, Math.round(W * 0.002));
-            const smallGap = Math.round(W * 0.02);
             const medGap = Math.round(W * 0.03);
             const textBlockH = sourceH
                 + (sourceH ? medGap : 0)
                 + titleH
                 + medGap
-                + (summaryH > 0 ? summaryH + medGap : 0)
-                + dividerH
-                + smallGap
-                + smallFontSize;
+                + (summaryH > 0 ? summaryH + medGap : 0);
             // Image dimensions — edge-to-edge (full canvas width, no left/right padding).
             // High-res sources are downscaled with high-quality smoothing; low-res sources are
             // upscaled to fill the width (accepting some softness for very small thumbnails).
@@ -6222,40 +6217,27 @@ const APP_VERSION = 30;
                 rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
                 ctx.fillStyle = rightGrad;
                 ctx.fillRect(drawX + imgDrawW - fadeW, drawY, fadeW, imgDrawH);
-                // IB logo block — inside the image, top-right, equal gap from top and right edges
-                const logoS = Math.round(W * 0.07);
-                const logoR = Math.round(W * 0.014);
-                const ibGap = Math.round(W * 0.025);
-                const logoX = drawX + imgDrawW - ibGap - logoS;
-                const logoY = drawY + ibGap;
-                ctx.fillStyle = '#ff2929';
-                roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
-                ctx.fill();
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold ' + Math.round(W * 0.032) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('IB', logoX + logoS / 2, logoY + logoS / 2);
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'alphabetic';
                 ctx.restore(); // remove rounded clip
                 cursorY += imgBlockH + gap;
             }
-            // Source label (uppercase, red) on the left, published date/time on the right
+            // Source label (uppercase, red) on the left, published date on the right
             if (article.source) {
                 ctx.fillStyle = '#ff2929';
                 ctx.font = '700 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.textAlign = 'left';
                 ctx.fillText(article.source.toUpperCase(), PAD, cursorY + sourceFontSize);
-                // Published date & time on the right side of the same row (in IST)
+                // Published date only (no time) on the right side of the same row (in IST)
                 if (article.pubDate) {
-                    const pubDateText = formatDateIST(article.pubDate);
-                    ctx.fillStyle = 'rgba(230, 237, 243, 0.65)';
-                    ctx.font = '500 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(pubDateText, W - PAD, cursorY + sourceFontSize);
-                    ctx.textAlign = 'left';
+                    const d = new Date(article.pubDate);
+                    const pubDateText = isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+                    if (pubDateText) {
+                        ctx.fillStyle = 'rgba(230, 237, 243, 0.65)';
+                        ctx.font = '500 ' + sourceFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+                        ctx.textAlign = 'right';
+                        ctx.fillText(pubDateText, W - PAD, cursorY + sourceFontSize);
+                        ctx.textAlign = 'left';
+                    }
                 }
                 cursorY += sourceFontSize + medGap;
             }
@@ -6273,15 +6255,7 @@ const APP_VERSION = 30;
                 wrapText(ctx, fullSummary, PAD, cursorY + bodyLineH, textW, bodyLineH);
                 cursorY += summaryH + medGap;
             }
-            // Thin divider line above the watermark
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
-            ctx.fillRect(PAD, cursorY, textW, dividerH);
-            cursorY += dividerH + smallGap;
-            // Footer: INVISIBLE BROADCAST watermark
-            ctx.fillStyle = 'rgba(255,255,255,0.32)';
-            ctx.font = '700 ' + smallFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textBaseline = 'alphabetic';
-            ctx.fillText('INVISIBLE BROADCAST', PAD, cursorY + smallFontSize);
+            // Watermark removed per user request
             const blob = await new Promise(r => c.toBlob(r, 'image/png'));
             if (!blob) {
                 btn && btn.classList.remove('btn-busy');
@@ -6393,13 +6367,16 @@ const APP_VERSION = 30;
         const title = cleanTitleForTopic(article.title);
         const summary = cleanSummary(stripHtml(article.summary || '')).trim();
         const body = await buildRephrasedBody(title, summary);
+        // Build source line: clean source name + article link
+        const sourceClean = (article.source || '').replace(/^IB\s*·\s*/, '').trim();
+        const sourceLine = sourceClean ? sourceClean + '\n' + (article.link || '') : (article.link || '');
+        const hashtags = buildHashtags(article).join(' ');
+        const footer = sourceLine ? sourceLine + '\n\n' + hashtags : hashtags;
         if (!body) {
-            // Absolute fallback: use the topic as-is if everything
-            // else fails (e.g. TF.js not loaded yet, empty summary).
             return (title || cleanSummary(stripHtml(article.title || '')).trim()) +
-                '\n\n' + buildHashtags(article).join(' ');
+                '\n\n' + footer;
         }
-        return body + '\n\n' + buildHashtags(article).join(' ');
+        return body + '\n\n' + footer;
     }
     // ── Rephraser internals (no AI, all rule-based + TF.js) ──
     // Clean a title for use as the topic in the caption.
