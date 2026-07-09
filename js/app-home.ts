@@ -5957,15 +5957,11 @@ const APP_VERSION = 30;
         ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
         const qLines = wrapText(ctx, quoteText, 0, 0, textW - shadowPadX * 2, quoteLineH);
         const qH = qLines * quoteLineH;
-
-        // Shadow box height = quote text + padding
         const shadowBoxH = qH + shadowPadY * 2;
-
-        // Height: image area (55%) + opening quote + shadow box + from + separator + watermark
         const fromH = quoteFrom ? fromFontSize : 0;
-        const imgAreaH = hasImg ? Math.round(1350 * 0.55) : 0;
-        const totalH = imgAreaH + quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + medGap + fromH + Math.round(W * 0.015) + medGap + wmFontSize + Math.round(W * 0.06);
-        const canvasH = Math.max(1350, totalH + Math.round(W * 0.08));
+
+        // Canvas: image fills bottom ~80%, text overlays on it
+        const canvasH = 1350;
         c.height = canvasH * dpr;
         ctx.scale(dpr, dpr);
         ctx.imageSmoothingQuality = 'high';
@@ -5974,63 +5970,64 @@ const APP_VERSION = 30;
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, canvasH);
 
-        let y = Math.round((canvasH - totalH) / 2);
-
-        // Draw image at top if available
+        // Draw image to fill canvas
         if (hasImg) {
-          const imgScale = Math.min(W / imgW, imgAreaH / imgH);
+          const imgScale = Math.max(W / imgW, canvasH / imgH);
           const drawW = Math.round(imgW * imgScale);
           const drawH = Math.round(imgH * imgScale);
           const imgX = Math.round((W - drawW) / 2);
-          ctx.drawImage(img, imgX, y, drawW, drawH);
-          // Gradient overlay on image
-          const grad = ctx.createLinearGradient(0, y, 0, y + drawH);
+          const imgY = Math.round((canvasH - drawH) / 2);
+          ctx.drawImage(img, imgX, imgY, drawW, drawH);
+          // Gradient: transparent top → dark bottom (like web card)
+          const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
           grad.addColorStop(0, 'rgba(0,0,0,0)');
-          grad.addColorStop(0.5, 'rgba(0,0,0,0.2)');
-          grad.addColorStop(0.8, 'rgba(0,0,0,0.7)');
+          grad.addColorStop(0.35, 'rgba(0,0,0,0)');
+          grad.addColorStop(0.55, 'rgba(0,0,0,0.15)');
+          grad.addColorStop(0.7, 'rgba(0,0,0,0.5)');
+          grad.addColorStop(0.85, 'rgba(0,0,0,0.85)');
           grad.addColorStop(1, 'rgba(0,0,0,1)');
           ctx.fillStyle = grad;
-          ctx.fillRect(0, y, W, drawH);
-          y += drawH;
+          ctx.fillRect(0, 0, W, canvasH);
         }
 
-        // Big red opening quote (no shadow box)
-        ctx.fillStyle = '#ff2929';
-        ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText('\u201C', PAD, y + quoteOpenSize);
-        y += quoteOpenSize;
+        // Text positioned in the bottom portion (like web: starts at ~65%)
+        const textStartY = Math.round(canvasH * 0.58);
 
-        // Sample image brightness behind text area to set shadow intensity
-        let shadowAlpha = 0.45; // default for no-image
+        // Sample image brightness behind text area
+        let shadowAlpha = 0.45;
         if (hasImg) {
           try {
-            const sampleCtx = c.getContext('2d');
-            const sx = Math.max(0, Math.round(shadowBoxX * dpr));
-            const sy = Math.max(0, Math.round(y * dpr));
-            const sw = Math.min(c.width - sx, Math.round(shadowBoxW * dpr));
+            const sx = Math.max(0, Math.round(PAD * dpr));
+            const sy = Math.max(0, Math.round((textStartY + quoteOpenSize) * dpr));
+            const sw = Math.min(c.width - sx, Math.round(textW * dpr));
             const sh = Math.min(c.height - sy, Math.round(shadowBoxH * dpr));
             if (sw > 0 && sh > 0) {
-              const pixels = sampleCtx.getImageData(sx, sy, sw, sh).data;
+              const pixels = ctx.getImageData(sx, sy, sw, sh).data;
               let totalBrightness = 0;
-              const samples = Math.min(pixels.length / 4, 2000);
-              const step = Math.max(4, Math.floor((pixels.length / 4) / samples));
+              const sampleCount = Math.min(pixels.length / 4, 2000);
+              const step = Math.max(4, Math.floor((pixels.length / 4) / sampleCount));
               for (let i = 0; i < pixels.length; i += step * 4) {
                 totalBrightness += (pixels[i] * 0.299 + pixels[i+1] * 0.587 + pixels[i+2] * 0.114);
               }
-              const avgBrightness = totalBrightness / samples;
-              // Bright image → darker shadow (0.55–0.7), dark image → lighter shadow (0.25–0.4)
+              const avgBrightness = totalBrightness / sampleCount;
               shadowAlpha = avgBrightness > 128 ? 0.55 + (avgBrightness - 128) / 255 * 0.15 : 0.25 + avgBrightness / 128 * 0.15;
             }
           } catch {}
         }
 
-        // Shadow box behind quote text — fades from all four sides, adapts to image
-        const shadowBoxX = PAD;
-        const shadowBoxW = textW;
+        // Big red opening quote
+        ctx.fillStyle = '#ff2929';
+        ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('\u201C', PAD, textStartY + quoteOpenSize);
+
+        // Shadow box behind quote text
+        const sbX = PAD;
+        const sbW = textW;
+        const sbY = textStartY + quoteOpenSize + shadowPadY;
         const sbGrad = ctx.createRadialGradient(
-          shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.15,
-          shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.55
+          sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.15,
+          sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.55
         );
         sbGrad.addColorStop(0, `rgba(0,0,0,${shadowAlpha})`);
         sbGrad.addColorStop(0.5, `rgba(0,0,0,${shadowAlpha * 0.6})`);
@@ -6038,24 +6035,24 @@ const APP_VERSION = 30;
         ctx.fillStyle = sbGrad;
         const sbR = Math.round(W * 0.015);
         ctx.beginPath();
-        ctx.roundRect(shadowBoxX, y, shadowBoxW, shadowBoxH, sbR);
+        ctx.roundRect(sbX, sbY, sbW, shadowBoxH, sbR);
         ctx.fill();
 
-        // Quote text inside shadow box
+        // Quote text
         ctx.fillStyle = '#e6edf3';
         ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        wrapText(ctx, quoteText, shadowBoxX + shadowPadX, y + shadowPadY + quoteLineH, textW - shadowPadX * 2, quoteLineH);
-        y += shadowBoxH + shadowPadY;
+        wrapText(ctx, quoteText, sbX + shadowPadX, sbY + shadowPadY + quoteLineH, textW - shadowPadX * 2, quoteLineH);
 
         // Quote from — RIGHT aligned
+        let afterTextY = sbY + shadowBoxH + shadowPadY;
         if (quoteFrom) {
           const fromText = '\u2014 ' + quoteFrom;
           ctx.fillStyle = '#ff2929';
           ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
           ctx.textBaseline = 'alphabetic';
           const fromTextW = ctx.measureText(fromText).width;
-          ctx.fillText(fromText, W - PAD - fromTextW, y + fromFontSize);
-          y += fromH + medGap;
+          ctx.fillText(fromText, W - PAD - fromTextW, afterTextY + fromFontSize);
+          afterTextY += fromH + medGap;
         }
 
         // Separator line — right-aligned, fading
@@ -6068,16 +6065,16 @@ const APP_VERSION = 30;
         ctx.strokeStyle = sepGrad;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(sepX, y);
-        ctx.lineTo(sepX + sepW, y);
+        ctx.moveTo(sepX, afterTextY);
+        ctx.lineTo(sepX + sepW, afterTextY);
         ctx.stroke();
-        y += medGap;
+        afterTextY += medGap;
 
-        // "Invisible Broadcast" watermark — LEFT aligned
+        // "Invisible Broadcast" — LEFT aligned
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.font = '600 ' + wmFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText('Invisible Broadcast', PAD, y + wmFontSize);
+        ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
 
         const blob = await new Promise(r => c.toBlob(r, 'image/png'));
         if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
