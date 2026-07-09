@@ -1668,6 +1668,7 @@ const APP_VERSION = 30;
         html += '<div class="reels-left-meta" title="Click to toggle">' +
             '<div class="reels-left-top">' +
             '<span class="reels-left-live" style="display:none">LIVE</span>' +
+            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
             '</div>' +
             '<span class="reels-left-date"></span>' +
             '</div>';
@@ -1740,17 +1741,24 @@ const APP_VERSION = 30;
         const count = cardEl.querySelector('.reels-count');
         if (count)
             count.textContent = (idx + 1) + ' / ' + total;
-        // Left-side meta: LIVE badge + Date (toggleable)
+        // Left-side meta: LIVE, Trending, Date (toggleable)
         const leftMeta = cardEl.querySelector('.reels-left-meta');
         const leftLive = cardEl.querySelector('.reels-left-live');
+        const leftTrending = cardEl.querySelector('.reels-left-trending');
         const leftDate = cardEl.querySelector('.reels-left-date');
         if (leftLive) leftLive.style.display = currentMode === 'live' ? '' : 'none';
+        if (leftTrending) {
+            const show = article._trendingCount > 0;
+            leftTrending.style.display = show ? '' : 'none';
+            const rkNum = leftTrending.querySelector('.rk-num');
+            if (rkNum) rkNum.textContent = show ? article._trendingCount : '';
+        }
         if (leftDate) leftDate.textContent = formatDateShort(article.pubDate);
         // Toggle visibility of left meta on click
         if (leftMeta) {
             leftMeta.onclick = (e) => {
                 e.stopPropagation();
-                const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-date');
+                const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-trending, .reels-left-date');
                 const isHidden = leftMeta.dataset.hidden === '1';
                 inner.forEach(el => { el.style.visibility = isHidden ? 'visible' : 'hidden'; });
                 leftMeta.dataset.hidden = isHidden ? '0' : '1';
@@ -6249,6 +6257,7 @@ const APP_VERSION = 30;
                 const fromFontSize = Math.round(W * 0.03);
                 const wmFontSize = Math.round(W * 0.02);
                 const quoteOpenSize = Math.round(W * 0.18);
+                const medGap = Math.round(W * 0.03);
                 // Measure quote text
                 ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
                 const qLines = wrapText(ctx, quoteText, 0, 0, textW, quoteLineH);
