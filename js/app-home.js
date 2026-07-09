@@ -1641,6 +1641,14 @@ const APP_VERSION = 30;
                 '</div>';
         }
         html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
+        // Top LEFT: Live+Trending horizontal, Time below (toggleable)
+        html += '<div class="reels-left-meta" title="Click to toggle">' +
+            '<div class="reels-left-top">' +
+            '<span class="reels-left-live" style="display:none">LIVE</span>' +
+            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
+            '</div>' +
+            '<span class="reels-left-date"></span>' +
+            '</div>';
         // Top RIGHT: Card number
         html += '<div class="reels-top-right">' +
             '<span class="reels-count"></span>' +
@@ -1663,14 +1671,6 @@ const APP_VERSION = 30;
             '</div>' +
             '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
             '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
-            '</div>';
-        // Bottom LEFT: LIVE badge + Date (toggleable)
-        html += '<div class="reels-left-meta" title="Click to toggle">' +
-            '<div class="reels-left-top">' +
-            '<span class="reels-left-live" style="display:none">LIVE</span>' +
-            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
-            '</div>' +
-            '<span class="reels-left-date"></span>' +
             '</div>';
         return html;
     }
