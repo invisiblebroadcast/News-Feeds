@@ -6243,21 +6243,23 @@ const APP_VERSION = 30;
                 const medGap = Math.round(W * 0.03);
                 const shadowPadX = Math.round(W * 0.04);
                 const shadowPadY = Math.round(W * 0.03);
-                // Measure quote text
+                // Measure quote text to get height
                 ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
                 const qLines = wrapText(ctx, quoteText, 0, 0, textW - shadowPadX * 2, quoteLineH);
                 const qH = qLines * quoteLineH;
                 const shadowBoxH = qH + shadowPadY * 2;
                 const fromH = quoteFrom ? fromFontSize : 0;
-                // Canvas: image fills entire canvas, text overlays on bottom
-                const canvasH = 1350;
+                // Calculate total text area height (below image)
+                const textAreaH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + medGap + fromH + Math.round(W * 0.015) + medGap + wmFontSize + Math.round(W * 0.06);
+                // Image takes 65%, text takes 35% — canvas height = textAreaH / 0.35
+                const canvasH = Math.max(1350, Math.round(textAreaH / 0.35));
                 c.height = canvasH * dpr;
                 ctx.scale(dpr, dpr);
                 ctx.imageSmoothingQuality = 'high';
                 // Black background
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, canvasH);
-                // Draw image to fill canvas
+                // Draw image to fill entire canvas (like web card)
                 if (hasImg) {
                     const imgScale = Math.max(W / imgW, canvasH / imgH);
                     const drawW = Math.round(imgW * imgScale);
@@ -6265,19 +6267,19 @@ const APP_VERSION = 30;
                     const imgX = Math.round((W - drawW) / 2);
                     const imgY = Math.round((canvasH - drawH) / 2);
                     ctx.drawImage(img, imgX, imgY, drawW, drawH);
-                    // Gradient: transparent top → dark bottom (like web card)
-                    const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
-                    grad.addColorStop(0, 'rgba(0,0,0,0)');
-                    grad.addColorStop(0.35, 'rgba(0,0,0,0)');
-                    grad.addColorStop(0.55, 'rgba(0,0,0,0.15)');
-                    grad.addColorStop(0.7, 'rgba(0,0,0,0.5)');
-                    grad.addColorStop(0.85, 'rgba(0,0,0,0.85)');
-                    grad.addColorStop(1, 'rgba(0,0,0,1)');
-                    ctx.fillStyle = grad;
-                    ctx.fillRect(0, 0, W, canvasH);
                 }
-                // Text positioned in the bottom portion (like web: starts at ~58%)
-                const textStartY = Math.round(canvasH * 0.58);
+                // Gradient: matches web card exactly (transparent top → black bottom)
+                const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.35, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.55, 'rgba(0,0,0,0.15)');
+                grad.addColorStop(0.7, 'rgba(0,0,0,0.5)');
+                grad.addColorStop(0.85, 'rgba(0,0,0,0.85)');
+                grad.addColorStop(1, 'rgba(0,0,0,1)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, canvasH);
+                // Text starts at 65% (matching web card padding-top: 65%)
+                const textStartY = Math.round(canvasH * 0.65);
                 // Sample image brightness behind text area
                 let shadowAlpha = 0.45;
                 if (hasImg) {
@@ -6305,7 +6307,7 @@ const APP_VERSION = 30;
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('\u201C', PAD, textStartY + quoteOpenSize);
-                // Shadow box behind quote text
+                // Shadow box behind quote text — radial fade all sides, adapts to image
                 const sbX = PAD;
                 const sbW = textW;
                 const sbY = textStartY + quoteOpenSize + shadowPadY;
