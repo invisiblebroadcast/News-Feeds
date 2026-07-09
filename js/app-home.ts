@@ -1632,11 +1632,10 @@ const APP_VERSION = 30;
         '<div class="reels-summary-wrap"><p class="reels-summary"></p></div>' +
         '<button class="btn btn-primary reels-read-btn">Read Original Article</button>' +
       '</div>';
-    // Bottom LEFT: Live+Trending horizontal, Time below (next to watermark)
+    // Bottom LEFT: LIVE badge + Date (toggleable)
     html += '<div class="reels-left-meta" title="Click to toggle">' +
           '<div class="reels-left-top">' +
             '<span class="reels-left-live" style="display:none">LIVE</span>' +
-            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
           '</div>' +
           '<span class="reels-left-date"></span>' +
         '</div>';
@@ -1700,24 +1699,17 @@ const APP_VERSION = 30;
 
     const count = cardEl.querySelector('.reels-count');
     if (count) count.textContent = (idx + 1) + ' / ' + total;
-    // Left-side vertical meta: LIVE, Trending, Published Time
+    // Left-side meta: LIVE badge + Date (toggleable)
     const leftMeta = cardEl.querySelector('.reels-left-meta');
     const leftLive = cardEl.querySelector('.reels-left-live');
-    const leftTrending = cardEl.querySelector('.reels-left-trending');
     const leftDate = cardEl.querySelector('.reels-left-date');
     if (leftLive) leftLive.style.display = currentMode === 'live' ? '' : 'none';
-    if (leftTrending) {
-      const show = article._trendingCount > 0;
-      leftTrending.style.display = show ? '' : 'none';
-      const rkNum = leftTrending.querySelector('.rk-num');
-      if (rkNum) rkNum.textContent = show ? article._trendingCount : '';
-    }
     if (leftDate) leftDate.textContent = formatDateShort(article.pubDate);
-    // Toggle visibility of left meta on click (like comments toggle)
+    // Toggle visibility of left meta on click
     if (leftMeta) {
       leftMeta.onclick = (e) => {
         e.stopPropagation();
-        const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-trending, .reels-left-date');
+        const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-date');
         const isHidden = leftMeta.dataset.hidden === '1';
         inner.forEach(el => { el.style.visibility = isHidden ? 'visible' : 'hidden'; });
         leftMeta.dataset.hidden = isHidden ? '0' : '1';
