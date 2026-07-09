@@ -6374,6 +6374,9 @@ a.nav-icon-only svg {
   overflow: visible !important;
   display: block !important;
   -webkit-box-orient: unset !important;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 90%, transparent 100%);
+  padding: 0 4px;
 }
 .quote-text br {
   content: '';
@@ -6407,22 +6410,24 @@ a.nav-icon-only svg {
   color: var(--accent, #ff2929);
   margin-top: 10px;
   font-family: Georgia, 'Times New Roman', serif;
+  text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(0,0,0,0.25);
+}
+.quote-separator {
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.5), transparent);
+  margin: 6px 0 4px auto;
 }
 .quote-watermark-overlay {
   font-size: 0.7rem;
   font-weight: 600;
   color: rgba(255,255,255,0.7);
   letter-spacing: 0.5px;
-  margin-top: 6px;
+  margin-top: 0;
   margin-bottom: 4px;
+  text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(0,0,0,0.2);
 }
 }
 

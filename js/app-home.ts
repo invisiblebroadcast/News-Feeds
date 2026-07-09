@@ -1700,12 +1700,6 @@ const APP_VERSION = 30;
 
     const count = cardEl.querySelector('.reels-count');
     if (count) count.textContent = (idx + 1) + ' / ' + total;
-    const modeBadge = cardEl.querySelector('.reels-mode-badge');
-    if (modeBadge) {
-      modeBadge.textContent = 'LIVE';
-      modeBadge.classList.toggle('mode-top', false);
-      modeBadge.classList.toggle('mode-live', true);
-    }
     // Left-side vertical meta: LIVE, Trending, Published Time
     const leftMeta = cardEl.querySelector('.reels-left-meta');
     const leftLive = cardEl.querySelector('.reels-left-live');
@@ -1776,9 +1770,11 @@ const APP_VERSION = 30;
       if (summaryWrap) summaryWrap.style.display = showDesc ? '' : 'none';
       // Hide the source line — we show quote_from + watermark instead
       if (source) source.textContent = '';
-      // Add quote_from (red, bold) and watermark after the summary
+      // Add quote_from (red, bold) + separator + watermark after the summary
       const existingFrom = cardEl.querySelector('.quote-from-overlay');
       if (existingFrom) existingFrom.remove();
+      const existingSep = cardEl.querySelector('.quote-separator');
+      if (existingSep) existingSep.remove();
       const existingWm = cardEl.querySelector('.quote-watermark-overlay');
       if (existingWm) existingWm.remove();
       if (quoteFrom) {
@@ -1787,16 +1783,21 @@ const APP_VERSION = 30;
         fromEl.textContent = '\u2014 ' + quoteFrom;
         summaryWrap.parentNode.insertBefore(fromEl, summaryWrap.nextSibling);
       }
+      const sepEl = document.createElement('div');
+      sepEl.className = 'quote-separator';
+      const fromRef = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
+      fromRef.parentNode.insertBefore(sepEl, fromRef.nextSibling);
       const wmEl = document.createElement('div');
       wmEl.className = 'quote-watermark-overlay';
       wmEl.textContent = 'Invisible Broadcast';
-      const refEl = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
-      refEl.parentNode.insertBefore(wmEl, refEl.nextSibling);
+      sepEl.parentNode.insertBefore(wmEl, sepEl.nextSibling);
     } else {
       cardEl.classList.remove('quote-type-card');
       // Clean up any leftover quote elements from a previous render
       const oldFrom = cardEl.querySelector('.quote-from-overlay');
       if (oldFrom) oldFrom.remove();
+      const oldSep = cardEl.querySelector('.quote-separator');
+      if (oldSep) oldSep.remove();
       const oldWm = cardEl.querySelector('.quote-watermark-overlay');
       if (oldWm) oldWm.remove();
       if (title) title.textContent = article.title;
