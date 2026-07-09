@@ -858,6 +858,9 @@ body.cards-view {
   pointer-events: none;
   z-index: 1;
 }
+.reels-card.quote-type-card .reels-img-wrap::after {
+  display: none;
+}
 .reels-img-wrap.no-image {
   display: none;
 }

@@ -6235,31 +6235,29 @@ const APP_VERSION = 30;
             if (article._pubType === 'quote') {
                 const quoteFrom = article._pubQuoteFrom || '';
                 const quoteText = article.summary || article.title || '';
-                const quoteFontSize = Math.round(W * 0.042);
-                const quoteLineH = Math.round(quoteFontSize * 1.55);
-                const fromFontSize = Math.round(W * 0.03);
-                const wmFontSize = Math.round(W * 0.022);
-                const quoteOpenSize = Math.round(W * 0.18);
-                const medGap = Math.round(W * 0.03);
+                const quoteFontSize = Math.round(W * 0.038);
+                const quoteLineH = Math.round(quoteFontSize * 1.5);
+                const fromFontSize = Math.round(W * 0.028);
+                const wmFontSize = Math.round(W * 0.02);
+                const quoteOpenSize = Math.round(W * 0.15);
+                const medGap = Math.round(W * 0.025);
                 const shadowPadX = Math.round(W * 0.04);
-                const shadowPadY = Math.round(W * 0.03);
+                const shadowPadY = Math.round(W * 0.025);
                 // Measure quote text to get height
                 ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
                 const qLines = wrapText(ctx, quoteText, 0, 0, textW - shadowPadX * 2, quoteLineH);
                 const qH = qLines * quoteLineH;
                 const shadowBoxH = qH + shadowPadY * 2;
                 const fromH = quoteFrom ? fromFontSize : 0;
-                // Calculate total text area height (below image)
-                const textAreaH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + medGap + fromH + Math.round(W * 0.015) + medGap + wmFontSize + Math.round(W * 0.06);
-                // Image takes 65%, text takes 35% — canvas height = textAreaH / 0.35
-                const canvasH = Math.max(1350, Math.round(textAreaH / 0.35));
+                // Fixed 9:16 canvas (like phone screen) — matches web card aspect
+                const canvasH = 1920;
                 c.height = canvasH * dpr;
                 ctx.scale(dpr, dpr);
                 ctx.imageSmoothingQuality = 'high';
                 // Black background
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, canvasH);
-                // Draw image to fill entire canvas (like web card)
+                // Draw image to fill canvas (object-fit: cover)
                 if (hasImg) {
                     const imgScale = Math.max(W / imgW, canvasH / imgH);
                     const drawW = Math.round(imgW * imgScale);
@@ -6268,7 +6266,7 @@ const APP_VERSION = 30;
                     const imgY = Math.round((canvasH - drawH) / 2);
                     ctx.drawImage(img, imgX, imgY, drawW, drawH);
                 }
-                // Gradient: matches web card exactly (transparent top → black bottom)
+                // Gradient: matches web card exactly
                 const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
                 grad.addColorStop(0, 'rgba(0,0,0,0)');
                 grad.addColorStop(0.35, 'rgba(0,0,0,0)');
@@ -6307,7 +6305,7 @@ const APP_VERSION = 30;
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('\u201C', PAD, textStartY + quoteOpenSize);
-                // Shadow box behind quote text — radial fade all sides, adapts to image
+                // Shadow box behind quote text
                 const sbX = PAD;
                 const sbW = textW;
                 const sbY = textStartY + quoteOpenSize + shadowPadY;
