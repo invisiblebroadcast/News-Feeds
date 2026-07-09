@@ -34,14 +34,14 @@ const FeedManager = (() => {
         technology: 'Technology & Innovation', science: 'Science & Research',
         health: 'Health & Medicine', sports: 'Sports & Athletics',
         entertainment: 'Culture & Entertainment', environment: 'Environment & Climate',
-        education: 'Education & Academia'
+        education: 'Education & Academia', quotes: 'Quotes'
     };
     const SUBCAT_ICONS = {
         all: '\uD83D\uDCCA', politics: '\uD83C\uDFDB', business: '\uD83D\uDCC8',
         technology: '\uD83D\uDCBB', science: '\uD83D\uDD2C',
         health: '\u2764\uFE0F', sports: '\u26BD',
         entertainment: '\uD83C\uDFAC', environment: '\uD83C\uDF31',
-        education: '\uD83C\uDF93'
+        education: '\uD83C\uDF93', quotes: '\u201C'
     };
     async function load() {
         if (feedData)

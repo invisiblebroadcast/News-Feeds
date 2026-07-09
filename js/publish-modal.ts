@@ -15,6 +15,12 @@ const PublishModal = (() => {
 
   let currentUser = null;
 
+  /** Format integer post_id as IB00001, IB00002, etc. */
+  function formatPostId(id) {
+    if (!id && id !== 0) return '';
+    return 'IB' + String(id).padStart(5, '0');
+  }
+
   /* ── YouTube helpers ── */
   function getVideoId(url) {
     const patterns = [
@@ -185,6 +191,7 @@ const PublishModal = (() => {
     const desc = $('#quote-desc')?.value?.trim();
     const quoteFrom = $('#quote-from')?.value?.trim();
     const sourceLink = $('#quote-source-link')?.value?.trim();
+    const scopeVal = $('#quote-scope-select')?.value || 'global';
     const msg = $('#quote-publish-msg');
 
     if (!currentUser) { setMsg(msg, 'Please sign in first', 'error'); return; }
@@ -207,9 +214,9 @@ const PublishModal = (() => {
           body: desc,
           source_name: quoteFrom || '',
           source_link: sourceLink || '',
-          scope: 'global',
-          nation: '',
-          category: 'all',
+          scope: scopeVal,
+          nation: scopeVal === 'nation' ? 'india' : '',
+          category: 'quotes',
           type: 'quote',
           quote_from: quoteFrom || ''
         })
@@ -222,7 +229,7 @@ const PublishModal = (() => {
 
       if (_quoteImageFile && postId) {
         const ext = _quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
-        const filePath = postId + '.' + ext;
+        const filePath = formatPostId(postId) + '.' + ext;
         const { error: uploadErr } = await client.storage
           .from('ib-post-images')
           .upload(filePath, _quoteImageFile, {

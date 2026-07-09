@@ -215,6 +215,19 @@
           </div>
         </div>
         <div class="setting-group">
+          <label class="setting-label">Quote Display</label>
+          <p class="setting-desc">Control how quotes are displayed in cards.</p>
+          <div class="feed-health-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="quote-preserve-spacing" checked>
+              <span class="toggle-row-text">
+                <strong>Preserve line breaks in quotes</strong>
+                <span class="toggle-row-desc">When ON, quotes show line breaks and paragraph spacing.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-group">
           <label class="setting-label">Custom Feed Sources</label>
           <p class="setting-desc">Add RSS feeds that aren't in our default directory.</p>
           <button class="btn" id="open-custom-sources-btn" style="width:100%;justify-content:center;">Open Custom Sources Manager</button>
@@ -848,6 +861,13 @@
 
         <!-- Quotes Tab -->
         <div class="publish-pane" data-publish-pane="quotes">
+          <div class="publish-field">
+            <label for="quote-scope-select">Scope</label>
+            <select id="quote-scope-select">
+              <option value="global">Global</option>
+              <option value="nation">India</option>
+            </select>
+          </div>
           <div class="publish-field">
             <label for="quote-desc">Quote Text</label>
             <textarea id="quote-desc" placeholder="Paste or type the quote here..."></textarea>

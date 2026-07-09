@@ -511,6 +511,7 @@ const APP_VERSION = 30;
         deleteCommentConfirm: $('#delete-comment-confirm'),
         deleteCommentCancel: $('#delete-comment-cancel'),
         autoDisableFailingSources: $('#auto-disable-failing-sources'),
+        quotePreserveSpacing: $('#quote-preserve-spacing'),
         feedHealthCount: $('#feed-health-count'),
         reenableAllBtn: $('#reenable-all-btn')
     };
@@ -1341,6 +1342,12 @@ const APP_VERSION = 30;
         }
         requestAnimationFrame(appendChunk);
     }
+    /** Convert newlines in quote text to <br> tags when setting is ON */
+    function formatQuoteText(text) {
+        const escaped = escHtml(text || '');
+        if (!Settings.get('quotePreserveSpacing')) return escaped;
+        return escaped.replace(/\n/g, '<br>');
+    }
     function renderCard(article, index) {
         const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
         const hasThumb = imgUrl && imgUrl.startsWith('http');
@@ -1425,7 +1432,7 @@ const APP_VERSION = 30;
                 '<div class="article-body">' +
                 '<div class="quote-block">' +
                 '<span class="quote-open">&ldquo;</span>' +
-                '<p class="article-summary quote-text">' + escHtml(article.summary || '') + '</p>' +
+                '<p class="article-summary quote-text">' + formatQuoteText(article.summary) + '</p>' +
                 '</div>' +
                 (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
                 '<div class="quote-watermark">Invisible Broadcast</div>' +
@@ -1634,9 +1641,18 @@ const APP_VERSION = 30;
                 '</div>';
         }
         html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
-        html += '<div class="reels-overlay">' +
-            '<div class="reels-count-row">' +
+        // Top LEFT: Live, Trending, Time (vertical, toggleable)
+        html += '<div class="reels-left-meta" title="Click to toggle">' +
+            '<span class="reels-left-live" style="display:none">LIVE</span>' +
+            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
+            '<span class="reels-left-date"></span>' +
+            '</div>';
+        // Top RIGHT: Card number
+        html += '<div class="reels-top-right">' +
             '<span class="reels-count"></span>' +
+            '</div>';
+        html += '<div class="reels-overlay">' +
+            '<div class="reels-badges-row">' +
             '<div class="reels-badges">' +
             '<span class="reels-conflict" style="display:none"><span class="rc-warn">⚠</span> Conflict</span>' +
             '<span class="reels-mode-badge"></span>' +
@@ -1645,8 +1661,6 @@ const APP_VERSION = 30;
             '<h2 class="reels-title"></h2>' +
             '<div class="reels-meta">' +
             '<span class="reels-source"></span>' +
-            '<span class="reels-date"></span>' +
-            '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
             '<span class="reels-flag" style="display:none"></span>' +
             '</div>' +
             '<div class="reels-conflict-panel" style="display:none">' +
@@ -1731,13 +1745,28 @@ const APP_VERSION = 30;
             modeBadge.classList.toggle('mode-top', false);
             modeBadge.classList.toggle('mode-live', true);
         }
-        const liveTrendingEl = cardEl.querySelector('.reels-live-trending');
-        if (liveTrendingEl) {
+        // Left-side vertical meta: LIVE, Trending, Published Time
+        const leftMeta = cardEl.querySelector('.reels-left-meta');
+        const leftLive = cardEl.querySelector('.reels-left-live');
+        const leftTrending = cardEl.querySelector('.reels-left-trending');
+        const leftDate = cardEl.querySelector('.reels-left-date');
+        if (leftLive) leftLive.style.display = currentMode === 'live' ? '' : 'none';
+        if (leftTrending) {
             const show = article._trendingCount > 0;
-            liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
-            const n = liveTrendingEl.querySelector('.rk-num');
-            if (n)
-                n.textContent = show ? article._trendingCount : '';
+            leftTrending.style.display = show ? '' : 'none';
+            const rkNum = leftTrending.querySelector('.rk-num');
+            if (rkNum) rkNum.textContent = show ? article._trendingCount : '';
+        }
+        if (leftDate) leftDate.textContent = formatDateShort(article.pubDate);
+        // Toggle visibility of left meta on click (like comments toggle)
+        if (leftMeta) {
+            leftMeta.onclick = (e) => {
+                e.stopPropagation();
+                const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-trending, .reels-left-date');
+                const isHidden = leftMeta.dataset.hidden === '1';
+                inner.forEach(el => { el.style.visibility = isHidden ? 'visible' : 'hidden'; });
+                leftMeta.dataset.hidden = isHidden ? '0' : '1';
+            };
         }
         const conflictBadge = cardEl.querySelector('.reels-conflict');
         const conflictPanel = cardEl.querySelector('.reels-conflict-panel');
@@ -1767,26 +1796,48 @@ const APP_VERSION = 30;
         }
         const title = cardEl.querySelector('.reels-title');
         const source = cardEl.querySelector('.reels-source');
-        const date = cardEl.querySelector('.reels-date');
         const summaryText = cleanSummary(stripHtml(article.summary));
         const summary = cardEl.querySelector('.reels-summary');
         const summaryWrap = cardEl.querySelector('.reels-summary-wrap');
         const showDesc = Settings.get('showDescription');
         // Quote type: show quote text with opening quote mark, hide title
         if (article._pubType === 'quote') {
+            cardEl.classList.add('quote-type-card');
             if (title) {
                 title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;">\u201C</span>';
             }
             const quoteFrom = article._pubQuoteFrom || '';
             if (summary) {
-                summary.textContent = (showDesc ? summaryText : '') + (quoteFrom ? '\n\n\u2014 ' + quoteFrom : '');
+                summary.innerHTML = showDesc ? formatQuoteText(article.summary) : '';
             }
             if (summaryWrap)
                 summaryWrap.style.display = showDesc ? '' : 'none';
             if (source)
-                source.textContent = 'Invisible Broadcast';
+                source.textContent = '';
+            // Add quote_from (red, bold) and watermark after the summary
+            const existingFrom = cardEl.querySelector('.quote-from-overlay');
+            if (existingFrom) existingFrom.remove();
+            const existingWm = cardEl.querySelector('.quote-watermark-overlay');
+            if (existingWm) existingWm.remove();
+            if (quoteFrom) {
+                const fromEl = document.createElement('div');
+                fromEl.className = 'quote-from-overlay';
+                fromEl.textContent = '\u2014 ' + quoteFrom;
+                summaryWrap.parentNode.insertBefore(fromEl, summaryWrap.nextSibling);
+            }
+            const wmEl = document.createElement('div');
+            wmEl.className = 'quote-watermark-overlay';
+            wmEl.textContent = 'Invisible Broadcast';
+            const refEl = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
+            refEl.parentNode.insertBefore(wmEl, refEl.nextSibling);
         }
         else {
+            cardEl.classList.remove('quote-type-card');
+            // Clean up any leftover quote elements from a previous render
+            const oldFrom = cardEl.querySelector('.quote-from-overlay');
+            if (oldFrom) oldFrom.remove();
+            const oldWm = cardEl.querySelector('.quote-watermark-overlay');
+            if (oldWm) oldWm.remove();
             if (title)
                 title.textContent = article.title;
             if (source)
@@ -1798,8 +1849,6 @@ const APP_VERSION = 30;
                 summaryWrap.style.display = showDesc ? '' : 'none';
             }
         }
-        if (date)
-            date.textContent = formatDateShort(article.pubDate);
         const ad = getArticleData(article.link);
         const flagEl = cardEl.querySelector('.reels-flag');
         if (flagEl) {
@@ -2059,7 +2108,7 @@ const APP_VERSION = 30;
                         if (isHidden) {
                             actions.classList.remove('reels-actions-hidden');
                             if (typeof window.PublishModal !== 'undefined' && window.PublishModal.setCurrentUser) {
-                                window.PublishModal.setCurrentUser(user);
+                                window.PublishModal.setCurrentUser(currentUser);
                             }
                         }
                         else {
@@ -2872,6 +2921,13 @@ const APP_VERSION = 30;
     /* ── Published articles storage (Supabase) ── */
     let _publishedCache = [];
     let _publishedFetchPromise = null;
+
+    /** Format integer post_id as IB00001, IB00002, etc. */
+    function formatPostId(id) {
+        if (!id && id !== 0) return '';
+        return 'IB' + String(id).padStart(5, '0');
+    }
+
     function getSupabaseClient() {
         try {
             return SupabaseStore.getClient();
@@ -2899,7 +2955,7 @@ const APP_VERSION = 30;
                     // Build image URL from post_id if present
                     let imageUrl = '';
                     if (r.post_id && r.type === 'quote') {
-                        imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + r.post_id + '.jpg';
+                        imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg';
                     }
                     return {
                         id: r.id,
@@ -2919,7 +2975,7 @@ const APP_VERSION = 30;
                         _pubCategory: r.category || 'all',
                         _pubUserEmail: r.user_email || '',
                         _pubId: r.id,
-                        _pubPostId: r.post_id || null,
+                        _pubPostId: formatPostId(r.post_id),
                         _pubType: r.type || 'feeds',
                         _pubQuoteFrom: r.quote_from || '',
                         _pubSourceName: r.source_name || '',
@@ -3117,6 +3173,12 @@ const APP_VERSION = 30;
     async function editPublishedArticle(pubId) {
         if (!currentUser)
             return;
+        function _setElMsg(el, text, type) {
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'publish-msg';
+            if (type) el.classList.add(type);
+        }
         try {
             const client = getSupabaseClient();
             if (!client)
@@ -3139,106 +3201,108 @@ const APP_VERSION = 30;
                 alert('Only the author can edit this post');
                 return;
             }
-            // Open publish modal pre-filled
-            const modal = $('#publish-modal');
-            const body = $('#publish-modal-body');
-            if (!modal || !body)
-                return;
+            // Open the publish modal
+            const modal = $('#yt-publish-modal');
+            if (!modal) return;
             modal.classList.add('open');
-            const titleInput = $('#publish-title-input');
-            const descInput = $('#publish-desc-textarea');
-            const authorInput = $('#publish-author-input');
-            const status = $('#publish-status');
-            const scopeSelect = $('#publish-scope-select');
-            const nationSelect = $('#publish-nation-select');
-            const categorySelect = $('#publish-category-select');
-            const sourcesContainer = $('#publish-sources-list');
-            if (titleInput)
-                titleInput.value = data.title || '';
-            if (descInput)
-                descInput.value = data.body || '';
-            if (authorInput)
-                authorInput.value = data.author || '';
-            if (status)
-                status.textContent = '';
-            if (scopeSelect) {
-                scopeSelect.value = data.scope || 'global';
-                scopeSelect.onchange();
+            const isQuote = data.type === 'quote';
+            // Switch to the correct tab
+            if (isQuote) {
+                $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'quotes'));
+                $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'quotes'));
+            } else {
+                $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'youtube'));
+                $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'youtube'));
             }
-            if (nationSelect)
-                nationSelect.value = data.nation || '';
-            if (categorySelect)
-                categorySelect.value = data.category || 'all';
-            if (sourcesContainer) {
-                const srcNames = (data.source_name || '').split(', ').filter(Boolean);
-                const srcLinks = (data.source_link || '').split(', ').filter(Boolean);
-                sourcesContainer.innerHTML = srcNames.map((n, i) => '<label class="publish-source-item">' +
-                    '<input type="checkbox" class="publish-source-cb" value="' + escAttr(srcLinks[i] || '') + '" checked data-name="' + escAttr(n) + '" data-title="' + escAttr(n) + '">' +
-                    '<span class="publish-source-name">' + escHtml(n) + '</span>' +
-                    '</label>').join('') || '<div style="color:var(--text-tertiary);font-size:0.82rem;padding:8px;">No sources.</div>';
-            }
-            body._editId = pubId;
-            body._article = { link: data.source_link || '', source: data.source_name || '' };
-            const closeBtn = $('#publish-modal-close');
-            if (closeBtn)
-                closeBtn.onclick = () => { modal.classList.remove('open'); body._editId = null; };
-            const submitBtn = $('#publish-submit-btn');
-            if (submitBtn) {
-                submitBtn.onclick = async () => {
-                    const t = $('#publish-title-input')?.value?.trim();
-                    const d = $('#publish-desc-textarea')?.value?.trim();
-                    const a = $('#publish-author-input')?.value?.trim();
-                    const s = $('#publish-status');
-                    const scopeV = scopeSelect?.value || 'global';
-                    const nationV = scopeV === 'nation' ? (nationSelect?.value || '') : '';
-                    const catV = categorySelect?.value || 'all';
-                    if (!t) {
-                        if (s)
-                            s.textContent = 'Please enter a title.';
-                        return;
-                    }
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                        submitBtn.textContent = '\u23F3 Updating\u2026';
-                    }
-                    try {
-                        const client2 = getSupabaseClient();
-                        if (!client2)
-                            throw new Error('Supabase not available');
-                        const { error: updErr } = await client2
-                            .from('published_articles')
-                            .update({
-                            title: t,
-                            body: d || '',
-                            author: a || data.author,
-                            scope: scopeV,
-                            nation: nationV,
-                            category: catV,
-                            last_modified: new Date().toISOString()
-                        })
-                            .eq('id', pubId);
-                        if (updErr)
-                            throw updErr;
-                        _publishedCache = [];
-                        await fetchPublishedArticlesFromSupabase();
-                        if (s)
-                            s.innerHTML = '\u2705 Updated!';
-                        if (submitBtn)
-                            submitBtn.textContent = '\u2705 Updated';
-                        body._editId = null;
-                        displayCurrentSubcat();
-                    }
-                    catch (err) {
-                        if (s)
-                            s.textContent = '\u274c ' + (err.message || 'Update failed');
-                        if (submitBtn) {
-                            submitBtn.disabled = false;
-                            submitBtn.textContent = '\uD83D\uDCE4 Update';
+            if (isQuote) {
+                // Pre-fill quote fields
+                const quoteDesc = $('#quote-desc');
+                const quoteFrom = $('#quote-from');
+                const quoteSourceLink = $('#quote-source-link');
+                const quoteScopeSelect = $('#quote-scope-select');
+                const quoteMsg = $('#quote-publish-msg');
+                if (quoteDesc) quoteDesc.value = data.body || '';
+                if (quoteFrom) quoteFrom.value = data.quote_from || data.source_name || '';
+                if (quoteSourceLink) quoteSourceLink.value = data.source_link || '';
+                if (quoteScopeSelect) quoteScopeSelect.value = data.scope || 'global';
+                if (quoteMsg) { quoteMsg.textContent = ''; quoteMsg.className = 'publish-msg'; }
+                const quoteBtn = $('#quote-publish-btn');
+                if (quoteBtn) {
+                    quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
+                    quoteBtn.onclick = async () => {
+                        const desc = $('#quote-desc')?.value?.trim();
+                        const qFrom = $('#quote-from')?.value?.trim();
+                        const qLink = $('#quote-source-link')?.value?.trim();
+                        const qScope = $('#quote-scope-select')?.value || 'global';
+                        if (!desc) { _setElMsg(quoteMsg, 'Please enter the quote text', 'error'); return; }
+                        quoteBtn.disabled = true; quoteBtn.textContent = 'Updating\u2026';
+                        try {
+                            const c2 = getSupabaseClient();
+                            const { error: updErr } = await c2.from('published_articles').update({
+                                body: desc,
+                                source_name: qFrom || '',
+                                source_link: qLink || '',
+                                scope: qScope,
+                                nation: qScope === 'nation' ? 'india' : '',
+                                quote_from: qFrom || '',
+                                last_modified: new Date().toISOString()
+                            }).eq('id', pubId);
+                            if (updErr) throw updErr;
+                            _publishedCache = [];
+                            await fetchPublishedArticlesFromSupabase();
+                            if (quoteMsg) { quoteMsg.innerHTML = '\u2705 Updated!'; quoteMsg.className = 'publish-msg success'; }
+                            quoteBtn.textContent = '\u2705 Updated';
+                            setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
+                        } catch (e) {
+                            if (quoteMsg) { quoteMsg.textContent = '\u274c ' + (e.message || 'Update failed'); quoteMsg.className = 'publish-msg error'; }
+                            quoteBtn.disabled = false; quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
                         }
-                    }
-                };
-                submitBtn.textContent = '\uD83D\uDCE4 Update';
+                    };
+                }
             }
+            else {
+                // Pre-fill YouTube fields
+                const titleInput = $('#publish-title');
+                const descInput = $('#publish-desc');
+                const urlInput = $('#publish-url');
+                const pubMsg = $('#publish-msg');
+                if (titleInput) titleInput.value = data.title || '';
+                if (descInput) descInput.value = data.body || '';
+                if (urlInput) urlInput.value = data.source_link || '';
+                if (pubMsg) { pubMsg.textContent = ''; pubMsg.className = 'publish-msg'; }
+                const ytBtn = $('#yt-publish-btn');
+                if (ytBtn) {
+                    ytBtn.textContent = '\uD83D\uDCE4 Update';
+                    ytBtn.onclick = async () => {
+                        const t = $('#publish-title')?.value?.trim();
+                        const d = $('#publish-desc')?.value?.trim();
+                        const u = $('#publish-url')?.value?.trim();
+                        if (!t) { _setElMsg(pubMsg, 'Please enter a title', 'error'); return; }
+                        ytBtn.disabled = true; ytBtn.textContent = 'Updating\u2026';
+                        try {
+                            const c2 = getSupabaseClient();
+                            const { error: updErr } = await c2.from('published_articles').update({
+                                title: t,
+                                body: d || '',
+                                source_link: u || '',
+                                last_modified: new Date().toISOString()
+                            }).eq('id', pubId);
+                            if (updErr) throw updErr;
+                            _publishedCache = [];
+                            await fetchPublishedArticlesFromSupabase();
+                            if (pubMsg) { pubMsg.innerHTML = '\u2705 Updated!'; pubMsg.className = 'publish-msg success'; }
+                            ytBtn.textContent = '\u2705 Updated';
+                            setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
+                        } catch (e) {
+                            if (pubMsg) { pubMsg.textContent = '\u274c ' + (e.message || 'Update failed'); pubMsg.className = 'publish-msg error'; }
+                            ytBtn.disabled = false; ytBtn.textContent = '\uD83D\uDCE4 Update';
+                        }
+                    };
+                }
+            }
+            // Close button
+            const closeBtn = $('#yt-publish-modal-close');
+            if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
         }
         catch (err) {
             console.warn('[Publish] Edit failed:', err.message);
@@ -3900,7 +3964,7 @@ const APP_VERSION = 30;
         setTopListStatus('Loading feeds…');
         try {
             const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
-            if (!feeds.length) {
+            if (!feeds.length && currentSubcat !== 'quotes') {
                 showError('No feed sources available. Open Settings to add custom feeds.');
                 isFetching = false;
                 return;
@@ -4609,7 +4673,7 @@ const APP_VERSION = 30;
     // Core fetch logic — no UI side-effects. Callers manage overlay/spinner.
     async function _fetchAndCache() {
         const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
-        if (!feeds.length)
+        if (!feeds.length && currentSubcat !== 'quotes')
             return;
         const subs = FeedManager.subcategoriesForScope(currentScope);
         if (!subs.includes(currentSubcat) && !isParliamentSubcat(currentSubcat)) {
@@ -4881,6 +4945,13 @@ const APP_VERSION = 30;
                     for (const k of Object.keys(scopeCache))
                         scopeCache[k] = null;
                 }
+            });
+        }
+        // Quote spacing toggle
+        if (el.quotePreserveSpacing) {
+            el.quotePreserveSpacing.checked = Settings.get('quotePreserveSpacing') !== false;
+            el.quotePreserveSpacing.addEventListener('change', () => {
+                Settings.set('quotePreserveSpacing', el.quotePreserveSpacing.checked);
             });
         }
         // Keep Settings → Feed Health in sync with live fetches. Whenever

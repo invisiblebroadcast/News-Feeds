@@ -13,6 +13,11 @@ const PublishModal = (() => {
     function $(sel, ctx) { return (ctx || document).querySelector(sel); }
     function $$(sel, ctx) { return [...(ctx || document).querySelectorAll(sel)]; }
     let currentUser = null;
+    /** Format integer post_id as IB00001, IB00002, etc. */
+    function formatPostId(id) {
+        if (!id && id !== 0) return '';
+        return 'IB' + String(id).padStart(5, '0');
+    }
     /* ── YouTube helpers ── */
     function getVideoId(url) {
         const patterns = [
@@ -245,7 +250,7 @@ const PublishModal = (() => {
             const postId = inserted?.post_id;
             if (_quoteImageFile && postId) {
                 const ext = _quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
-                const filePath = postId + '.' + ext;
+                const filePath = formatPostId(postId) + '.' + ext;
                 const { error: uploadErr } = await client.storage
                     .from('ib-post-images')
                     .upload(filePath, _quoteImageFile, {

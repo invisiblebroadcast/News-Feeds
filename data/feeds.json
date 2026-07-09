@@ -1,5 +1,5 @@
 {
-  "subcategories": ["politics", "business", "technology", "science", "health", "sports", "entertainment", "environment", "education"],
+  "subcategories": ["politics", "business", "technology", "science", "health", "sports", "entertainment", "environment", "education", "quotes"],
   "nations": {
     "india": { "label": "India", "icon": "\ud83c\uddee\ud83c\uddf3" }
   },

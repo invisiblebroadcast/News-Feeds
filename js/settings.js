@@ -11,7 +11,9 @@ const Settings = (() => {
         // re-enable failed sources from Settings → Feed Health and
         // Activity → Failed sources. Default OFF so we don't surprise the
         // user by silently dropping sources on first install.
-        autoDisableFailingSources: false
+        autoDisableFailingSources: false,
+        // When ON, quote posts preserve line breaks and paragraph spacing
+        quotePreserveSpacing: true
     };
     let cache = null;
     function load() {
