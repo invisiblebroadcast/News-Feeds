@@ -6426,16 +6426,16 @@ a.nav-icon-only svg {
   letter-spacing: 0.5px;
   margin-top: 0;
   margin-bottom: 4px;
-  text-align: right;
+  text-align: left;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 }
 
-/* Left-side meta (Live+Trending horizontal, Date below) — TOP LEFT */
+/* Bottom LEFT: Live+Trending horizontal, Time below — next to watermark */
 .reels-left-meta {
   position: absolute;
   left: 8px;
-  top: 8px;
+  bottom: 8px;
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -6445,7 +6445,7 @@ a.nav-icon-only svg {
 }
 .reels-left-top {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 5px;
 }
 .reels-left-live {
@@ -6460,6 +6460,8 @@ a.nav-icon-only svg {
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
 }
 .reels-left-trending {
   font-size: 0.7rem;
@@ -6472,6 +6474,8 @@ a.nav-icon-only svg {
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
 }
 .reels-left-trending .lrk-arrow {
   font-size: 0.85rem;
@@ -6489,6 +6493,7 @@ a.nav-icon-only svg {
   padding: 1px 5px;
   border-radius: 3px;
   background: rgba(0,0,0,0.35);
+  margin-top: 1px;
 }
 
 /* Top RIGHT: Card number — below toolbar row */
