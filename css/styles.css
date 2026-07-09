@@ -6411,7 +6411,7 @@ a.nav-icon-only svg {
   opacity: 0.5;
 }
 
-/* Left-side vertical meta (Live, Trending, Date) — TOP LEFT */
+/* Left-side meta (Live+Trending horizontal, Date below) — TOP LEFT */
 .reels-left-meta {
   position: absolute;
   left: 8px;
@@ -6420,8 +6420,13 @@ a.nav-icon-only svg {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   cursor: pointer;
+}
+.reels-left-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 .reels-left-live {
   font-size: 0.6rem;
@@ -6459,11 +6464,11 @@ a.nav-icon-only svg {
   text-shadow: 0 1px 4px rgba(0,0,0,0.7);
 }
 
-/* Top RIGHT: Card number */
+/* Top RIGHT: Card number — below toolbar row */
 .reels-top-right {
   position: absolute;
   right: 10px;
-  top: 10px;
+  top: 48px;
   z-index: 10;
 }
 .reels-top-right .reels-count {

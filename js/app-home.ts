@@ -1609,10 +1609,12 @@ const APP_VERSION = 30;
       '</div>';
     }
     html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
-    // Top LEFT: Live, Trending, Time (vertical, toggleable)
+    // Top LEFT: Live+Trending horizontal, Time below (toggleable)
     html += '<div class="reels-left-meta" title="Click to toggle">' +
-          '<span class="reels-left-live" style="display:none">LIVE</span>' +
-          '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
+          '<div class="reels-left-top">' +
+            '<span class="reels-left-live" style="display:none">LIVE</span>' +
+            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
+          '</div>' +
           '<span class="reels-left-date"></span>' +
         '</div>';
     // Top RIGHT: Card number
