@@ -1785,6 +1785,7 @@ const APP_VERSION = 30;
             }
             const quoteFrom = article._pubQuoteFrom || '';
             if (summary) {
+                summary.classList.add('quote-text');
                 summary.innerHTML = showDesc ? formatQuoteText(article.summary) : '';
             }
             if (summaryWrap)
@@ -1827,6 +1828,7 @@ const APP_VERSION = 30;
             if (source)
                 source.textContent = article.source;
             if (summary) {
+                summary.classList.remove('quote-text');
                 summary.textContent = showDesc ? summaryText : '';
             }
             if (summaryWrap) {
@@ -6236,16 +6238,21 @@ const APP_VERSION = 30;
                 const quoteFontSize = Math.round(W * 0.042);
                 const quoteLineH = Math.round(quoteFontSize * 1.55);
                 const fromFontSize = Math.round(W * 0.03);
-                const wmFontSize = Math.round(W * 0.02);
+                const wmFontSize = Math.round(W * 0.022);
                 const quoteOpenSize = Math.round(W * 0.18);
                 const medGap = Math.round(W * 0.03);
+                const shadowPadX = Math.round(W * 0.04);
+                const shadowPadY = Math.round(W * 0.03);
                 // Measure quote text
                 ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
-                const qLines = wrapText(ctx, quoteText, 0, 0, textW, quoteLineH);
+                const qLines = wrapText(ctx, quoteText, 0, 0, textW - shadowPadX * 2, quoteLineH);
                 const qH = qLines * quoteLineH;
-                // Height: opening quote + quote text + from + gap + watermark
+                // Shadow box height = quote text + padding
+                const shadowBoxH = qH + shadowPadY * 2;
+                // Height: image area (55%) + opening quote + shadow box + from + separator + watermark
                 const fromH = quoteFrom ? fromFontSize : 0;
-                const totalH = quoteOpenSize + qH + medGap + fromH + medGap + wmFontSize + Math.round(W * 0.06);
+                const imgAreaH = hasImg ? Math.round(1350 * 0.55) : 0;
+                const totalH = imgAreaH + quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + medGap + fromH + Math.round(W * 0.015) + medGap + wmFontSize + Math.round(W * 0.06);
                 const canvasH = Math.max(1350, totalH + Math.round(W * 0.08));
                 c.height = canvasH * dpr;
                 ctx.scale(dpr, dpr);
@@ -6254,30 +6261,75 @@ const APP_VERSION = 30;
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, canvasH);
                 let y = Math.round((canvasH - totalH) / 2);
-                // Big red opening quote
+                // Draw image at top if available
+                if (hasImg) {
+                    const imgScale = Math.min(W / imgW, imgAreaH / imgH);
+                    const drawW = Math.round(imgW * imgScale);
+                    const drawH = Math.round(imgH * imgScale);
+                    const imgX = Math.round((W - drawW) / 2);
+                    ctx.drawImage(img, imgX, y, drawW, drawH);
+                    // Gradient overlay on image
+                    const grad = ctx.createLinearGradient(0, y, 0, y + drawH);
+                    grad.addColorStop(0, 'rgba(0,0,0,0)');
+                    grad.addColorStop(0.5, 'rgba(0,0,0,0.2)');
+                    grad.addColorStop(0.8, 'rgba(0,0,0,0.7)');
+                    grad.addColorStop(1, 'rgba(0,0,0,1)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, y, W, drawH);
+                    y += drawH;
+                }
+                // Big red opening quote (no shadow box)
                 ctx.fillStyle = '#ff2929';
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('\u201C', PAD, y + quoteOpenSize);
                 y += quoteOpenSize;
-                // Quote text
+                // Shadow box behind quote text
+                const shadowBoxX = PAD;
+                const shadowBoxW = textW;
+                const sbGrad = ctx.createRadialGradient(shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, 0, shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW / 1.5);
+                sbGrad.addColorStop(0, 'rgba(0,0,0,0.55)');
+                sbGrad.addColorStop(0.7, 'rgba(0,0,0,0.35)');
+                sbGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = sbGrad;
+                const sbR = Math.round(W * 0.015);
+                ctx.beginPath();
+                ctx.roundRect(shadowBoxX, y, shadowBoxW, shadowBoxH, sbR);
+                ctx.fill();
+                // Quote text inside shadow box
                 ctx.fillStyle = '#e6edf3';
                 ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
-                wrapText(ctx, quoteText, PAD, y + quoteLineH, textW, quoteLineH);
-                y += qH + medGap;
-                // Quote from
+                wrapText(ctx, quoteText, shadowBoxX + shadowPadX, y + shadowPadY + quoteLineH, textW - shadowPadX * 2, quoteLineH);
+                y += shadowBoxH + shadowPadY;
+                // Quote from — RIGHT aligned
                 if (quoteFrom) {
-                    ctx.fillStyle = 'rgba(230, 237, 243, 0.85)';
-                    ctx.font = '600 ' + fromFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    const fromText = '\u2014 ' + quoteFrom;
+                    ctx.fillStyle = '#ff2929';
+                    ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
                     ctx.textBaseline = 'alphabetic';
-                    ctx.fillText('\u2014 ' + quoteFrom, PAD, y + fromFontSize);
+                    const fromTextW = ctx.measureText(fromText).width;
+                    ctx.fillText(fromText, W - PAD - fromTextW, y + fromFontSize);
                     y += fromH + medGap;
                 }
-                // Grey "Invisible Broadcast" watermark
-                ctx.fillStyle = 'rgba(255,255,255,0.32)';
-                ctx.font = '700 ' + wmFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                // Separator line — right-aligned, fading
+                const sepW = Math.round(textW * 0.4);
+                const sepX = W - PAD - sepW;
+                const sepGrad = ctx.createLinearGradient(sepX, 0, sepX + sepW, 0);
+                sepGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                sepGrad.addColorStop(0.3, 'rgba(255,255,255,0.5)');
+                sepGrad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.strokeStyle = sepGrad;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(sepX, y);
+                ctx.lineTo(sepX + sepW, y);
+                ctx.stroke();
+                y += medGap;
+                // "Invisible Broadcast" watermark — LEFT aligned
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.font = '600 ' + wmFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
                 ctx.textBaseline = 'alphabetic';
-                ctx.fillText('INVISIBLE BROADCAST', PAD, y + wmFontSize);
+                ctx.fillText('Invisible Broadcast', PAD, y + wmFontSize);
                 const blob = await new Promise(r => c.toBlob(r, 'image/png'));
                 if (!blob) {
                     btn && btn.classList.remove('btn-busy');
