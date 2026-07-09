@@ -1345,7 +1345,8 @@ const APP_VERSION = 30;
     /** Convert newlines in quote text to <br> tags when setting is ON */
     function formatQuoteText(text) {
         const escaped = escHtml(text || '');
-        if (!Settings.get('quotePreserveSpacing')) return escaped;
+        if (!Settings.get('quotePreserveSpacing'))
+            return escaped;
         return escaped.replace(/\n/g, '<br>');
     }
     function renderCard(article, index) {
@@ -1640,7 +1641,7 @@ const APP_VERSION = 30;
                 '</button>' +
                 '</div>';
         }
-        html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
+        html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="eager" decoding="async"></div>';
         html += '<div class="reels-overlay">' +
             '<div class="reels-count-row">' +
             '<span class="reels-count"></span>' +
@@ -1743,7 +1744,8 @@ const APP_VERSION = 30;
             const show = article._trendingCount > 0;
             liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
             const n = liveTrendingEl.querySelector('.rk-num');
-            if (n) n.textContent = show ? article._trendingCount : '';
+            if (n)
+                n.textContent = show ? article._trendingCount : '';
         }
         const conflictBadge = cardEl.querySelector('.reels-conflict');
         const conflictPanel = cardEl.querySelector('.reels-conflict-panel');
@@ -1790,15 +1792,19 @@ const APP_VERSION = 30;
             }
             if (summaryWrap)
                 summaryWrap.style.display = showDesc ? '' : 'none';
+            // Hide the source line — we show quote_from + watermark instead
             if (source)
                 source.textContent = '';
             // Add quote_from (red, bold) + separator + watermark after the summary
             const existingFrom = cardEl.querySelector('.quote-from-overlay');
-            if (existingFrom) existingFrom.remove();
+            if (existingFrom)
+                existingFrom.remove();
             const existingSep = cardEl.querySelector('.quote-separator');
-            if (existingSep) existingSep.remove();
+            if (existingSep)
+                existingSep.remove();
             const existingWm = cardEl.querySelector('.quote-watermark-overlay');
-            if (existingWm) existingWm.remove();
+            if (existingWm)
+                existingWm.remove();
             if (quoteFrom) {
                 const fromEl = document.createElement('div');
                 fromEl.className = 'quote-from-overlay';
@@ -1818,11 +1824,14 @@ const APP_VERSION = 30;
             cardEl.classList.remove('quote-type-card');
             // Clean up any leftover quote elements from a previous render
             const oldFrom = cardEl.querySelector('.quote-from-overlay');
-            if (oldFrom) oldFrom.remove();
+            if (oldFrom)
+                oldFrom.remove();
             const oldSep = cardEl.querySelector('.quote-separator');
-            if (oldSep) oldSep.remove();
+            if (oldSep)
+                oldSep.remove();
             const oldWm = cardEl.querySelector('.quote-watermark-overlay');
-            if (oldWm) oldWm.remove();
+            if (oldWm)
+                oldWm.remove();
             if (title)
                 title.textContent = article.title;
             if (source)
@@ -1891,7 +1900,8 @@ const APP_VERSION = 30;
             const headerH = header ? header.getBoundingClientRect().height : 0;
             const footerH = footerBar ? footerBar.getBoundingClientRect().height : 0;
             const available = window.innerHeight - headerH - footerH;
-            const maxH = Math.max(240, available - 4);
+            const maxH = Math.max(240, available - 8);
+            container.style.height = maxH + 'px';
             container.style.maxHeight = maxH + 'px';
         });
     }
@@ -2907,13 +2917,12 @@ const APP_VERSION = 30;
     /* ── Published articles storage (Supabase) ── */
     let _publishedCache = [];
     let _publishedFetchPromise = null;
-
     /** Format integer post_id as IB00001, IB00002, etc. */
     function formatPostId(id) {
-        if (!id && id !== 0) return '';
+        if (!id && id !== 0)
+            return '';
         return 'IB' + String(id).padStart(5, '0');
     }
-
     function getSupabaseClient() {
         try {
             return SupabaseStore.getClient();
@@ -3160,10 +3169,12 @@ const APP_VERSION = 30;
         if (!currentUser)
             return;
         function _setElMsg(el, text, type) {
-            if (!el) return;
+            if (!el)
+                return;
             el.textContent = text;
             el.className = 'publish-msg';
-            if (type) el.classList.add(type);
+            if (type)
+                el.classList.add(type);
         }
         try {
             const client = getSupabaseClient();
@@ -3189,14 +3200,16 @@ const APP_VERSION = 30;
             }
             // Open the publish modal
             const modal = $('#yt-publish-modal');
-            if (!modal) return;
+            if (!modal)
+                return;
             modal.classList.add('open');
             const isQuote = data.type === 'quote';
             // Switch to the correct tab
             if (isQuote) {
                 $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'quotes'));
                 $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'quotes'));
-            } else {
+            }
+            else {
                 $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'youtube'));
                 $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'youtube'));
             }
@@ -3207,11 +3220,18 @@ const APP_VERSION = 30;
                 const quoteSourceLink = $('#quote-source-link');
                 const quoteScopeSelect = $('#quote-scope-select');
                 const quoteMsg = $('#quote-publish-msg');
-                if (quoteDesc) quoteDesc.value = data.body || '';
-                if (quoteFrom) quoteFrom.value = data.quote_from || data.source_name || '';
-                if (quoteSourceLink) quoteSourceLink.value = data.source_link || '';
-                if (quoteScopeSelect) quoteScopeSelect.value = data.scope || 'global';
-                if (quoteMsg) { quoteMsg.textContent = ''; quoteMsg.className = 'publish-msg'; }
+                if (quoteDesc)
+                    quoteDesc.value = data.body || '';
+                if (quoteFrom)
+                    quoteFrom.value = data.quote_from || data.source_name || '';
+                if (quoteSourceLink)
+                    quoteSourceLink.value = data.source_link || '';
+                if (quoteScopeSelect)
+                    quoteScopeSelect.value = data.scope || 'global';
+                if (quoteMsg) {
+                    quoteMsg.textContent = '';
+                    quoteMsg.className = 'publish-msg';
+                }
                 const quoteBtn = $('#quote-publish-btn');
                 if (quoteBtn) {
                     quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
@@ -3220,8 +3240,12 @@ const APP_VERSION = 30;
                         const qFrom = $('#quote-from')?.value?.trim();
                         const qLink = $('#quote-source-link')?.value?.trim();
                         const qScope = $('#quote-scope-select')?.value || 'global';
-                        if (!desc) { _setElMsg(quoteMsg, 'Please enter the quote text', 'error'); return; }
-                        quoteBtn.disabled = true; quoteBtn.textContent = 'Updating\u2026';
+                        if (!desc) {
+                            _setElMsg(quoteMsg, 'Please enter the quote text', 'error');
+                            return;
+                        }
+                        quoteBtn.disabled = true;
+                        quoteBtn.textContent = 'Updating\u2026';
                         try {
                             const c2 = getSupabaseClient();
                             const { error: updErr } = await c2.from('published_articles').update({
@@ -3233,15 +3257,24 @@ const APP_VERSION = 30;
                                 quote_from: qFrom || '',
                                 last_modified: new Date().toISOString()
                             }).eq('id', pubId);
-                            if (updErr) throw updErr;
+                            if (updErr)
+                                throw updErr;
                             _publishedCache = [];
                             await fetchPublishedArticlesFromSupabase();
-                            if (quoteMsg) { quoteMsg.innerHTML = '\u2705 Updated!'; quoteMsg.className = 'publish-msg success'; }
+                            if (quoteMsg) {
+                                quoteMsg.innerHTML = '\u2705 Updated!';
+                                quoteMsg.className = 'publish-msg success';
+                            }
                             quoteBtn.textContent = '\u2705 Updated';
                             setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
-                        } catch (e) {
-                            if (quoteMsg) { quoteMsg.textContent = '\u274c ' + (e.message || 'Update failed'); quoteMsg.className = 'publish-msg error'; }
-                            quoteBtn.disabled = false; quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
+                        }
+                        catch (e) {
+                            if (quoteMsg) {
+                                quoteMsg.textContent = '\u274c ' + (e.message || 'Update failed');
+                                quoteMsg.className = 'publish-msg error';
+                            }
+                            quoteBtn.disabled = false;
+                            quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
                         }
                     };
                 }
@@ -3252,10 +3285,16 @@ const APP_VERSION = 30;
                 const descInput = $('#publish-desc');
                 const urlInput = $('#publish-url');
                 const pubMsg = $('#publish-msg');
-                if (titleInput) titleInput.value = data.title || '';
-                if (descInput) descInput.value = data.body || '';
-                if (urlInput) urlInput.value = data.source_link || '';
-                if (pubMsg) { pubMsg.textContent = ''; pubMsg.className = 'publish-msg'; }
+                if (titleInput)
+                    titleInput.value = data.title || '';
+                if (descInput)
+                    descInput.value = data.body || '';
+                if (urlInput)
+                    urlInput.value = data.source_link || '';
+                if (pubMsg) {
+                    pubMsg.textContent = '';
+                    pubMsg.className = 'publish-msg';
+                }
                 const ytBtn = $('#yt-publish-btn');
                 if (ytBtn) {
                     ytBtn.textContent = '\uD83D\uDCE4 Update';
@@ -3263,8 +3302,12 @@ const APP_VERSION = 30;
                         const t = $('#publish-title')?.value?.trim();
                         const d = $('#publish-desc')?.value?.trim();
                         const u = $('#publish-url')?.value?.trim();
-                        if (!t) { _setElMsg(pubMsg, 'Please enter a title', 'error'); return; }
-                        ytBtn.disabled = true; ytBtn.textContent = 'Updating\u2026';
+                        if (!t) {
+                            _setElMsg(pubMsg, 'Please enter a title', 'error');
+                            return;
+                        }
+                        ytBtn.disabled = true;
+                        ytBtn.textContent = 'Updating\u2026';
                         try {
                             const c2 = getSupabaseClient();
                             const { error: updErr } = await c2.from('published_articles').update({
@@ -3273,22 +3316,32 @@ const APP_VERSION = 30;
                                 source_link: u || '',
                                 last_modified: new Date().toISOString()
                             }).eq('id', pubId);
-                            if (updErr) throw updErr;
+                            if (updErr)
+                                throw updErr;
                             _publishedCache = [];
                             await fetchPublishedArticlesFromSupabase();
-                            if (pubMsg) { pubMsg.innerHTML = '\u2705 Updated!'; pubMsg.className = 'publish-msg success'; }
+                            if (pubMsg) {
+                                pubMsg.innerHTML = '\u2705 Updated!';
+                                pubMsg.className = 'publish-msg success';
+                            }
                             ytBtn.textContent = '\u2705 Updated';
                             setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
-                        } catch (e) {
-                            if (pubMsg) { pubMsg.textContent = '\u274c ' + (e.message || 'Update failed'); pubMsg.className = 'publish-msg error'; }
-                            ytBtn.disabled = false; ytBtn.textContent = '\uD83D\uDCE4 Update';
+                        }
+                        catch (e) {
+                            if (pubMsg) {
+                                pubMsg.textContent = '\u274c ' + (e.message || 'Update failed');
+                                pubMsg.className = 'publish-msg error';
+                            }
+                            ytBtn.disabled = false;
+                            ytBtn.textContent = '\uD83D\uDCE4 Update';
                         }
                     };
                 }
             }
             // Close button
             const closeBtn = $('#yt-publish-modal-close');
-            if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
+            if (closeBtn)
+                closeBtn.onclick = () => modal.classList.remove('open');
         }
         catch (err) {
             console.warn('[Publish] Edit failed:', err.message);
@@ -3950,6 +4003,8 @@ const APP_VERSION = 30;
         setTopListStatus('Loading feeds…');
         try {
             const feeds = FeedManager.getFeedsForSubcat(currentScope, currentScope === 'nation' ? currentNation : null, currentSubcat);
+            // 'quotes' subcat has no RSS feeds — skip feed fetch but still
+            // merge published articles from Supabase.
             if (!feeds.length && currentSubcat !== 'quotes') {
                 showError('No feed sources available. Open Settings to add custom feeds.');
                 isFetching = false;
@@ -6019,7 +6074,8 @@ const APP_VERSION = 30;
     const TITLE_COLORS = ['#e6edf3', '#f5e6d3', '#d3e8f5', '#e6d3f5', '#d3f5e0', '#f5e0d3', '#f0dbe8', '#dbe8f0', '#d4f0db', '#f0ecd4', '#e0dbf0', '#dbf0ec'];
     function enhanceImageUrl(url) {
         let u = url;
-        u = u.replace(/[?&](w|width|size|h|height)=\d+/gi, '');
+        // Strip small dimension suffixes from filenames (e.g. photo-200x200.jpg → photo.jpg)
+        // but preserve query-string size parameters that CDNs may need.
         u = u.replace(/[-_](\d+)x(\d+)(\.\w+)$/i, '$3');
         u = u.replace(/\?&$/, '').replace(/\?$/, '');
         return u !== url ? u : null;
@@ -6155,11 +6211,100 @@ const APP_VERSION = 30;
         }
         return null;
     }
+    // Capture the current card using html2canvas for an exact visual replica.
+    // Returns a Blob (PNG) or null on failure. Hides toolbar/action buttons
+    // before capture so the output matches the clean card appearance.
+    async function captureCardWithHtml2Canvas() {
+        if (typeof html2canvas === 'undefined')
+            return null;
+        const card = document.querySelector('.reels-stack .reels-card');
+        if (!card)
+            return null;
+        // Temporarily hide interactive overlays that shouldn't appear in the share
+        const actionsBar = card.querySelector('.reels-actions');
+        const toolbarRow = card.querySelector('.reels-toolbar-row');
+        const navArrows = card.querySelectorAll('.reels-nav');
+        const wasActionsHidden = actionsBar && actionsBar.classList.contains('reels-actions-hidden');
+        const wasToolbarDisplay = toolbarRow ? toolbarRow.style.display : '';
+        const navDisplays = Array.from(navArrows).map(n => n.style.display);
+        if (actionsBar)
+            actionsBar.classList.add('reels-actions-hidden');
+        if (toolbarRow)
+            toolbarRow.style.display = 'none';
+        navArrows.forEach(n => n.style.display = 'none');
+        try {
+            const canvas = await html2canvas(card, {
+                useCORS: true,
+                allowTaint: true,
+                scale: Math.min(window.devicePixelRatio || 1, 2),
+                backgroundColor: '#000000',
+                logging: false,
+                // Ensure gradients and shadows render correctly
+                imageTimeout: 15000,
+                removeContainer: true,
+            });
+            return new Promise(r => canvas.toBlob(r, 'image/png'));
+        }
+        catch (err) {
+            console.warn('[Share] html2canvas failed:', err.message);
+            return null;
+        }
+        finally {
+            // Restore hidden elements
+            if (actionsBar && !wasActionsHidden)
+                actionsBar.classList.remove('reels-actions-hidden');
+            if (toolbarRow)
+                toolbarRow.style.display = wasToolbarDisplay;
+            navArrows.forEach((n, i) => { n.style.display = navDisplays[i]; });
+        }
+    }
     // Generate a share image. includeImage=true will fetch and embed the
     // source image; includeImage=false will produce a text-only card.
     async function handleShareImage(article, btn, includeImage) {
         btn && btn.classList.add('btn-busy');
         try {
+            // ── Primary: use html2canvas for exact visual replica ──
+            const capturedBlob = await captureCardWithHtml2Canvas();
+            if (capturedBlob) {
+                const caption = article._pubType === 'quote'
+                    ? buildQuoteCaption(article)
+                    : await buildShareCaption(article);
+                try {
+                    await navigator.clipboard.writeText(caption);
+                }
+                catch { }
+                const SHARE_MAX_BYTES = 5 * 1024 * 1024;
+                const tooLargeForShare = capturedBlob.size > SHARE_MAX_BYTES;
+                const file = new File([capturedBlob], 'invisible-broadcast.png', { type: 'image/png' });
+                if (navigator.share && !tooLargeForShare) {
+                    try {
+                        await navigator.share({ files: [file], title: article.title, text: caption });
+                        btn && btn.classList.remove('btn-busy');
+                        flashCopyButton(btn, 'Caption copied — share opened');
+                        return;
+                    }
+                    catch (err) {
+                        if (err && err.name === 'AbortError') {
+                            btn && btn.classList.remove('btn-busy');
+                            return;
+                        }
+                    }
+                }
+                try {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(capturedBlob);
+                    a.download = 'invisible-broadcast.png';
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    flashCopyButton(btn, 'Caption copied — image downloaded');
+                }
+                catch {
+                    flashCopyButton(btn, 'Caption copied');
+                }
+                btn && btn.classList.remove('btn-busy');
+                return;
+            }
+            // ── Fallback: custom canvas drawing when html2canvas is unavailable ──
             const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
             const hasThumb = imgUrl && imgUrl.startsWith('http');
             const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';

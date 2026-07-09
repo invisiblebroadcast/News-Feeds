@@ -1608,7 +1608,7 @@ const APP_VERSION = 30;
         '</button>' +
       '</div>';
     }
-    html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
+    html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="eager" decoding="async"></div>';
     html += '<div class="reels-overlay">' +
         '<div class="reels-count-row">' +
           '<span class="reels-count"></span>' +
@@ -1828,7 +1828,8 @@ const APP_VERSION = 30;
       const headerH = header ? header.getBoundingClientRect().height : 0;
       const footerH = footerBar ? footerBar.getBoundingClientRect().height : 0;
       const available = window.innerHeight - headerH - footerH;
-      const maxH = Math.max(240, available - 4);
+      const maxH = Math.max(240, available - 8);
+      container.style.height = maxH + 'px';
       container.style.maxHeight = maxH + 'px';
     });
   }
@@ -5743,7 +5744,8 @@ const APP_VERSION = 30;
 
   function enhanceImageUrl(url) {
     let u = url;
-    u = u.replace(/[?&](w|width|size|h|height)=\d+/gi, '');
+    // Strip small dimension suffixes from filenames (e.g. photo-200x200.jpg → photo.jpg)
+    // but preserve query-string size parameters that CDNs may need.
     u = u.replace(/[-_](\d+)x(\d+)(\.\w+)$/i, '$3');
     u = u.replace(/\?&$/, '').replace(/\?$/, '');
     return u !== url ? u : null;
@@ -5860,11 +5862,90 @@ const APP_VERSION = 30;
     return null;
   }
 
+  // Capture the current card using html2canvas for an exact visual replica.
+  // Returns a Blob (PNG) or null on failure. Hides toolbar/action buttons
+  // before capture so the output matches the clean card appearance.
+  async function captureCardWithHtml2Canvas() {
+    if (typeof html2canvas === 'undefined') return null;
+    const card = document.querySelector('.reels-stack .reels-card');
+    if (!card) return null;
+
+    // Temporarily hide interactive overlays that shouldn't appear in the share
+    const actionsBar = card.querySelector('.reels-actions');
+    const toolbarRow = card.querySelector('.reels-toolbar-row');
+    const navArrows = card.querySelectorAll('.reels-nav');
+    const wasActionsHidden = actionsBar && actionsBar.classList.contains('reels-actions-hidden');
+    const wasToolbarDisplay = toolbarRow ? toolbarRow.style.display : '';
+    const navDisplays = Array.from(navArrows).map(n => n.style.display);
+
+    if (actionsBar) actionsBar.classList.add('reels-actions-hidden');
+    if (toolbarRow) toolbarRow.style.display = 'none';
+    navArrows.forEach(n => n.style.display = 'none');
+
+    try {
+      const canvas = await html2canvas(card, {
+        useCORS: true,
+        allowTaint: true,
+        scale: Math.min(window.devicePixelRatio || 1, 2),
+        backgroundColor: '#000000',
+        logging: false,
+        // Ensure gradients and shadows render correctly
+        imageTimeout: 15000,
+        removeContainer: true,
+      });
+      return new Promise(r => canvas.toBlob(r, 'image/png'));
+    } catch (err) {
+      console.warn('[Share] html2canvas failed:', err.message);
+      return null;
+    } finally {
+      // Restore hidden elements
+      if (actionsBar && !wasActionsHidden) actionsBar.classList.remove('reels-actions-hidden');
+      if (toolbarRow) toolbarRow.style.display = wasToolbarDisplay;
+      navArrows.forEach((n, i) => { n.style.display = navDisplays[i]; });
+    }
+  }
+
   // Generate a share image. includeImage=true will fetch and embed the
   // source image; includeImage=false will produce a text-only card.
   async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
+      // ── Primary: use html2canvas for exact visual replica ──
+      const capturedBlob = await captureCardWithHtml2Canvas();
+      if (capturedBlob) {
+        const caption = article._pubType === 'quote'
+          ? buildQuoteCaption(article)
+          : await buildShareCaption(article);
+        try { await navigator.clipboard.writeText(caption); } catch {}
+
+        const SHARE_MAX_BYTES = 5 * 1024 * 1024;
+        const tooLargeForShare = capturedBlob.size > SHARE_MAX_BYTES;
+        const file = new File([capturedBlob], 'invisible-broadcast.png', { type: 'image/png' });
+        if (navigator.share && !tooLargeForShare) {
+          try {
+            await navigator.share({ files: [file], title: article.title, text: caption });
+            btn && btn.classList.remove('btn-busy');
+            flashCopyButton(btn, 'Caption copied — share opened');
+            return;
+          } catch (err) {
+            if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
+          }
+        }
+        try {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(capturedBlob);
+          a.download = 'invisible-broadcast.png';
+          a.click();
+          URL.revokeObjectURL(a.href);
+          flashCopyButton(btn, 'Caption copied — image downloaded');
+        } catch {
+          flashCopyButton(btn, 'Caption copied');
+        }
+        btn && btn.classList.remove('btn-busy');
+        return;
+      }
+
+      // ── Fallback: custom canvas drawing when html2canvas is unavailable ──
       const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
       const hasThumb = imgUrl && imgUrl.startsWith('http');
       const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
