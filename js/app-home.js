@@ -6284,12 +6284,35 @@ const APP_VERSION = 30;
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('\u201C', PAD, y + quoteOpenSize);
                 y += quoteOpenSize;
-                // Shadow box behind quote text — fades from all four sides
+                // Sample image brightness behind text area to set shadow intensity
+                let shadowAlpha = 0.45;
+                if (hasImg) {
+                    try {
+                        const sampleCtx = c.getContext('2d');
+                        const sx = Math.max(0, Math.round(shadowBoxX * dpr));
+                        const sy = Math.max(0, Math.round(y * dpr));
+                        const sw = Math.min(c.width - sx, Math.round(shadowBoxW * dpr));
+                        const sh = Math.min(c.height - sy, Math.round(shadowBoxH * dpr));
+                        if (sw > 0 && sh > 0) {
+                            const pixels = sampleCtx.getImageData(sx, sy, sw, sh).data;
+                            let totalBrightness = 0;
+                            const samples = Math.min(pixels.length / 4, 2000);
+                            const step = Math.max(4, Math.floor((pixels.length / 4) / samples));
+                            for (let i = 0; i < pixels.length; i += step * 4) {
+                                totalBrightness += (pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
+                            }
+                            const avgBrightness = totalBrightness / samples;
+                            shadowAlpha = avgBrightness > 128 ? 0.55 + (avgBrightness - 128) / 255 * 0.15 : 0.25 + avgBrightness / 128 * 0.15;
+                        }
+                    }
+                    catch { }
+                }
+                // Shadow box behind quote text — fades from all four sides, adapts to image
                 const shadowBoxX = PAD;
                 const shadowBoxW = textW;
                 const sbGrad = ctx.createRadialGradient(shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.15, shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.55);
-                sbGrad.addColorStop(0, 'rgba(0,0,0,0.5)');
-                sbGrad.addColorStop(0.5, 'rgba(0,0,0,0.3)');
+                sbGrad.addColorStop(0, `rgba(0,0,0,${shadowAlpha})`);
+                sbGrad.addColorStop(0.5, `rgba(0,0,0,${shadowAlpha * 0.6})`);
                 sbGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = sbGrad;
                 const sbR = Math.round(W * 0.015);
