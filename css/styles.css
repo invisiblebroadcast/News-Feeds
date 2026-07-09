@@ -6372,9 +6372,7 @@ a.nav-icon-only svg {
   -webkit-box-orient: unset !important;
   padding: 14px 18px;
   border-radius: 10px;
-  background: rgba(0,0,0,0.3);
-  backdrop-filter: blur(12px) brightness(0.55);
-  -webkit-backdrop-filter: blur(12px) brightness(0.55);
+  background: rgba(0,0,0,0.4);
   mask-image: radial-gradient(ellipse 92% 88% at center, black 35%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 92% 88% at center, black 35%, transparent 100%);
 }
