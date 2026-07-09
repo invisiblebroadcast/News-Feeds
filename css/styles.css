@@ -1034,9 +1034,6 @@ body.cards-view {
   line-height: 1.3;
   margin-bottom: 6px;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.5);
-  padding: 2px 0;
-  text-align: left;
 }
 .reels-meta {
   display: flex;
@@ -1046,9 +1043,6 @@ body.cards-view {
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin-bottom: 6px;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-  padding-left: 0;
-  text-align: left;
 }
 .reels-meta .reels-source {
   color: var(--accent);
@@ -1106,11 +1100,8 @@ body.cards-view {
 .reels-summary {
   font-size: 0.85rem;
   line-height: 1.55;
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.8);
   margin: 0;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.3);
-  padding: 4px 0;
-  text-align: left;
 }
 .reels-nav {
   position: absolute;
@@ -6435,94 +6426,15 @@ a.nav-icon-only svg {
 }
 }
 
-/* Left-side meta (Live+Trending horizontal, Date below) — TOP LEFT */
-.reels-left-meta {
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  cursor: pointer;
-}
-.reels-left-top {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.reels-left-live {
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #3fb950;
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(63, 185, 80, 0.6);
-  padding: 2px 6px;
-  border-radius: 3px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-.reels-left-trending {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #51cf66;
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(81, 207, 102, 0.5);
-  padding: 2px 6px;
-  border-radius: 3px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-.reels-left-trending .lrk-arrow {
-  font-size: 0.85rem;
-  font-weight: 800;
-  animation: ark-pulse 1.6s ease-in-out infinite;
-}
-.reels-left-trending .rk-num {
-  writing-mode: horizontal-tb;
-}
-.reels-left-date {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.9);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5);
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(0,0,0,0.35);
-}
-
 /* Hide meta for quote cards */
-.reels-card.quote-type-card .reels-left-meta {
+.reels-card.quote-type-card .reels-count-row {
   display: none;
 }
-.reels-card.quote-type-card .reels-top-right {
+.reels-card.quote-type-card .reels-meta {
   display: none;
 }
 .reels-card.quote-type-card .reels-read-btn {
   display: none !important;
-}
-
-/* Top RIGHT: Card number — below toolbar row */
-.reels-top-right {
-  position: absolute;
-  right: 10px;
-  top: 48px;
-  z-index: 10;
-}
-.reels-top-right .reels-count {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.95);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-  background: rgba(0,0,0,0.5);
-  padding: 3px 10px;
-  border-radius: 10px;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
 @media (max-width: 767px) {

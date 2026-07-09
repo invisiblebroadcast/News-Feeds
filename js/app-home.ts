@@ -1609,20 +1609,9 @@ const APP_VERSION = 30;
       '</div>';
     }
     html += '<div class="reels-img-wrap"><img class="reels-img" alt="" loading="lazy"></div>';
-    // Top LEFT: Live+Trending horizontal, Time below (toggleable)
-    html += '<div class="reels-left-meta" title="Click to toggle">' +
-          '<div class="reels-left-top">' +
-            '<span class="reels-left-live" style="display:none">LIVE</span>' +
-            '<span class="reels-left-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
-          '</div>' +
-          '<span class="reels-left-date"></span>' +
-        '</div>';
-    // Top RIGHT: Card number
-    html += '<div class="reels-top-right">' +
-          '<span class="reels-count"></span>' +
-        '</div>';
     html += '<div class="reels-overlay">' +
-        '<div class="reels-badges-row">' +
+        '<div class="reels-count-row">' +
+          '<span class="reels-count"></span>' +
           '<div class="reels-badges">' +
             '<span class="reels-conflict" style="display:none"><span class="rc-warn">⚠</span> Conflict</span>' +
             '<span class="reels-mode-badge"></span>' +
@@ -1631,6 +1620,8 @@ const APP_VERSION = 30;
         '<h2 class="reels-title"></h2>' +
         '<div class="reels-meta">' +
           '<span class="reels-source"></span>' +
+          '<span class="reels-date"></span>' +
+          '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
           '<span class="reels-flag" style="display:none"></span>' +
         '</div>' +
         '<div class="reels-conflict-panel" style="display:none">' +
@@ -1700,28 +1691,18 @@ const APP_VERSION = 30;
 
     const count = cardEl.querySelector('.reels-count');
     if (count) count.textContent = (idx + 1) + ' / ' + total;
-    // Left-side meta: LIVE, Trending, Date (toggleable)
-    const leftMeta = cardEl.querySelector('.reels-left-meta');
-    const leftLive = cardEl.querySelector('.reels-left-live');
-    const leftTrending = cardEl.querySelector('.reels-left-trending');
-    const leftDate = cardEl.querySelector('.reels-left-date');
-    if (leftLive) leftLive.style.display = currentMode === 'live' ? '' : 'none';
-    if (leftTrending) {
-      const show = article._trendingCount > 0;
-      leftTrending.style.display = show ? '' : 'none';
-      const rkNum = leftTrending.querySelector('.rk-num');
-      if (rkNum) rkNum.textContent = show ? article._trendingCount : '';
+    const modeBadge = cardEl.querySelector('.reels-mode-badge');
+    if (modeBadge) {
+      modeBadge.textContent = 'LIVE';
+      modeBadge.classList.toggle('mode-top', false);
+      modeBadge.classList.toggle('mode-live', true);
     }
-    if (leftDate) leftDate.textContent = formatDateShort(article.pubDate);
-    // Toggle visibility of left meta on click
-    if (leftMeta) {
-      leftMeta.onclick = (e) => {
-        e.stopPropagation();
-        const inner = leftMeta.querySelectorAll('.reels-left-live, .reels-left-trending, .reels-left-date');
-        const isHidden = leftMeta.dataset.hidden === '1';
-        inner.forEach(el => { el.style.visibility = isHidden ? 'visible' : 'hidden'; });
-        leftMeta.dataset.hidden = isHidden ? '0' : '1';
-      };
+    const liveTrendingEl = cardEl.querySelector('.reels-live-trending');
+    if (liveTrendingEl) {
+      const show = article._trendingCount > 0;
+      liveTrendingEl.style.display = show ? 'inline-flex' : 'none';
+      const n = liveTrendingEl.querySelector('.rk-num');
+      if (n) n.textContent = show ? article._trendingCount : '';
     }
     const conflictBadge = cardEl.querySelector('.reels-conflict');
     const conflictPanel = cardEl.querySelector('.reels-conflict-panel');
