@@ -6281,10 +6281,23 @@ const APP_VERSION = 30;
                 scale: Math.min(window.devicePixelRatio || 1, 2),
                 backgroundColor: '#000000',
                 logging: false,
-                // Ensure gradients and shadows render correctly
                 imageTimeout: 15000,
                 removeContainer: true,
             });
+            // Clip canvas to the card's visible bounding rect so overflow
+            // (e.g. absolutely-positioned quote images) is trimmed.
+            const rect = card.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const clipW = Math.round(rect.width * dpr);
+            const clipH = Math.round(rect.height * dpr);
+            if (clipW > 0 && clipH > 0 && (canvas.width !== clipW || canvas.height !== clipH)) {
+                const clipped = document.createElement('canvas');
+                clipped.width = clipW;
+                clipped.height = clipH;
+                const ctx = clipped.getContext('2d');
+                ctx.drawImage(canvas, 0, 0, clipW, clipH);
+                return new Promise(r => clipped.toBlob(r, 'image/png'));
+            }
             return new Promise(r => canvas.toBlob(r, 'image/png'));
         }
         catch (err) {
