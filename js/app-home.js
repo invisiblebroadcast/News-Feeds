@@ -6284,12 +6284,12 @@ const APP_VERSION = 30;
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('\u201C', PAD, y + quoteOpenSize);
                 y += quoteOpenSize;
-                // Shadow box behind quote text
+                // Shadow box behind quote text — fades from all four sides
                 const shadowBoxX = PAD;
                 const shadowBoxW = textW;
-                const sbGrad = ctx.createRadialGradient(shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, 0, shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW / 1.5);
-                sbGrad.addColorStop(0, 'rgba(0,0,0,0.55)');
-                sbGrad.addColorStop(0.7, 'rgba(0,0,0,0.35)');
+                const sbGrad = ctx.createRadialGradient(shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.15, shadowBoxX + shadowBoxW / 2, y + shadowBoxH / 2, shadowBoxW * 0.55);
+                sbGrad.addColorStop(0, 'rgba(0,0,0,0.5)');
+                sbGrad.addColorStop(0.5, 'rgba(0,0,0,0.3)');
                 sbGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = sbGrad;
                 const sbR = Math.round(W * 0.015);
