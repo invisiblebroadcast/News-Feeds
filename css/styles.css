@@ -1477,6 +1477,50 @@ body.cards-view .app-footer {
   }
 }
 
+/* ─── Reels Fullscreen Mode ─── */
+body.cards-fullscreen .sticky-zone,
+body.cards-fullscreen .section-footer-bar,
+body.cards-fullscreen .app-footer {
+  display: none !important;
+}
+body.cards-fullscreen .app-main {
+  padding: 0 !important;
+  height: 100vh !important;
+}
+body.cards-fullscreen .reels-container {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  padding: 0;
+  border-radius: 0;
+}
+body.cards-fullscreen .reels-stack {
+  border-radius: 0;
+  max-height: 100vh;
+}
+body.cards-fullscreen .reels-stack .reels-card {
+  border-radius: 0;
+  border: none;
+}
+/* Native fullscreen API: style the fullscreen element directly */
+.reels-container:fullscreen,
+.reels-container:-webkit-full-screen {
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0;
+  border-radius: 0;
+  background: #000;
+}
+.reels-container:fullscreen .reels-stack,
+.reels-container:-webkit-full-screen .reels-stack {
+  border-radius: 0;
+  max-height: 100vh;
+}
+.reels-container:fullscreen .reels-card,
+.reels-container:-webkit-full-screen .reels-card {
+  border-radius: 0;
+  border: none;
+}
+
 /* ─── Feed Input ─── */
 .feed-input-row {
   display: flex;

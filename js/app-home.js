@@ -1599,6 +1599,11 @@ const APP_VERSION = 30;
             // Refresh is done via the IB logo in the header; not duplicated here.
             html += '<div class="reels-toolbar-row">' +
                 '<div class="reels-toolbar-group reels-toolbar-left">' +
+                '<button class="reels-tool-btn reels-fullscreen-btn" title="Toggle Fullscreen">' +
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/>' +
+                '</svg>' +
+                '</button>' +
                 '<button class="reels-tool-btn reels-share-text" title="Copy Link">&#x1F517;</button>' +
                 '</div>' +
                 '<div class="reels-toolbar-group reels-toolbar-right">' +
@@ -1961,6 +1966,12 @@ const APP_VERSION = 30;
                 if (home) {
                     e.stopPropagation();
                     forceExitToHome();
+                    return;
+                }
+                const fsBtn = e.target.closest('.reels-fullscreen-btn');
+                if (fsBtn) {
+                    e.stopPropagation();
+                    toggleReelsFullscreen();
                     return;
                 }
                 const toggleDesc = e.target.closest('.reels-toggle-desc');
@@ -2352,6 +2363,33 @@ const APP_VERSION = 30;
             c.webkitRequestFullscreen();
         }
     }
+    function toggleReelsFullscreen() {
+        const container = document.querySelector('.reels-container');
+        if (!container)
+            return;
+        const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+        if (isFs) {
+            if (document.exitFullscreen)
+                document.exitFullscreen();
+            else if (document.webkitExitFullscreen)
+                document.webkitExitFullscreen();
+        }
+        else {
+            if (container.requestFullscreen)
+                container.requestFullscreen().catch(err => console.warn('Fullscreen failed:', err.message));
+            else if (container.webkitRequestFullscreen)
+                container.webkitRequestFullscreen();
+        }
+    }
+    function syncFullscreenBtn() {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        document.body.classList.toggle('cards-fullscreen', isFs);
+        const btn = document.querySelector('.reels-fullscreen-btn');
+        if (btn)
+            btn.classList.toggle('active', isFs);
+    }
+    document.addEventListener('fullscreenchange', syncFullscreenBtn);
+    document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
     // Exit reels view via the in-app exit button (e.g. the home button
     // on the reels card). Cleans up the back-stack entry that was pushed
     // when the user entered reels, so the next back press doesn't try
@@ -6224,14 +6262,18 @@ const APP_VERSION = 30;
         const actionsBar = card.querySelector('.reels-actions');
         const toolbarRow = card.querySelector('.reels-toolbar-row');
         const navArrows = card.querySelectorAll('.reels-nav');
+        const countRow = card.querySelector('.reels-count-row');
         const wasActionsHidden = actionsBar && actionsBar.classList.contains('reels-actions-hidden');
         const wasToolbarDisplay = toolbarRow ? toolbarRow.style.display : '';
         const navDisplays = Array.from(navArrows).map(n => n.style.display);
+        const wasCountDisplay = countRow ? countRow.style.display : '';
         if (actionsBar)
             actionsBar.classList.add('reels-actions-hidden');
         if (toolbarRow)
             toolbarRow.style.display = 'none';
         navArrows.forEach(n => n.style.display = 'none');
+        if (countRow)
+            countRow.style.display = 'none';
         try {
             const canvas = await html2canvas(card, {
                 useCORS: true,
@@ -6256,6 +6298,8 @@ const APP_VERSION = 30;
             if (toolbarRow)
                 toolbarRow.style.display = wasToolbarDisplay;
             navArrows.forEach((n, i) => { n.style.display = navDisplays[i]; });
+            if (countRow)
+                countRow.style.display = wasCountDisplay;
         }
     }
     // Generate a share image. includeImage=true will fetch and embed the
