@@ -1510,18 +1510,10 @@ const APP_VERSION = 6;
 
   function sizeReelsContainer() {
     const container = el.main.querySelector('.reels-container');
-    const bottomBar = document.getElementById('bottom-bar');
-    const footerBar = document.getElementById('section-footer-bar');
-    const header = document.querySelector('.app-header');
     if (!container) return;
-    requestAnimationFrame(() => {
-      const headerH = header ? header.getBoundingClientRect().height : 0;
-      const bottomH = (footerBar || bottomBar) ? (footerBar || bottomBar).getBoundingClientRect().height : 0;
-      const available = window.innerHeight - headerH - bottomH;
-      const maxH = Math.max(240, available - 8);
-      container.style.height = maxH + 'px';
-      container.style.maxHeight = maxH + 'px';
-    });
+    /* Table layout handles all sizing. Clear any stale inline styles. */
+    container.style.height = '';
+    container.style.maxHeight = '';
   }
 
   function showReel() {
@@ -1595,6 +1587,8 @@ const APP_VERSION = 6;
           const current = Settings.get('showDescription');
           Settings.set('showDescription', !current);
           syncSettingsToCloud();
+          // Toggle the active class on the button directly
+          toggleDesc.classList.toggle('active', !current);
           // Re-render the current card to apply the setting
           showReel();
           return;
@@ -4998,42 +4992,7 @@ const APP_VERSION = 6;
   async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
-      // ── Primary: use html2canvas for exact visual replica ──
-      const capturedBlob = await captureCardWithHtml2Canvas();
-      if (capturedBlob) {
-        const caption = article._pubType === 'quote'
-          ? buildQuoteCaption(article)
-          : await buildShareCaption(article);
-        try { await navigator.clipboard.writeText(caption); } catch {}
-
-        const SHARE_MAX_BYTES = 5 * 1024 * 1024;
-        const tooLargeForShare = capturedBlob.size > SHARE_MAX_BYTES;
-        const file = new File([capturedBlob], 'invisible-broadcast.png', { type: 'image/png' });
-        if (navigator.share && !tooLargeForShare) {
-          try {
-            await navigator.share({ files: [file], title: article.title, text: caption });
-            btn && btn.classList.remove('btn-busy');
-            flashCopyButton(btn, 'Caption copied — share opened');
-            return;
-          } catch (err) {
-            if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
-          }
-        }
-        try {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(capturedBlob);
-          a.download = 'invisible-broadcast.png';
-          a.click();
-          URL.revokeObjectURL(a.href);
-          flashCopyButton(btn, 'Caption copied — image downloaded');
-        } catch {
-          flashCopyButton(btn, 'Caption copied');
-        }
-        btn && btn.classList.remove('btn-busy');
-        return;
-      }
-
-      // ── Fallback: custom canvas drawing when html2canvas is unavailable ──
+      // html2canvas doesn't support object-fit:cover, so always use custom canvas
       const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
       const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
       const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
@@ -5131,9 +5090,7 @@ const APP_VERSION = 6;
         + smallGap
         + smallFontSize;
 
-      // Image dimensions — edge-to-edge (full canvas width, no left/right padding).
-      // High-res sources are downscaled with high-quality smoothing; low-res sources are
-      // upscaled to fill the width (accepting some softness for very small thumbnails).
+      // Image dimensions — cover mode: zoom to fill area, center, crop excess
       let imgDrawW = 0, imgDrawH = 0;
       let imgBlockH = 0;
       // Header area above the image for the IB block (only when image is present)
@@ -5141,10 +5098,10 @@ const APP_VERSION = 6;
       if (hasImg) {
         const maxW = W;
         const maxH = imgMaxAreaH - ibHeaderH;
-        const scale = Math.min(maxW / imgW, maxH / imgH);
+        const scale = Math.max(maxW / imgW, maxH / imgH);
         imgDrawW = Math.round(imgW * scale);
         imgDrawH = Math.round(imgH * scale);
-        imgBlockH = ibHeaderH + imgDrawH;
+        imgBlockH = ibHeaderH + maxH;
       }
 
       // Total content height
@@ -5163,17 +5120,20 @@ const APP_VERSION = 6;
 
       let cursorY = topOffset;
 
-      // Image (if any) — edge-to-edge (full width, no left/right padding)
+      // Image (if any) — cover mode: zoom to fill, center, crop
       let imageTopY = 0;
       if (hasImg) {
-        const drawX = Math.round((W - imgDrawW) / 2);
-        const drawY = cursorY + ibHeaderH;
-        imageTopY = drawY;
+        const maxW = W;
+        const maxH = imgMaxAreaH - ibHeaderH;
+        // Center the oversized image within the bounds (cover mode)
+        const drawX = Math.round((maxW - imgDrawW) / 2);
+        const drawY = cursorY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
+        imageTopY = cursorY + ibHeaderH;
         const imgRadius = 0;
 
-        // Clip to rounded rect so the image has soft corners
+        // Clip to bounds so the image is cropped (cover mode)
         ctx.save();
-        roundRect(ctx, drawX, drawY, imgDrawW, imgDrawH, imgRadius);
+        roundRect(ctx, 0, imageTopY, maxW, maxH, imgRadius);
         ctx.clip();
 
         // Multi-pass downscale for sharper output when source is much larger than target.
@@ -5197,39 +5157,39 @@ const APP_VERSION = 6;
           ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
         }
 
-        // Top fade: black → transparent
-        const fadeH = Math.round(imgDrawH * 0.2);
-        const topGrad = ctx.createLinearGradient(0, drawY, 0, drawY + fadeH);
+        // Top fade: black → transparent (within bounds)
+        const fadeH = Math.round(maxH * 0.2);
+        const topGrad = ctx.createLinearGradient(0, imageTopY, 0, imageTopY + fadeH);
         topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         topGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = topGrad;
-        ctx.fillRect(drawX, drawY, imgDrawW, fadeH);
-        // Bottom fade: transparent → black
-        const botGrad = ctx.createLinearGradient(0, drawY + imgDrawH - fadeH, 0, drawY + imgDrawH);
+        ctx.fillRect(0, imageTopY, W, fadeH);
+        // Bottom fade: transparent → black (within bounds)
+        const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - fadeH, 0, imageTopY + maxH);
         botGrad.addColorStop(0, 'rgba(0,0,0,0)');
         botGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = botGrad;
-        ctx.fillRect(drawX, drawY + imgDrawH - fadeH, imgDrawW, fadeH);
-        // Left fade: black → transparent (increased to 18% width, 0.85 alpha)
-        const fadeW = Math.round(imgDrawW * 0.18);
-        const leftGrad = ctx.createLinearGradient(drawX, 0, drawX + fadeW, 0);
+        ctx.fillRect(0, imageTopY + maxH - fadeH, W, fadeH);
+        // Left fade: black → transparent
+        const fadeW = Math.round(W * 0.18);
+        const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
         leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = leftGrad;
-        ctx.fillRect(drawX, drawY, fadeW, imgDrawH);
+        ctx.fillRect(0, imageTopY, fadeW, maxH);
         // Right fade: transparent → black
-        const rightGrad = ctx.createLinearGradient(drawX + imgDrawW - fadeW, 0, drawX + imgDrawW, 0);
+        const rightGrad = ctx.createLinearGradient(W - fadeW, 0, W, 0);
         rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
         rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = rightGrad;
-        ctx.fillRect(drawX + imgDrawW - fadeW, drawY, fadeW, imgDrawH);
+        ctx.fillRect(W - fadeW, imageTopY, fadeW, maxH);
 
         // IB logo block — inside the image, top-right, equal gap from top and right edges
         const logoS = Math.round(W * 0.07);
         const logoR = Math.round(W * 0.014);
         const ibGap = Math.round(W * 0.025);
-        const logoX = drawX + imgDrawW - ibGap - logoS;
-        const logoY = drawY + ibGap;
+        const logoX = maxW - ibGap - logoS;
+        const logoY = imageTopY + ibGap;
         ctx.fillStyle = '#ff2929';
         roundRect(ctx, logoX, logoY, logoS, logoS, logoR);
         ctx.fill();
@@ -5241,7 +5201,7 @@ const APP_VERSION = 6;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
-        ctx.restore(); // remove rounded clip
+        ctx.restore(); // remove clip
         cursorY += imgBlockH + gap;
       }
 

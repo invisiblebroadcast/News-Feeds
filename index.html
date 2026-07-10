@@ -39,129 +39,128 @@
   <!-- Progress Bar -->
   <div class="progress-bar" id="progress-bar"><div class="pb-fill" id="progress-fill"></div></div>
 
-  <!-- Sticky Header -->
-  <div class="sticky-zone" id="sticky-zone">
-    <header class="app-header">
-      <div class="app-header-inner">
-        <div class="header-left">
-          <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds" style="cursor:pointer;">
-            <span class="logo-icon">IB</span>
-          </div>
-          <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
-            <button class="btn btn-ghost btn-icon ib-refresh-spinner" id="ib-refresh-spinner" disabled>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/></svg>
-            </button>
-            <button class="btn btn-ghost btn-icon ib-recent-btn" id="ib-recent-btn" style="display:none">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4dabf7" stroke-width="1.6"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4 8,8 11,10" stroke="#4dabf7"/></svg>
-            </button>
-          </div>
-          <button class="btn btn-ghost btn-icon nav-btn-icon" id="trending-btn" title="Trending · Top 25" aria-label="Trending">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-          </button>
-        </div>
-
-        <div class="header-right">
-          <button class="btn btn-ghost btn-icon nav-btn-icon" id="search-toggle-btn" title="Search" aria-label="Search">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </button>
-          <button class="btn btn-ghost btn-icon nav-btn-icon" id="analyze-btn" title="Analyze a person" aria-label="Analyze">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-          </button>
-          <a href="activity.html" class="nav-icon-only" data-page="activity"><span class="nav-icon">&#x1F4CA;</span></a>
-          <button class="btn btn-ghost btn-icon nav-btn-icon" id="settings-btn" title="Quick Settings" aria-label="Settings">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-          <button class="btn" id="auth-btn">Sign In</button>
-          <div class="auth-user" id="auth-user" style="display:none">
-            <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
-              <span class="auth-avatar-wrap">
-                <img class="auth-avatar" id="auth-avatar" src="" alt="">
-                <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
-              </span>
-            </button>
-            <div class="auth-dropdown" id="auth-dropdown" style="display:none">
-              <div class="auth-dropdown-header">
-                <div class="auth-dropdown-name" id="auth-dropdown-name"></div>
-                <div class="auth-dropdown-email" id="auth-dropdown-email"></div>
+  <!-- Main Layout Grid: rows 1-3 and 5 fixed height, row 4 fills remaining viewport -->
+  <div class="app-layout" id="app-layout">
+      <!-- Row 1: IB Header -->
+      <div class="layout-row-1">
+          <header class="app-header">
+            <div class="app-header-inner">
+              <div class="header-left">
+                <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds" style="cursor:pointer;">
+                  <span class="logo-icon">IB</span>
+                </div>
+                <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
+                  <button class="btn btn-ghost btn-icon ib-refresh-spinner" id="ib-refresh-spinner" disabled>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8a6 6 0 0110.5-4"/><path d="M14 8a6 6 0 01-10.5 4"/><polyline points="12,1 12.5,4 9.5,4.5"/><polyline points="4,15 3.5,12 6.5,11.5"/></svg>
+                  </button>
+                  <button class="btn btn-ghost btn-icon ib-recent-btn" id="ib-recent-btn" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4dabf7" stroke-width="1.6"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4 8,8 11,10" stroke="#4dabf7"/></svg>
+                  </button>
+                </div>
+                <button class="btn btn-ghost btn-icon nav-btn-icon" id="trending-btn" title="Trending · Top 25" aria-label="Trending">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+                </button>
               </div>
-              <button class="auth-dropdown-item" id="auth-change-avatar-btn"><span>&#x1F4F7;</span> Change Avatar</button>
-              <button class="auth-dropdown-item" id="auth-change-name-btn"><span>&#x270F;&#xFE0F;</span> Change Name</button>
-              <button class="auth-dropdown-item" id="auth-change-password-btn"><span>&#x1F511;</span> Change Password</button>
-              <div class="auth-dropdown-divider"></div>
-              <button class="auth-dropdown-item auth-dropdown-item-danger" id="auth-signout-btn"><span>&#x23FB;</span> Sign Out</button>
+              <div class="header-right">
+                <button class="btn btn-ghost btn-icon nav-btn-icon" id="search-toggle-btn" title="Search" aria-label="Search">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+                <button class="btn btn-ghost btn-icon nav-btn-icon" id="analyze-btn" title="Analyze a person" aria-label="Analyze">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+                </button>
+                <a href="activity.html" class="nav-icon-only" data-page="activity"><span class="nav-icon">&#x1F4CA;</span></a>
+                <button class="btn btn-ghost btn-icon nav-btn-icon" id="settings-btn" title="Quick Settings" aria-label="Settings">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <button class="btn" id="auth-btn">Sign In</button>
+                <div class="auth-user" id="auth-user" style="display:none">
+                  <button class="auth-avatar-btn" id="auth-avatar-btn" title="Account menu">
+                    <span class="auth-avatar-wrap">
+                      <img class="auth-avatar" id="auth-avatar" src="" alt="">
+                      <span class="auth-avatar-fallback" id="auth-avatar-fallback">&#x1F464;</span>
+                    </span>
+                  </button>
+                  <div class="auth-dropdown" id="auth-dropdown" style="display:none">
+                    <div class="auth-dropdown-header">
+                      <div class="auth-dropdown-name" id="auth-dropdown-name"></div>
+                      <div class="auth-dropdown-email" id="auth-dropdown-email"></div>
+                    </div>
+                    <button class="auth-dropdown-item" id="auth-change-avatar-btn"><span>&#x1F4F7;</span> Change Avatar</button>
+                    <button class="auth-dropdown-item" id="auth-change-name-btn"><span>&#x270F;&#xFE0F;</span> Change Name</button>
+                    <button class="auth-dropdown-item" id="auth-change-password-btn"><span>&#x1F511;</span> Change Password</button>
+                    <div class="auth-dropdown-divider"></div>
+                    <button class="auth-dropdown-item auth-dropdown-item-danger" id="auth-signout-btn"><span>&#x23FB;</span> Sign Out</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+          <div class="header-search-row" id="header-search-row" hidden>
+            <div class="page-container">
+              <input type="text" id="search-input" placeholder="Search articles…">
             </div>
           </div>
-        </div>
       </div>
-    </header>
 
-    <!-- Search Row -->
-    <div class="header-search-row" id="header-search-row" hidden>
-      <div class="page-container">
-        <input type="text" id="search-input" placeholder="Search articles…">
+      <!-- Row 2: Global/India tabs -->
+      <div class="layout-row-2">
+          <nav class="top-tabs-row" id="top-tabs-row">
+            <div class="page-container">
+              <ul class="tab-list" id="top-tab-list">
+                <li class="tab-item active" data-scope="global">Global</li>
+                <li class="tab-item" data-scope="nation" data-nation="india">India</li>
+              </ul>
+            </div>
+          </nav>
       </div>
-    </div>
 
-    <!-- Top Navigation Tabs -->
-    <nav class="top-tabs-row" id="top-tabs-row">
-      <div class="page-container">
-        <ul class="tab-list" id="top-tab-list">
-          <li class="tab-item active" data-scope="global">Global</li>
-          <li class="tab-item" data-scope="nation" data-nation="india">India</li>
-        </ul>
+      <!-- Row 3: Feeds/Topics/Conflicts tabs -->
+      <div class="layout-row-3">
+          <div class="section-tabs-row" id="section-tabs-row">
+            <div class="page-container">
+              <div class="section-tab-list" id="section-tab-list">
+                <button class="section-tab active" data-section="feeds">Feeds</button>
+                <button class="section-tab" data-section="topics">Topics</button>
+                <button class="section-tab" data-section="conflicts">Conflicts</button>
+              </div>
+            </div>
+          </div>
       </div>
-    </nav>
-    <div class="section-tabs-row" id="section-tabs-row">
-      <div class="page-container">
-        <div class="section-tab-list" id="section-tab-list">
-          <button class="section-tab active" data-section="feeds">Feeds</button>
-          <button class="section-tab" data-section="topics">Topics</button>
-          <button class="section-tab" data-section="conflicts">Conflicts</button>
-        </div>
+
+      <!-- Row 4: Content — fills all remaining space -->
+      <div class="layout-row-4">
+          <main class="app-main page-enter" id="main-content">
+            <div class="loading-state">
+              <div class="loading-spinner"></div>
+              <p>Loading news feeds&hellip;</p>
+            </div>
+          </main>
       </div>
-    </div>
+
+      <!-- Row 5: Category footer bar -->
+      <div class="layout-row-5">
+          <div class="section-footer-bar" id="section-footer-bar">
+            <div class="section-footer-inner">
+              <div class="section-footer-left">
+                <span class="section-meta" id="section-meta"></span>
+                <h2 id="section-title"></h2>
+              </div>
+              <div class="section-footer-right">
+                <div class="source-toggle-wrap" id="source-toggle-wrap" title="Toggle between Feeds and IB">
+                  <span class="source-toggle-label">Feeds</span>
+                  <button class="source-toggle-switch" id="source-toggle-switch" role="switch" aria-checked="false">
+                    <span class="source-toggle-thumb"></span>
+                  </button>
+                  <span class="source-toggle-label">IB</span>
+                </div>
+                <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+      </div>
   </div>
-
-  <!-- Main Content Area -->
-  <main class="app-main page-enter" id="main-content">
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Loading news feeds&hellip;</p>
-    </div>
-  </main>
-
-  <!-- Section Footer Bar (title + view toggle, always fixed at bottom) -->
-  <div class="section-footer-bar" id="section-footer-bar">
-    <div class="section-footer-inner">
-      <div class="section-footer-left">
-        <span class="section-meta" id="section-meta"></span>
-        <h2 id="section-title"></h2>
-      </div>
-      <div class="section-footer-right">
-        <div class="source-toggle-wrap" id="source-toggle-wrap" title="Toggle between Feeds and IB">
-          <span class="source-toggle-label">Feeds</span>
-          <button class="source-toggle-switch" id="source-toggle-switch" role="switch" aria-checked="false">
-            <span class="source-toggle-thumb"></span>
-          </button>
-          <span class="source-toggle-label">IB</span>
-        </div>
-        <button class="btn btn-ghost btn-icon view-toggle-btn" id="view-toggle-btn" title="Toggle view" aria-label="Toggle view">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <footer class="app-footer">
-    <div class="page-container">
-      Invisible Broadcast &mdash; Aggregated from global sources.
-      <div class="footer-links">
-        <a href="explore.html">Explore</a>
-        <a href="activity.html">Activity</a>
-        <a href="settings.html">Settings</a>
-      </div>
-    </div>
-  </footer>
 
   <!-- Modals (preserved from original SPA) -->
   <div class="modal-overlay" id="settings-modal">
