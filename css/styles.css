@@ -77,6 +77,8 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -84,9 +86,9 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
 a {

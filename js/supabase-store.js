@@ -1,21 +1,9 @@
 // @ts-nocheck
 const SUPABASE_URL = 'https://yokftwevcspbpbnwmrnb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlva2Z0d2V2Y3NwYnBibndtcm5iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNjEzNzEsImV4cCI6MjA5NjgzNzM3MX0.zfdj2115WsFw2KFyFkW54W-ShDNRwtKxQ8UiKNfF7U0';
-try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('sb-') && k.includes('auth-token')) localStorage.removeItem(k);
-    }
-} catch {}
 const SupabaseStore = (() => {
     const { createClient } = supabase;
-    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-            detectSessionInUrl: false,
-        }
-    });
+    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const CACHE_KEY = 'newsfeeds_article_data_supa';
     function readCache() {
         try {
