@@ -6053,15 +6053,29 @@ const APP_VERSION = 30;
         const shadowPadX = Math.round(W * 0.04);
         const shadowPadY = Math.round(W * 0.025);
 
-        // Measure quote text to get height
+        // Measure quote text first to calculate dynamic canvas height
+        // Split by \n to preserve paragraph breaks (matches cards view <br> behavior)
+        const quoteParagraphs = quoteText.split('\n').filter(p => p.trim());
+        const paraGap = Math.round(quoteLineH * 0.5);
         ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        const qLines = wrapText(ctx, quoteText, 0, 0, textW - shadowPadX * 2, quoteLineH);
-        const qH = qLines * quoteLineH;
+        const maxTextW = textW - shadowPadX * 2;
+        let totalQLines = 0;
+        const paraLineCounts: number[] = [];
+        for (const para of quoteParagraphs) {
+          const n = wrapText(ctx, para, 0, 0, maxTextW, quoteLineH);
+          paraLineCounts.push(n);
+          totalQLines += n;
+        }
+        if (totalQLines === 0) { paraLineCounts.push(1); totalQLines = 1; }
+        const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
         const shadowBoxH = qH + shadowPadY * 2;
         const fromH = quoteFrom ? fromFontSize : 0;
 
-        // Fixed 9:16 canvas (like phone screen) — matches web card aspect
-        const canvasH = 1920;
+        // Total content below the 65% text-start line
+        const textBlockContentH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize;
+        // Canvas height: text starts at 65%, so canvasH * 0.35 must fit textBlockContentH
+        // Minimum 1920 (9:16) for visual consistency
+        const canvasH = Math.max(1920, Math.ceil(textBlockContentH / 0.35));
         c.height = canvasH * dpr;
         ctx.scale(dpr, dpr);
         ctx.imageSmoothingQuality = 'high';
@@ -6139,25 +6153,40 @@ const APP_VERSION = 30;
         ctx.roundRect(sbX, sbY, sbW, shadowBoxH, sbR);
         ctx.fill();
 
-        // Quote text
+        // Quote text — draw each paragraph with gap between them (italic + bold, matching cards view)
         ctx.fillStyle = '#e6edf3';
-        ctx.font = '700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        wrapText(ctx, quoteText, sbX + shadowPadX, sbY + shadowPadY + quoteLineH, textW - shadowPadX * 2, quoteLineH);
+        ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
+        let textY = sbY + shadowPadY + quoteLineH;
+        let paraIdx = 0;
+        for (const para of quoteParagraphs) {
+          if (paraIdx > 0) textY += paraGap;
+          wrapText(ctx, para, sbX + shadowPadX, textY, maxTextW, quoteLineH);
+          textY += paraLineCounts[paraIdx] * quoteLineH;
+          paraIdx++;
+        }
 
-        // Quote from — RIGHT aligned
+        // Quote from — RIGHT aligned, red, with text-shadow (matching cards view)
         let afterTextY = sbY + shadowBoxH + shadowPadY;
         if (quoteFrom) {
           const fromText = '\u2014 ' + quoteFrom;
-          ctx.fillStyle = '#ff2929';
-          ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
           ctx.textBaseline = 'alphabetic';
           const fromTextW = ctx.measureText(fromText).width;
-          ctx.fillText(fromText, W - PAD - fromTextW, afterTextY + fromFontSize);
+          const fromX = W - PAD - fromTextW;
+          const fromY = afterTextY + fromFontSize;
+          ctx.shadowColor = 'rgba(0,0,0,0.7)';
+          ctx.shadowBlur = 3;
+          ctx.shadowOffsetY = 1;
+          ctx.fillStyle = '#ff2929';
+          ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
+          ctx.fillText(fromText, fromX, fromY);
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
           afterTextY += fromH + medGap;
         }
 
-        // Separator line — right-aligned, fading
-        const sepW = Math.round(textW * 0.4);
+        // Separator line — right-aligned, fading (matching cards view: 60% width)
+        const sepW = Math.round(textW * 0.6);
         const sepX = W - PAD - sepW;
         const sepGrad = ctx.createLinearGradient(sepX, 0, sepX + sepW, 0);
         sepGrad.addColorStop(0, 'rgba(255,255,255,0)');
@@ -6171,11 +6200,17 @@ const APP_VERSION = 30;
         ctx.stroke();
         afterTextY += medGap;
 
-        // "Invisible Broadcast" — LEFT aligned
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.font = '600 ' + wmFontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        // "Invisible Broadcast" — LEFT aligned, Georgia, with text-shadow (matching cards view)
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '600 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
         ctx.textBaseline = 'alphabetic';
         ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
         const blob = await new Promise(r => c.toBlob(r, 'image/png'));
         if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
