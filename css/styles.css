@@ -317,7 +317,7 @@ img { max-width: 100%; height: auto; }
 /* ─── App Layout Table ─── */
 .app-layout {
   display: grid;
-  grid-template-rows: auto auto auto 1fr var(--fixed-row-h, 44px);
+  grid-template-rows: auto auto auto 1fr 44px;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -325,11 +325,12 @@ img { max-width: 100%; height: auto; }
 .app-layout > .layout-row-1,
 .app-layout > .layout-row-2,
 .app-layout > .layout-row-3 {
-  min-height: var(--fixed-row-h, 44px);
+  min-height: 44px;
 }
 .app-layout > .layout-row-5 {
-  height: var(--fixed-row-h, 44px);
-  min-height: var(--fixed-row-h, 44px);
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 .app-layout > .layout-row-4 {
   min-height: 0;
@@ -6077,6 +6078,7 @@ a.nav-icon-only svg {
 /* ─── Section Footer Bar ─── */
 .section-footer-bar {
   height: 100%;
+  min-height: 44px;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-secondary);
 }
