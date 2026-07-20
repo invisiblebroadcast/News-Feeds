@@ -6470,6 +6470,7 @@ a.nav-icon-only svg {
   height: 100%;
   object-fit: cover;
   object-position: center;
+  filter: brightness(1.1);
 }
 /* Fade-to-black on bottom 20% of image (40%→60% of card) */
 .reels-stack .reels-card.quote-type-card .reels-img-wrap::after {
@@ -6482,6 +6483,7 @@ a.nav-icon-only svg {
   background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.5) 50%, #000 100%);
   pointer-events: none;
 }
+/* Overlay: transparent so image shows through in the top 40% */
 .reels-stack .reels-card.quote-type-card .reels-overlay {
   position: absolute;
   top: 0;
@@ -6489,14 +6491,15 @@ a.nav-icon-only svg {
   right: 0;
   bottom: 0;
   margin-top: 0;
-  padding-top: 40%;
+  padding: 40% 16px 16px;
+  background: transparent;
   overflow: hidden;
 }
 .reels-stack .reels-card.quote-type-card .reels-title {
   display: block;
   font-size: 2.2rem;
   line-height: 1;
-  margin: 0 0 4px 16px;
+  margin: 0 0 4px 0;
   text-align: left;
   color: var(--accent, #ff2929);
   text-shadow: 0 1px 3px rgba(0,0,0,0.5);
@@ -6507,7 +6510,10 @@ a.nav-icon-only svg {
   font-size: 0.72rem;
   font-weight: 600;
   color: rgba(255,255,255,0.6);
-  margin-top: 4px;
+  position: absolute;
+  right: 16px;
+  top: calc(40% + 8px);
+  margin-top: 0;
 }
 .reels-stack .reels-card.quote-type-card .reels-read-btn {
   display: none !important;
@@ -6515,7 +6521,7 @@ a.nav-icon-only svg {
 /* Reduce gap between quote mark and text */
 .reels-card.quote-type-card .reels-summary-wrap {
   margin-top: 0;
-  padding: 0 16px;
+  padding: 0;
 }
 
 @media (max-width: 767px) {
