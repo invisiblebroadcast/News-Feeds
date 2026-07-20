@@ -6439,8 +6439,8 @@ a.nav-icon-only svg {
   padding-left: 0;
 }
 
-/* Quote cards: image fills entire card, gradient fades bottom 40% to black,
-   quote text starts at 40% (overlapping with the fade) */
+/* Quote cards: top 60% = photo, bottom 60% = text, middle 20% = overlap fade.
+   Image fades to black from 40%→60%, quote text starts at 40%. */
 .reels-stack .reels-card.quote-type-card {
   border: none;
   box-shadow: none;
@@ -6454,14 +6454,15 @@ a.nav-icon-only svg {
 .reels-stack .reels-card.quote-type-card .reels-live-trending {
   display: none !important;
 }
-.reels:  none;
+.reels-stack .reels-card.quote-type-card .reels-source {
+  display: none;
 }
 .reels-stack .reels-card.quote-type-card .reels-img-wrap {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  height: 60%;
   overflow: hidden;
 }
 .reels-stack .reels-card.quote-type-card .reels-img-wrap .reels-img {
@@ -6470,14 +6471,14 @@ a.nav-icon-only svg {
   object-fit: cover;
   object-position: center;
 }
-/* Fade-to-black on bottom 40% of image */
+/* Fade-to-black on bottom 20% of image (40%→60% of card) */
 .reels-stack .reels-card.quote-type-card .reels-img-wrap::after {
   content: '';
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 40%;
+  height: 33%; /* 33% of the 60% image area = 20% of card */
   background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.5) 50%, #000 100%);
   pointer-events: none;
 }
@@ -6491,6 +6492,15 @@ a.nav-icon-only svg {
   padding-top: 40%;
   overflow: hidden;
 }
+.reels-stack .reels-card.quote-type-card .reels-title {
+  display: block;
+  font-size: 2.2rem;
+  line-height: 1;
+  margin: 0 0 4px 16px;
+  text-align: left;
+  color: var(--accent, #ff2929);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
 .reels-stack .reels-card.quote-type-card .reels-meta {
   display: block;
   text-align: right;
@@ -6501,6 +6511,11 @@ a.nav-icon-only svg {
 }
 .reels-stack .reels-card.quote-type-card .reels-read-btn {
   display: none !important;
+}
+/* Reduce gap between quote mark and text */
+.reels-card.quote-type-card .reels-summary-wrap {
+  margin-top: 0;
+  padding: 0 16px;
 }
 
 @media (max-width: 767px) {
