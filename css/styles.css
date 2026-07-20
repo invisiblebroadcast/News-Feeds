@@ -865,14 +865,8 @@ body.cards-view .app-main {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: high-quality;
 }
-.reels-img-wrap::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.88) 0%, transparent 14%, transparent 60%, rgba(0,0,0,0.88) 100%);
-  pointer-events: none;
-  z-index: 1;
-}
+/* No ::after gradient veil on card images (quotes and regular posts) —
+   images render clear edge to edge. */
 .reels-img-wrap.no-image {
   display: none;
 }
@@ -6482,17 +6476,8 @@ a.nav-icon-only svg {
   object-position: center;
   filter: brightness(1.15);
 }
-.reels-stack .reels-card.quote-type-card .reels-img-wrap::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 33%;
-  background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 50%, #000 100%);
-  pointer-events: none;
-  z-index: 2;
-}
+/* No ::after fade on quote card images — the grey gradient veil over the
+   photo was removed intentionally; the image renders clear edge to edge. */
 .reels-stack .reels-card.quote-type-card .reels-overlay {
   position: absolute;
   top: 0;
@@ -6512,24 +6497,40 @@ a.nav-icon-only svg {
   font-size: 2.4rem;
   line-height: 1;
   margin: 0;
-  text-align: left;
+  text-align: center;
   color: var(--accent, #ff2929);
   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
+/* Quote symbol + date are grouped together as one centered block at the top
+   of the overlay. The date stays in normal flow (static) right after the
+   quote mark — no absolute positioning — so the pair renders identically in
+   normal and fullscreen cards view. */
 .reels-stack .reels-card.quote-type-card .reels-meta {
   display: block;
-  text-align: right;
+  text-align: center;
   font-size: 0.72rem;
   font-weight: 700;
   color: rgba(255,255,255,0.6);
   margin: 4px 0 0 0;
-  position: absolute;
-  right: 16px;
-  top: calc(40% + 6px);
 }
 .reels-stack .reels-card.quote-type-card .reels-summary-wrap {
   margin: 0;
   padding: 0;
+}
+/* Quote cards: the image is absolutely positioned from the very top of the
+   card, i.e. behind the toolbar row. Keep the toolbar transparent so it
+   doesn't render as a black box over the photo, and raise it above the
+   full-card overlay (z-index 3) so its buttons stay clickable. The row
+   itself ignores pointer events so the empty strip still allows swipes;
+   only the buttons receive clicks (they have their own dark circle bg). */
+.reels-stack .reels-card.quote-type-card .reels-toolbar-row {
+  background: transparent;
+  border-bottom-color: transparent;
+  z-index: 4;
+  pointer-events: none;
+}
+.reels-stack .reels-card.quote-type-card .reels-toolbar-row .reels-tool-btn {
+  pointer-events: auto;
 }
 
 @media (max-width: 767px) {
