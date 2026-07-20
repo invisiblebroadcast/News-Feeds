@@ -1,0 +1,115 @@
+/* ============================================================
+   Mobile stylesheet — loaded on devices with width <= 768px
+   Contains all mobile-specific overrides extracted from styles.css
+   ============================================================ */
+
+/* Base mobile font sizes */
+@media (max-width: 480px) {
+  :root {
+    --container-padding: 12px;
+    --card-padding: 12px;
+    --gap: 8px;
+    --section-margin: 16px;
+  }
+}
+
+/* Small mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .feed-list-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+}
+
+/* Tablet/phone (max-width: 768px) */
+@media (max-width: 768px) {
+  .feed-filters-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .feed-filters-bar .feed-filter-btn {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+}
+
+/* Article card responsive */
+@media (max-width: 768px) {
+  .article-card {
+    flex-direction: column;
+  }
+  .article-thumb {
+    width: 100%;
+    height: 160px;
+  }
+  .article-card .article-title {
+    font-size: var(--font-size-md);
+  }
+}
+
+/* Cards view mobile */
+@media (max-width: 800px) {
+  .reels-container {
+    border-radius: 0;
+  }
+  .reels-card {
+    border-radius: 0;
+  }
+  .reels-meta-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}
+
+/* Settings mobile */
+@media (max-width: 600px) {
+  .settings-container {
+    padding: 12px;
+  }
+  .setting-group {
+    padding: 12px;
+  }
+}
+
+/* Modal mobile */
+@media (max-width: 800px) {
+  .modal {
+    max-width: 95vw;
+    margin: 8px;
+  }
+}
+
+/* Comment page mobile */
+@media (max-width: 600px) {
+  .comment-item {
+    padding: 8px;
+  }
+  .comment-author {
+    font-size: 0.8rem;
+  }
+}
+
+/* Feed health mobile */
+@media (max-width: 600px) {
+  .feed-health-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Quote card mobile */
+@media (max-width: 767px) {
+  .quote-from-overlay {
+    font-size: 0.95rem;
+  }
+  .quote-occupation-overlay {
+    font-size: 0.75rem;
+  }
+  .quote-watermark-overlay {
+    font-size: 0.65rem;
+  }
+}
+
+/* Bottom bar mobile adjustments handled by desktop.css media queries */
+/* Additional mobile-specific overrides can be added here */
