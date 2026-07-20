@@ -6118,25 +6118,27 @@ const APP_VERSION = 30;
         const dateH = quoteDate ? wmFontSize : 0;
         const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + occH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
 
-        // Image area: same bounds as non-quote cards (max 55% of 1350)
+        // Canvas height: compact, grows with content. Min 1350.
+        const textOnlyH = textBlockH;
+        const canvasH = Math.max(1350, textOnlyH + Math.round(W * 0.08));
+        c.height = canvasH * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.imageSmoothingQuality = 'high';
+
+        // Image area: top 60% of canvas
+        const imgBlockHCalc = Math.round(canvasH * 0.6);
         const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
         let imgDrawW = 0, imgDrawH = 0, imgBlockH = 0;
         if (hasImg) {
-          const maxH = imgMaxAreaH - ibHeaderH;
+          const maxH = imgBlockHCalc - ibHeaderH;
           const scale = Math.max(W / imgW, maxH / imgH);
           imgDrawW = Math.round(imgW * scale);
           imgDrawH = Math.round(imgH * scale);
           imgBlockH = ibHeaderH + maxH;
         }
 
-        // Canvas height: compact, grows with content
-        const totalContentH = (hasImg ? imgBlockH + gap : 0) + textBlockH;
-        const canvasH = Math.max(1350, totalContentH + Math.round(W * 0.08));
-        c.height = canvasH * dpr;
-        ctx.scale(dpr, dpr);
-        ctx.imageSmoothingQuality = 'high';
-
         // Center content vertically
+        const totalContentH = (hasImg ? imgBlockH + gap : 0) + textBlockH;
         const topOffset = Math.round((canvasH - totalContentH) / 2);
 
         // Black background
@@ -6147,7 +6149,7 @@ const APP_VERSION = 30;
 
         // Draw image (cover mode, centered)
         if (hasImg) {
-          const maxH = imgMaxAreaH - ibHeaderH;
+          const maxH = imgBlockHCalc - ibHeaderH;
           const drawX = Math.round((W - imgDrawW) / 2);
           const drawY = cursorY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
           const imageTopY = cursorY + ibHeaderH;
@@ -6178,18 +6180,14 @@ const APP_VERSION = 30;
             ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
           }
 
-          // Top/bottom fades within image bounds
-          const fadeH = Math.round(maxH * 0.2);
-          const topGrad = ctx.createLinearGradient(0, imageTopY, 0, imageTopY + fadeH);
-          topGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
-          topGrad.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = topGrad;
-          ctx.fillRect(0, imageTopY, W, fadeH);
-          const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - fadeH, 0, imageTopY + maxH);
+          // Bottom fade to black — strong 40% of image area for clean blend
+          const botFadeH = Math.round(maxH * 0.4);
+          const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - botFadeH, 0, imageTopY + maxH);
           botGrad.addColorStop(0, 'rgba(0,0,0,0)');
-          botGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
+          botGrad.addColorStop(0.5, 'rgba(0,0,0,0.5)');
+          botGrad.addColorStop(1, 'rgba(0,0,0,1)');
           ctx.fillStyle = botGrad;
-          ctx.fillRect(0, imageTopY + maxH - fadeH, W, fadeH);
+          ctx.fillRect(0, imageTopY + maxH - botFadeH, W, botFadeH);
 
           ctx.restore();
           cursorY += imgBlockH + gap;
