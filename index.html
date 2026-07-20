@@ -845,6 +845,14 @@
             <label for="publish-desc">Description (Markdown supported)</label>
             <textarea id="publish-desc" placeholder="Post content..."></textarea>
           </div>
+          <div class="publish-field">
+            <label for="ib-post-image">Image (optional, PNG/JPG, max 2MB)</label>
+            <input type="file" id="ib-post-image" accept="image/png,image/jpeg">
+            <div id="ib-post-image-preview" style="display:none;margin-top:8px;">
+              <img id="ib-post-image-preview-img" style="max-width:100%;max-height:120px;border-radius:4px;">
+              <button class="btn btn-ghost" id="ib-post-image-remove" style="font-size:0.75rem;margin-top:4px;">Remove</button>
+            </div>
+          </div>
 
           <div class="publish-msg" id="publish-msg"></div>
 

@@ -2982,7 +2982,7 @@ const APP_VERSION = 30;
                 _publishedCache = (data || []).map(r => {
                     // Build image URL from post_id if present
                     let imageUrl = '';
-                    if (r.post_id && r.type === 'quote') {
+                    if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
                         imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg';
                     }
                     return {
