@@ -6458,7 +6458,9 @@ a.nav-icon-only svg {
 .reels-stack .reels-card.quote-type-card .reels-read-btn,
 .reels-stack .reels-card.quote-type-card .reels-flag,
 .reels-stack .reels-card.quote-type-card .reels-actions-side,
-.reels-stack .reels-card.quote-type-card .reels-bottom-actions {
+.reels-stack .reels-card.quote-type-card .reels-bottom-actions,
+.reels-stack .reels-card.quote-type-card .reels-toolbar-row,
+.reels-stack .reels-card.quote-type-card .reels-actions {
   display: none !important;
 }
 .reels-stack .reels-card.quote-type-card .reels-img-wrap {
