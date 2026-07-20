@@ -148,6 +148,7 @@ img { max-width: 100%; height: auto; }
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+  cursor: pointer;
   white-space: nowrap;
 }
 .ib-row-left {
@@ -3662,6 +3663,10 @@ body.cards-fullscreen .reels-stack .reels-card {
   padding: 0;
   border-radius: var(--radius-sm);
   transition: all var(--transition);
+  margin-top: 10px;
+  font-size: 0.82rem;
+  text-align: center;
+  min-height: 1.2em;
 }
 .auth-msg.error {
   color: var(--accent);
@@ -7491,3 +7496,175 @@ a.nav-icon-only svg {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ============================================================
+   Utility classes (replaces inline styles)
+   ============================================================ */
+.cursor-pointer { cursor: pointer; }
+.valign-middle-mr6 { vertical-align: middle; margin-right: 6px; }
+.valign-middle-mr4 { vertical-align: middle; margin-right: 4px; }
+
+/* Form inputs — full width with standard styling */
+.input-field-full {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  outline: none;
+  margin-bottom: 8px;
+}
+
+/* Full-width centered buttons */
+.btn-full-center {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+}
+.btn-full-center-lg {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  position: relative;
+}
+.btn-full-center-sm {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  margin-top: 8px;
+}
+.btn-full-center-mt12 {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  margin-top: 12px;
+}
+
+/* Auth divider line */
+.auth-divider-line { flex: 1; height: 1px; background: var(--border-primary); }
+
+/* Message/status text */
+.msg-text { margin-top: 12px; font-size: 0.82rem; text-align: center; min-height: 1.2em; }
+.msg-text-sm { margin-top: 10px; font-size: 0.82rem; text-align: center; min-height: 1.2em; }
+
+/* Avatar styles */
+.avatar-img {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border-primary);
+}
+.avatar-fallback {
+  position: relative;
+  font-size: 2rem;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff2929, #ff6b6b);
+  color: #fff;
+}
+
+/* Article modal */
+.modal-img-full { width: 100%; object-fit: cover; display: block; }
+.modal-source-label { color: var(--accent-red-hover); font-weight: 600; }
+.modal-summary { font-size: 0.95rem; line-height: 1.7; color: var(--text-primary); }
+.modal-actions-row { margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.modal-comments-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+.modal-bottom-row { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Text alignment */
+.text-center { text-align: center; }
+
+/* Article modal conflicts */
+.article-conflicts {
+  display: none;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: rgba(255,165,0,0.08);
+  border: 1px solid rgba(255,165,0,0.35);
+  border-radius: 8px;
+}
+
+/* Flex row gaps */
+.flex-row-gap8 { display: flex; gap: 8px; align-items: center; }
+.flex-row-gap12 { display: flex; gap: 12px; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 16px; flex-wrap: wrap; }
+
+/* Setting group with border-top */
+.setting-group-top { border-top: 1px solid var(--border-color); padding-top: 16px; }
+.setting-desc-mb12 { margin-bottom: 12px; }
+
+/* SVG icons in headers — vertical alignment */
+.modal-header svg,
+.settings-container h2 svg,
+.modal h2 svg {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* Auth divider line */
+.auth-divider span {
+  flex: 1;
+  height: 1px;
+  background: var(--border-primary);
+}
+
+/* Article modal image wrap */
+.article-modal-img-wrap {
+  display: none;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 300px;
+}
+.modal-img-full {
+  width: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Article modal utility classes */
+.emoji-lg { font-size: 1.1rem; }
+.flag-label { font-size: 0.82rem; color: var(--text-secondary); font-weight: 500; margin-left: 8px; }
+.modal-actions-row { margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.modal-comments-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+.modal-bottom-row { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Article modal source and summary */
+#article-modal-source { color: var(--accent-red-hover); font-weight: 600; }
+#article-modal-summary { font-size: 0.95rem; line-height: 1.7; color: var(--text-primary); }
+.modal-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+}
+.emoji-md { font-size: 0.95rem; }
+.text-sm { font-size: 0.9rem; }
+.mono-text-sm { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-tertiary); word-break: break-word; }
+.flex-1 { flex: 1; }
+/* App loading overlay */
+.app-loading-overlay { z-index: 10000; }
+.app-loading-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; max-width: 400px; width: 90%; }
+.loading-spinner-center { margin: 0 auto; }
+.app-loading-status { margin-top: 16px; font-size: 0.95rem; color: var(--text-primary); }
+.app-loading-progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+.app-loading-desc { font-size: 0.85rem; color: var(--text-secondary); }
+.btn-min90 { min-width: 90px; }
+
+/* Reader view */
+.reader-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 16px; color: var(--text-secondary); }
+.reader-content { display: none; overflow-y: auto; flex: 1; padding: 32px 40px; background: var(--bg-primary); color: var(--text-primary); font-size: 1.05rem; line-height: 1.8; }
+.source-fallback { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; text-align: center; padding: 24px; color: var(--text-secondary); }

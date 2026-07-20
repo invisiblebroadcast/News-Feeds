@@ -46,7 +46,7 @@
     <header class="app-header">
       <div class="app-header-inner">
         <div class="header-left">
-          <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds" style="cursor:pointer;">
+          <div class="app-logo" id="ib-refresh-btn" title="Refresh feeds">
             <span class="logo-icon">IB</span>
           </div>
           <div class="ib-refresh-status" id="ib-refresh-status" style="display:none">
@@ -169,7 +169,7 @@
     <div class="modal">
       <div class="modal-header">
         <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/></svg>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.5 2.5l1.5 1.5M12 12l1.5 1.5M2.5 13.5l1.5-1.5M12 4l1.5-1.5"/></svg>
           Settings
         </h2>
         <button class="modal-close" id="modal-close">&times;</button>
@@ -178,7 +178,7 @@
         <div class="setting-group">
           <label class="setting-label">Tweets (via Nitter)</label>
           <p class="setting-desc">Tweets for the Analyze feature are fetched from public Nitter instances.</p>
-          <p class="setting-desc" id="settings-nitter-hint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-tertiary);word-break:break-word;"></p>
+          <p class="setting-desc" id="settings-nitter-hint" class="mono-text-sm"></p>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="btn btn-ghost" id="settings-nitter-clear" type="button">Clear tweet cache</button>
           </div>
@@ -243,7 +243,7 @@
             </div>
           </div>
           <div class="feed-input-row">
-            <div class="select-wrapper" style="flex:1">
+            <div class="select-wrapper" class="flex-1">
               <select id="feed-subcat-select"></select>
             </div>
             <button class="btn btn-primary" id="feed-add-btn">Add</button>
@@ -266,20 +266,20 @@
         <button class="modal-close" id="article-modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <div id="article-modal-img-wrap" style="display:none;margin-bottom:16px;border-radius:6px;overflow:hidden;max-height:300px;">
-          <img id="article-modal-img" src="" alt="" style="width:100%;object-fit:cover;display:block;">
+        <div id="article-modal-img-wrap" class="article-modal-img-wrap">
+          <img class="modal-img-full" id="article-modal-img" src="" alt="">
         </div>
         <div style="display:flex;gap:12px;font-size:0.82rem;color:var(--text-secondary);margin-bottom:16px;flex-wrap:wrap;">
-          <span style="color:var(--accent-red-hover);font-weight:600;" id="article-modal-source"></span>
+          <span id="article-modal-source"></span>
           <span id="article-modal-date"></span>
         </div>
-        <p id="article-modal-summary" style="font-size:0.95rem;line-height:1.7;color:var(--text-primary);"></p>
+        <p id="article-modal-summary"></p>
         <div id="article-modal-conflicts" style="display:none;margin-top:16px;padding:14px 16px;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.35);border-radius:8px;"></div>
-        <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <button class="article-action-btn article-like-btn" id="article-modal-like" title="Like"><span style="font-size:1.1rem;">&#x1F44D;</span> <span>Like</span></button>
-          <button class="article-action-btn article-dislike-btn" id="article-modal-dislike" title="Dislike"><span style="font-size:1.1rem;">&#x1F44E;</span> <span>Dislike</span></button>
-          <span style="font-size:0.82rem;color:var(--text-secondary);font-weight:500;margin-left:8px;">Flag:</span>
-          <select id="article-modal-flag" style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-primary);font-size:0.82rem;font-family:var(--font);outline:none;cursor:pointer;">
+        <div class="modal-actions-row">
+          <button class="article-action-btn article-like-btn" id="article-modal-like" title="Like"><span class="emoji-lg">&#x1F44D;</span> <span>Like</span></button>
+          <button class="article-action-btn article-dislike-btn" id="article-modal-dislike" title="Dislike"><span class="emoji-lg">&#x1F44E;</span> <span>Dislike</span></button>
+          <span class="flag-label">Flag:</span>
+          <select id="article-modal-flag" class="modal-select">
             <option value="">None</option>
             <option value="save">&#x1F516; Save for later</option>
             <option value="investigative">&#x1F50D; Investigative</option>
@@ -288,12 +288,12 @@
             <option value="urgent">&#x26A1; Urgent</option>
           </select>
         </div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-          <button class="card-action-btn" id="article-modal-comments-btn"><span style="font-size:0.95rem;">&#x1F4AC;</span> <span>View / Add Comments</span> <span class="card-action-count" id="article-modal-comments-count">0</span></button>
+        <div class="modal-comments-row">
+          <button class="card-action-btn" id="article-modal-comments-btn"><span class="emoji-md">&#x1F4AC;</span> <span>View / Add Comments</span> <span class="card-action-count" id="article-modal-comments-count">0</span></button>
         </div>
-        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="modal-bottom-row">
           <button class="btn btn-primary" id="article-modal-read">Read Article</button>
-          <button class="btn btn-ghost" id="article-modal-cards-btn" title="Cards View"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:4px;"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg> Cards</button>
+          <button class="btn btn-ghost" id="article-modal-cards-btn" title="Cards View"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="9" rx="1.5"/><path d="M4 11v3M12 11v3M8 11v3"/></svg> Cards</button>
           <button class="btn btn-danger" id="article-modal-ext-link">Open in Browser</button>
         </div>
         <div class="modal-watermark"><span class="wm-brand">Invisible Broadcast</span></div>
@@ -308,13 +308,13 @@
         <button class="modal-close" id="source-modal-close">&times;</button>
       </div>
       <div class="modal-body modal-body-full">
-        <div id="reader-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;color:var(--text-secondary);">
+        <div id="reader-loading" class="reader-loading">
           <div class="loading-spinner"></div>
           <p>Fetching article...</p>
         </div>
-        <div id="reader-content" style="display:none;overflow-y:auto;flex:1;padding:32px 40px;background:var(--bg-primary);color:var(--text-primary);font-size:1.05rem;line-height:1.8;"></div>
-        <div id="source-fallback" style="display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;text-align:center;padding:24px;color:var(--text-secondary);">
-          <p style="font-size:0.9rem;">This article could not be loaded in reader mode.</p>
+        <div id="reader-content" class="reader-content"></div>
+        <div id="source-fallback" class="source-fallback">
+          <p class="text-sm">This article could not be loaded in reader mode.</p>
           <a id="source-fallback-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Open in Browser</a>
         </div>
       </div>
@@ -325,7 +325,7 @@
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/></svg>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2,9 5,6 8,10 11,5 14,9"/><path d="M2 13h12"/><path d="M2 3v10"/><path d="M14 3v10"/></svg>
           Activity
         </h2>
         <button class="modal-close" id="activity-modal-close">&times;</button>
@@ -421,7 +421,7 @@
     <div class="modal">
       <div class="modal-header">
         <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/></svg>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 7h12"/><path d="M5 1v3"/><path d="M11 1v3"/></svg>
           Pick a Date
         </h2>
         <button class="modal-close" id="top-date-modal-close">&times;</button>
@@ -629,7 +629,7 @@
     <div class="modal">
       <div class="modal-header">
         <h2>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align:middle;margin-right:6px;"><circle cx="8" cy="8" r="6.5"/><path d="M8 10a3 3 0 100-6 3 3 0 000 6z"/><path d="M2 13.5a7 7 0 0112 0"/></svg>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 10a3 3 0 100-6 3 3 0 000 6z"/><path d="M2 13.5a7 7 0 0112 0"/></svg>
           <span id="auth-modal-title">Sign In</span>
         </h2>
         <button class="modal-close" id="auth-modal-close">&times;</button>
@@ -641,28 +641,28 @@
         </div>
         <form id="auth-form-fields" novalidate autocomplete="on">
           <div id="auth-name-field" style="display:none">
-            <input type="text" id="auth-name" placeholder="Full Name" required minlength="2" autocomplete="name" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+            <input type="text" class="input-field-full" id="auth-name" placeholder="Full Name" required minlength="2" autocomplete="name">
           </div>
-          <input type="email" id="auth-email" placeholder="Email" required autocomplete="email" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <input type="password" id="auth-password" placeholder="Password (min 6 chars)" required minlength="6" autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+          <input type="email" class="input-field-full" id="auth-email" placeholder="Email" required autocomplete="email">
+          <input type="password" class="input-field-full" id="auth-password" placeholder="Password (min 6 chars)" required minlength="6" autocomplete="current-password">
           <div id="auth-repeat-field" style="display:none">
-            <input type="password" id="auth-password-repeat" placeholder="Repeat Password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
+            <input type="password" class="input-field-full" id="auth-password-repeat" placeholder="Repeat Password" required minlength="6" autocomplete="new-password">
           </div>
-          <button type="submit" class="btn btn-primary" id="auth-submit-btn" style="width:100%;justify-content:center;padding:12px;position:relative;">
+          <button type="submit" class="btn btn-primary" id="auth-submit-btn" class="btn-full-center-lg">
             <span class="auth-submit-text">Sign In</span>
             <span class="auth-submit-spinner" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">&#x21BB;</span>
           </button>
         </form>
         <div class="auth-divider" style="display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--text-tertiary);font-size:0.8rem;">
-          <span style="flex:1;height:1px;background:var(--border-primary);"></span>
+          <span></span>
           <span>or</span>
-          <span style="flex:1;height:1px;background:var(--border-primary);"></span>
+          <span></span>
         </div>
-        <button class="btn btn-ghost" id="auth-google-btn" style="width:100%;justify-content:center;padding:10px;gap:8px;border:1px solid var(--border-primary);">
+        <button class="btn btn-ghost btn-full-center" id="auth-google-btn" style="gap:8px;border:1px solid var(--border-primary)">
           <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
           <span>Sign in with Google</span>
         </button>
-        <div id="auth-msg" class="auth-msg" style="margin-top:12px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+        <div id="auth-msg" class="auth-msg"></div>
       </div>
     </div>
   </div>
@@ -675,10 +675,10 @@
       </div>
       <div class="modal-body">
         <form id="change-name-form" novalidate>
-          <input type="text" id="change-name-input" placeholder="Your name" required minlength="2" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <button type="submit" class="btn btn-primary" id="change-name-submit-btn" style="width:100%;justify-content:center;padding:10px;">Save</button>
+          <input type="text" class="input-field-full" id="change-name-input" placeholder="Your name" required minlength="2">
+          <button type="submit" class="btn btn-primary" id="change-name-submit-btn" class="btn-full-center">Save</button>
         </form>
-        <div id="change-name-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+        <div id="change-name-msg" class="auth-msg"></div>
       </div>
     </div>
   </div>
@@ -691,12 +691,12 @@
       </div>
       <div class="modal-body">
         <form id="change-password-form" novalidate>
-          <input type="password" id="change-password-current" placeholder="Current password" required autocomplete="current-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <input type="password" id="change-password-new" placeholder="New password (min 6 chars)" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <input type="password" id="change-password-repeat" placeholder="Repeat new password" required minlength="6" autocomplete="new-password" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-size:0.85rem;font-family:var(--font);outline:none;margin-bottom:8px;">
-          <button type="submit" class="btn btn-primary" id="change-password-submit-btn" style="width:100%;justify-content:center;padding:10px;">Update Password</button>
+          <input type="password" class="input-field-full" id="change-password-current" placeholder="Current password" required autocomplete="current-password">
+          <input type="password" class="input-field-full" id="change-password-new" placeholder="New password (min 6 chars)" required minlength="6" autocomplete="new-password">
+          <input type="password" class="input-field-full" id="change-password-repeat" placeholder="Repeat new password" required minlength="6" autocomplete="new-password">
+          <button type="submit" class="btn btn-primary" id="change-password-submit-btn" class="btn-full-center">Update Password</button>
         </form>
-        <div id="change-password-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+        <div id="change-password-msg" class="auth-msg"></div>
       </div>
     </div>
   </div>
@@ -707,15 +707,15 @@
         <h2>Change Avatar</h2>
         <button class="modal-close" id="change-avatar-modal-close">&times;</button>
       </div>
-      <div class="modal-body" style="text-align:center;">
+      <div class="modal-body" class="text-center">
         <div class="change-avatar-preview-wrap">
-          <img class="auth-avatar" id="change-avatar-preview" src="" alt="" style="position:relative;width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-primary);">
-          <span class="auth-avatar-fallback" id="change-avatar-fallback" style="position:relative;font-size:2rem;width:80px;height:80px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg, #ff2929, #ff6b6b);color:#fff;">&#x1F464;</span>
+          <img class="auth-avatar avatar-img" id="change-avatar-preview" src="" alt="">
+          <span class="auth-avatar-fallback avatar-fallback" id="change-avatar-fallback" class="avatar-fallback">&#x1F464;</span>
         </div>
         <input type="file" id="change-avatar-input" accept="image/*" style="display:none;">
-        <button type="button" class="btn" id="change-avatar-pick-btn" style="width:100%;justify-content:center;padding:10px;margin-top:12px;">Choose Image</button>
-        <button type="button" class="btn btn-primary" id="change-avatar-upload-btn" style="width:100%;justify-content:center;padding:10px;margin-top:8px;" disabled>Upload</button>
-        <div id="change-avatar-msg" class="auth-msg" style="margin-top:10px;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+        <button type="button" class="btn" id="change-avatar-pick-btn" class="btn btn-full-center-mt12">Choose Image</button>
+        <button type="button" class="btn btn-primary" id="change-avatar-upload-btn" class="btn btn-primary btn-full-center-sm" disabled>Upload</button>
+        <div id="change-avatar-msg" class="auth-msg"></div>
       </div>
     </div>
   </div>
@@ -757,18 +757,18 @@
     }
   </script>
   <!-- Global Loading Overlay -->
-  <div class="modal-overlay" id="app-loading-overlay" style="z-index:10000;">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;max-width:400px;width:90%;">
-      <div class="loading-spinner" id="app-loading-spinner" style="margin:0 auto;"></div>
-      <p id="app-loading-status" style="margin-top:16px;font-size:0.95rem;color:var(--text-primary);">Loading&hellip;</p>
+  <div class="modal-overlay" id="app-loading-overlay" class="app-loading-overlay">
+    <div class="app-loading-content">
+      <div class="loading-spinner" id="app-loading-spinner" class="loading-spinner-center"></div>
+      <p id="app-loading-status" class="app-loading-status">Loading&hellip;</p>
       <div id="app-loading-progress-wrap" style="display:none;margin-top:12px;width:100%;height:6px;background:var(--border-primary);border-radius:3px;overflow:hidden;">
-        <div id="app-loading-progress-bar" style="height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width 0.3s;"></div>
+        <div id="app-loading-progress-bar" class="app-loading-progress-bar"></div>
       </div>
       <div id="app-loading-confirm" style="display:none;margin-top:16px;flex-direction:column;align-items:center;gap:8px;">
-        <p style="font-size:0.85rem;color:var(--text-secondary);">Enable AI-powered semantic search? This downloads a <strong>~25MB model</strong> (one-time).</p>
+        <p class="app-loading-desc">Enable AI-powered semantic search? This downloads a <strong>~25MB model</strong> (one-time).</p>
         <div style="display:flex;gap:10px;justify-content:center;margin-top:4px;">
-          <button class="btn" id="app-loading-skip-btn" style="min-width:90px;">Skip</button>
-          <button class="btn btn-primary" id="app-loading-download-btn" style="min-width:90px;">Download</button>
+          <button class="btn" id="app-loading-skip-btn" class="btn-min90">Skip</button>
+          <button class="btn btn-primary" id="app-loading-download-btn" class="btn-min90">Download</button>
         </div>
       </div>
     </div>
