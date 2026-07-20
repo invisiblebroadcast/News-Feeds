@@ -879,48 +879,6 @@ body.cards-view .app-main {
   justify-content: center;
 }
 
-/* Quote type: image takes top 60%, overlay below */
-.reels-card.quote-type-card .reels-img-wrap {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 60%;
-  overflow: hidden;
-}
-.reels-card.quote-type-card .reels-img-wrap .reels-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-}
-.reels-card.quote-type-card .reels-img-wrap::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.5) 50%, #000 100%);
-  pointer-events: none;
-}
-.reels-card.quote-type-card .reels-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  margin-top: 0;
-  padding-top: 62%;
-  background: linear-gradient(
-    180deg,
-    rgba(0,0,0,0) 0%,
-    rgba(0,0,0,0) 55%,
-    rgba(0,0,0,1) 62%,
-    rgba(0,0,0,1) 100%
-  );
-  overflow: hidden;
-}
 .reels-progress {
   display: flex;
   gap: 4px;
@@ -6481,17 +6439,65 @@ a.nav-icon-only svg {
   padding-left: 0;
 }
 
-/* Quote cards: hide elements, fix layout */
-.reels-card.quote-type-card .reels-count-row {
+/* Quote cards: hide elements, fix layout — use higher-specificity selectors
+   to override .reels-card.has-image rules that come later in the file */
+.reels-stack .reels-card.quote-type-card {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  clip-path: none;
+}
+.reels-stack .reels-card.quote-type-card .reels-count-row {
   display: none;
 }
-.reels-card.quote-type-card .reels-live-trending {
+.reels-stack .reels-card.quote-type-card .reels-live-trending {
   display: none !important;
 }
-.reels-card.quote-type-card .reels-source {
+.reels-stack .reels-card.quote-type-card .reels-source {
   display: none;
 }
-.reels-card.quote-type-card .reels-meta {
+.reels-stack .reels-card.quote-type-card .reels-img-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  overflow: hidden;
+}
+.reels-stack .reels-card.quote-type-card .reels-img-wrap .reels-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.reels-stack .reels-card.quote-type-card .reels-img-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.5) 50%, #000 100%);
+  pointer-events: none;
+}
+.reels-stack .reels-card.quote-type-card .reels-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 0;
+  padding-top: 62%;
+  background: linear-gradient(
+    180deg,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0) 55%,
+    rgba(0,0,0,1) 62%,
+    rgba(0,0,0,1) 100%
+  );
+  overflow: hidden;
+}
+.reels-stack .reels-card.quote-type-card .reels-meta {
   display: block;
   text-align: right;
   font-size: 0.72rem;
@@ -6499,15 +6505,8 @@ a.nav-icon-only svg {
   color: rgba(255,255,255,0.6);
   margin-top: 4px;
 }
-.reels-card.quote-type-card .reels-read-btn {
+.reels-stack .reels-card.quote-type-card .reels-read-btn {
   display: none !important;
-}
-/* Remove top glitch — no border, no shadow, flush to top */
-.reels-card.quote-type-card {
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  clip-path: none;
 }
 
 @media (max-width: 767px) {
