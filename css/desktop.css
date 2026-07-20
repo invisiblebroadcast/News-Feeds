@@ -7708,3 +7708,4 @@ a.nav-icon-only svg {
 
 /* Coming soon */
 .coming-soon-text { color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 40px 0; }
+.rr-loading { text-align: center; padding: 20px; color: var(--text-tertiary); }

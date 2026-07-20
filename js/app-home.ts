@@ -1951,9 +1951,8 @@ const APP_VERSION = 30;
           const existingContent = scroll.querySelector('.rr-fetched');
           if (existingContent) { existingContent.remove(); return; }
           const wrapper = document.createElement('div');
-          wrapper.className = 'rr-fetched';
-          wrapper.style.cssText = 'margin-top:16px;border-top:1px solid var(--border-primary);padding-top:16px';
-          wrapper.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Loading\u2026</div>';
+          wrapper.className = 'rr-fetched section-divider-top';
+          wrapper.innerHTML = '<div class="rr-loading">Loading\u2026</div>';
           scroll.appendChild(wrapper);
           (async () => {
             try {
@@ -8019,7 +8018,7 @@ const APP_VERSION = 30;
       googleBtn.addEventListener('click', () => {
         if (window.location.protocol === 'file:') {
           const msg = $('#auth-msg');
-          if (msg) { msg.textContent = 'Google sign-in requires a web server (http:// or https://).'; msg.style.color = 'var(--error, #e03131)'; }
+          if (msg) { msg.textContent = 'Google sign-in requires a web server (http:// or https://).'; msg.classList.add('error'); }
           return;
         }
         client.auth.signInWithOAuth({
