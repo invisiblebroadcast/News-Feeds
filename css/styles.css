@@ -6428,7 +6428,6 @@ a.nav-icon-only svg {
 }
 .quote-occupation {
   font-size: 0.82rem;
-  font-style: italic;
   color: var(--text-secondary);
   margin-bottom: 4px;
   text-align: right;
@@ -6454,9 +6453,8 @@ a.nav-icon-only svg {
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
 }
 .quote-occupation-overlay {
-  font-size: 0.85rem;
-  font-style: italic;
-  color: rgba(255,255,255,0.8);
+  font-size: 0.82rem;
+  color: #fff;
   margin-top: 2px;
   text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);

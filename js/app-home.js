@@ -569,6 +569,12 @@ const APP_VERSION = 30;
             return days + 'd ago';
         return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     }
+    function formatDateActual(d) {
+        const date = new Date(d);
+        if (isNaN(date.getTime()))
+            return d;
+        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
     function stripHtml(html) {
         const div = document.createElement('div');
         div.innerHTML = html;
@@ -1440,7 +1446,7 @@ const APP_VERSION = 30;
                 (quoteOccupation ? '<div class="quote-occupation">' + escHtml(quoteOccupation) + '</div>' : '') +
                 '<div class="quote-watermark">Invisible Broadcast</div>' +
                 '<div class="article-meta">' +
-                '<span class="date">' + formatDateShort(article._pubQuoteDate || article.pubDate) + '</span>' +
+                '<span class="date">' + formatDateActual(article._pubQuoteDate || article.pubDate) + '</span>' +
                 '</div>' +
                 '<div class="card-actions">' +
                 '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
@@ -1809,7 +1815,7 @@ const APP_VERSION = 30;
             // Show quote date if set
             const dateEl = cardEl.querySelector('.reels-date');
             if (dateEl) {
-                dateEl.textContent = quoteDate ? formatDateShort(quoteDate) : '';
+                dateEl.textContent = quoteDate ? formatDateActual(quoteDate) : '';
             }
             // Add quote_from (red, bold) + occupation + separator + watermark after the summary
             const existingFrom = cardEl.querySelector('.quote-from-overlay');
@@ -1839,8 +1845,8 @@ const APP_VERSION = 30;
             }
             const sepEl = document.createElement('div');
             sepEl.className = 'quote-separator';
-            const fromRef = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
-            fromRef.parentNode.insertBefore(sepEl, fromRef.nextSibling);
+            const lastRef = cardEl.querySelector('.quote-occupation-overlay') || cardEl.querySelector('.quote-from-overlay') || summaryWrap;
+            lastRef.parentNode.insertBefore(sepEl, lastRef.nextSibling);
             const wmEl = document.createElement('div');
             wmEl.className = 'quote-watermark-overlay';
             wmEl.textContent = 'Invisible Broadcast';
@@ -6635,7 +6641,7 @@ const APP_VERSION = 30;
                 ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
                 // Quote date — RIGHT aligned (matching cards view)
                 if (quoteDate) {
-                    const dateText = formatDateShort(quoteDate);
+                    const dateText = formatDateActual(quoteDate);
                     const dateTextW = ctx.measureText(dateText).width;
                     ctx.fillText(dateText, W - PAD - dateTextW, afterTextY + wmFontSize);
                 }
