@@ -10,6 +10,11 @@ ALTER TABLE published_articles
 ALTER TABLE published_articles
   ADD COLUMN IF NOT EXISTS quote_from text NOT NULL DEFAULT '';
 
+-- 'quote_date' stores the date the quote was made/said (not the publish date).
+-- Format: text, e.g. '2026-07-20'. Empty string means not set.
+ALTER TABLE published_articles
+  ADD COLUMN IF NOT EXISTS quote_date text NOT NULL DEFAULT '';
+
 -- Index for filtering by type
 CREATE INDEX IF NOT EXISTS idx_published_articles_type
   ON published_articles (type);

@@ -209,6 +209,7 @@ const PublishModal = (() => {
     async function handlePublishQuote() {
         const desc = $('#quote-desc')?.value?.trim();
         const quoteFrom = $('#quote-from')?.value?.trim();
+        const quoteDate = $('#quote-date')?.value || '';
         const sourceLink = $('#quote-source-link')?.value?.trim();
         const scopeVal = $('#quote-scope-select')?.value || 'global';
         const msg = $('#quote-publish-msg');
@@ -243,7 +244,8 @@ const PublishModal = (() => {
                 nation: scopeVal === 'nation' ? 'india' : '',
                 category: 'quotes',
                 type: 'quote',
-                quote_from: quoteFrom || ''
+                quote_from: quoteFrom || '',
+                quote_date: quoteDate
             })
                 .select('post_id')
                 .single();
@@ -269,6 +271,8 @@ const PublishModal = (() => {
                 $('#quote-from').value = '';
             if ($('#quote-desc'))
                 $('#quote-desc').value = '';
+            if ($('#quote-date'))
+                $('#quote-date').value = '';
             if ($('#quote-source-link'))
                 $('#quote-source-link').value = '';
             if ($('#quote-image'))

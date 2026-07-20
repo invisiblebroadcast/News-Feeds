@@ -1438,7 +1438,7 @@ const APP_VERSION = 30;
                 (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
                 '<div class="quote-watermark">Invisible Broadcast</div>' +
                 '<div class="article-meta">' +
-                '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
+                '<span class="date">' + formatDateShort(article._pubQuoteDate || article.pubDate) + '</span>' +
                 '</div>' +
                 '<div class="card-actions">' +
                 '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
@@ -1793,6 +1793,7 @@ const APP_VERSION = 30;
                 title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;">\u201C</span>';
             }
             const quoteFrom = article._pubQuoteFrom || '';
+            const quoteDate = article._pubQuoteDate || '';
             if (summary) {
                 summary.classList.add('quote-text');
                 summary.innerHTML = showDesc ? formatQuoteText(article.summary) : '';
@@ -1802,6 +1803,11 @@ const APP_VERSION = 30;
             // Hide the source line — we show quote_from + watermark instead
             if (source)
                 source.textContent = '';
+            // Show quote date if set
+            const dateEl = cardEl.querySelector('.reels-date');
+            if (dateEl) {
+                dateEl.textContent = quoteDate ? formatDateShort(quoteDate) : '';
+            }
             // Add quote_from (red, bold) + separator + watermark after the summary
             const existingFrom = cardEl.querySelector('.quote-from-overlay');
             if (existingFrom)
@@ -3010,6 +3016,7 @@ const APP_VERSION = 30;
                         _pubPostId: formatPostId(r.post_id),
                         _pubType: r.type || 'feeds',
                         _pubQuoteFrom: r.quote_from || '',
+                        _pubQuoteDate: r.quote_date || '',
                         _pubSourceName: r.source_name || '',
                         _pubSourceLink: r.source_link || ''
                     };
@@ -6402,6 +6409,7 @@ const APP_VERSION = 30;
             // ── Quote type: compact card layout (image at top, text below) ──
             if (article._pubType === 'quote') {
                 const quoteFrom = article._pubQuoteFrom || '';
+                const quoteDate = article._pubQuoteDate || '';
                 const quoteText = article.summary || article.title || '';
                 const quoteFontSize = Math.round(W * 0.038);
                 const quoteLineH = Math.round(quoteFontSize * 1.5);
@@ -6430,7 +6438,8 @@ const APP_VERSION = 30;
                 const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
                 const shadowBoxH = qH + shadowPadY * 2;
                 const fromH = quoteFrom ? fromFontSize : 0;
-                const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize;
+                const dateH = quoteDate ? wmFontSize : 0;
+                const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
                 // Image area: same bounds as non-quote cards (max 55% of 1350)
                 const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
                 let imgDrawW = 0, imgDrawH = 0, imgBlockH = 0;
@@ -6574,6 +6583,12 @@ const APP_VERSION = 30;
                 ctx.font = '600 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
+                // Quote date — RIGHT aligned (matching cards view)
+                if (quoteDate) {
+                    const dateText = formatDateShort(quoteDate);
+                    const dateTextW = ctx.measureText(dateText).width;
+                    ctx.fillText(dateText, W - PAD - dateTextW, afterTextY + wmFontSize);
+                }
                 ctx.shadowColor = 'transparent';
                 ctx.shadowBlur = 0;
                 ctx.shadowOffsetY = 0;
