@@ -6439,13 +6439,14 @@ a.nav-icon-only svg {
   padding-left: 0;
 }
 
-/* Quote cards: hide elements, fix layout — use higher-specificity selectors
-   to override .reels-card.has-image rules that come later in the file */
+/* Quote cards: image fills entire card, gradient fades bottom 40% to black,
+   quote text starts at 40% (overlapping with the fade) */
 .reels-stack .reels-card.quote-type-card {
   border: none;
   box-shadow: none;
   border-radius: 0;
   clip-path: none;
+  background: #000;
 }
 .reels-stack .reels-card.quote-type-card .reels-count-row {
   display: none;
@@ -6453,15 +6454,14 @@ a.nav-icon-only svg {
 .reels-stack .reels-card.quote-type-card .reels-live-trending {
   display: none !important;
 }
-.reels-stack .reels-card.quote-type-card .reels-source {
-  display: none;
+.reels:  none;
 }
 .reels-stack .reels-card.quote-type-card .reels-img-wrap {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 60%;
+  bottom: 0;
   overflow: hidden;
 }
 .reels-stack .reels-card.quote-type-card .reels-img-wrap .reels-img {
@@ -6470,6 +6470,7 @@ a.nav-icon-only svg {
   object-fit: cover;
   object-position: center;
 }
+/* Fade-to-black on bottom 40% of image */
 .reels-stack .reels-card.quote-type-card .reels-img-wrap::after {
   content: '';
   position: absolute;
@@ -6487,14 +6488,7 @@ a.nav-icon-only svg {
   right: 0;
   bottom: 0;
   margin-top: 0;
-  padding-top: 62%;
-  background: linear-gradient(
-    180deg,
-    rgba(0,0,0,0) 0%,
-    rgba(0,0,0,0) 55%,
-    rgba(0,0,0,1) 62%,
-    rgba(0,0,0,1) 100%
-  );
+  padding-top: 40%;
   overflow: hidden;
 }
 .reels-stack .reels-card.quote-type-card .reels-meta {
