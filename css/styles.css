@@ -7668,3 +7668,43 @@ a.nav-icon-only svg {
 .reader-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 16px; color: var(--text-secondary); }
 .reader-content { display: none; overflow-y: auto; flex: 1; padding: 32px 40px; background: var(--bg-primary); color: var(--text-primary); font-size: 1.05rem; line-height: 1.8; }
 .source-fallback { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; text-align: center; padding: 24px; color: var(--text-secondary); }
+/* Modal sizes */
+.modal-sm { max-width: 400px; }
+.modal-md { max-width: 520px; }
+.modal-lg { max-width: 640px; }
+.modal-xs { max-width: 380px; }
+
+/* H2 icon spacing */
+.h2-icon { margin-right: 6px; }
+
+/* Modal confirm text */
+.modal-confirm-text { margin: 0 0 16px; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; }
+.modal-confirm-text-sm { margin: 0 0 12px; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; }
+.modal-confirm-note { margin: 0; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; }
+
+/* Spacer */
+.spacer-32 { width: 32px; }
+
+/* Modal body padding overrides */
+#translate-modal-body { padding: 8px 0; }
+#cluster-modal-body { padding: 0; }
+#build-modal-body { padding: 0; }
+.auth-google-outline { gap: 8px; border: 1px solid var(--border-primary); }
+.text-primary-bold { color: var(--text-primary); }
+.svg-mr6 { margin-right: 6px; }
+.valign-middle-mr8 { vertical-align: middle; margin-right: 8px; }
+/* Build/publish modal */
+.build-headline-readonly { color: var(--text-secondary); }
+.build-headline-full { width: 100%; }
+.build-actions-pad { padding: 14px 20px; }
+.publish-status-text { font-size: 0.85rem; color: var(--text-secondary); }
+.publish-desc-text { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px; }
+.section-divider-top { margin-top: 16px; border-top: 1px solid var(--border-primary); padding-top: 12px; }
+.empty-state-text { color: var(--text-tertiary); font-size: 0.82rem; padding: 12px; }
+
+/* Image preview */
+.image-preview-img { max-width: 100%; max-height: 120px; border-radius: 4px; }
+.image-remove-btn { font-size: 0.75rem; margin-top: 4px; }
+
+/* Coming soon */
+.coming-soon-text { color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 40px 0; }
