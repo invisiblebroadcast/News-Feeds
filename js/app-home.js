@@ -1425,6 +1425,7 @@ const APP_VERSION = 30;
         // Quote type: different card layout
         if (article._pubType === 'quote') {
             const quoteFrom = article._pubQuoteFrom || '';
+            const quoteOccupation = article._pubQuoteOccupation || '';
             const bgUrl = article.imageUrl || '';
             const bgStyle = bgUrl ? 'background-image:url(' + escAttr(bgUrl) + ');background-size:cover;background-position:center;' : '';
             return '<article class="article-card quote-card' + (bgUrl ? ' quote-card-bg' : '') + '" style="animation-delay:' + ((index % 10) * 0.04) + 's;' + bgStyle + '">' +
@@ -1436,6 +1437,7 @@ const APP_VERSION = 30;
                 '<p class="article-summary quote-text">' + formatQuoteText(article.summary) + '</p>' +
                 '</div>' +
                 (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
+                (quoteOccupation ? '<div class="quote-occupation">' + escHtml(quoteOccupation) + '</div>' : '') +
                 '<div class="quote-watermark">Invisible Broadcast</div>' +
                 '<div class="article-meta">' +
                 '<span class="date">' + formatDateShort(article._pubQuoteDate || article.pubDate) + '</span>' +
@@ -1793,6 +1795,7 @@ const APP_VERSION = 30;
                 title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;">\u201C</span>';
             }
             const quoteFrom = article._pubQuoteFrom || '';
+            const quoteOccupation = article._pubQuoteOccupation || '';
             const quoteDate = article._pubQuoteDate || '';
             if (summary) {
                 summary.classList.add('quote-text');
@@ -1808,10 +1811,13 @@ const APP_VERSION = 30;
             if (dateEl) {
                 dateEl.textContent = quoteDate ? formatDateShort(quoteDate) : '';
             }
-            // Add quote_from (red, bold) + separator + watermark after the summary
+            // Add quote_from (red, bold) + occupation + separator + watermark after the summary
             const existingFrom = cardEl.querySelector('.quote-from-overlay');
             if (existingFrom)
                 existingFrom.remove();
+            const existingOcc = cardEl.querySelector('.quote-occupation-overlay');
+            if (existingOcc)
+                existingOcc.remove();
             const existingSep = cardEl.querySelector('.quote-separator');
             if (existingSep)
                 existingSep.remove();
@@ -1823,6 +1829,13 @@ const APP_VERSION = 30;
                 fromEl.className = 'quote-from-overlay';
                 fromEl.textContent = '\u2014 ' + quoteFrom;
                 summaryWrap.parentNode.insertBefore(fromEl, summaryWrap.nextSibling);
+            }
+            if (quoteOccupation) {
+                const occEl = document.createElement('div');
+                occEl.className = 'quote-occupation-overlay';
+                occEl.textContent = quoteOccupation;
+                const fromRef2 = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
+                fromRef2.parentNode.insertBefore(occEl, fromRef2.nextSibling);
             }
             const sepEl = document.createElement('div');
             sepEl.className = 'quote-separator';
@@ -1839,6 +1852,9 @@ const APP_VERSION = 30;
             const oldFrom = cardEl.querySelector('.quote-from-overlay');
             if (oldFrom)
                 oldFrom.remove();
+            const oldOcc = cardEl.querySelector('.quote-occupation-overlay');
+            if (oldOcc)
+                oldOcc.remove();
             const oldSep = cardEl.querySelector('.quote-separator');
             if (oldSep)
                 oldSep.remove();
@@ -3017,6 +3033,7 @@ const APP_VERSION = 30;
                         _pubType: r.type || 'feeds',
                         _pubQuoteFrom: r.quote_from || '',
                         _pubQuoteDate: r.quote_date || '',
+                        _pubQuoteOccupation: r.quote_occupation || '',
                         _pubSourceName: r.source_name || '',
                         _pubSourceLink: r.source_link || ''
                     };
@@ -3261,6 +3278,8 @@ const APP_VERSION = 30;
                 // Pre-fill quote fields
                 const quoteDesc = $('#quote-desc');
                 const quoteFrom = $('#quote-from');
+                const quoteOccupation = $('#quote-occupation');
+                const quoteDate = $('#quote-date');
                 const quoteSourceLink = $('#quote-source-link');
                 const quoteScopeSelect = $('#quote-scope-select');
                 const quoteMsg = $('#quote-publish-msg');
@@ -3268,6 +3287,10 @@ const APP_VERSION = 30;
                     quoteDesc.value = data.body || '';
                 if (quoteFrom)
                     quoteFrom.value = data.quote_from || data.source_name || '';
+                if (quoteOccupation)
+                    quoteOccupation.value = data.quote_occupation || '';
+                if (quoteDate)
+                    quoteDate.value = data.quote_date || '';
                 if (quoteSourceLink)
                     quoteSourceLink.value = data.source_link || '';
                 if (quoteScopeSelect)
@@ -3279,11 +3302,15 @@ const APP_VERSION = 30;
                 const quoteBtn = $('#quote-publish-btn');
                 if (quoteBtn) {
                     quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
+                    // Signal to publish-modal.ts to skip its addEventListener handler
+                    window._ibSkipPublish = true;
                     quoteBtn.onclick = async () => {
                         const desc = $('#quote-desc')?.value?.trim();
                         const qFrom = $('#quote-from')?.value?.trim();
+                        const qOccupation = $('#quote-occupation')?.value?.trim() || '';
                         const qLink = $('#quote-source-link')?.value?.trim();
                         const qScope = $('#quote-scope-select')?.value || 'global';
+                        const qDate = $('#quote-date')?.value || '';
                         if (!desc) {
                             _setElMsg(quoteMsg, 'Please enter the quote text', 'error');
                             return;
@@ -3299,6 +3326,8 @@ const APP_VERSION = 30;
                                 scope: qScope,
                                 nation: qScope === 'nation' ? 'india' : '',
                                 quote_from: qFrom || '',
+                                quote_date: qDate,
+                                quote_occupation: qOccupation,
                                 last_modified: new Date().toISOString()
                             }).eq('id', pubId);
                             if (updErr)
@@ -3342,6 +3371,7 @@ const APP_VERSION = 30;
                 const ytBtn = $('#yt-publish-btn');
                 if (ytBtn) {
                     ytBtn.textContent = '\uD83D\uDCE4 Update';
+                    window._ibSkipPublish = true;
                     ytBtn.onclick = async () => {
                         const t = $('#publish-title')?.value?.trim();
                         const d = $('#publish-desc')?.value?.trim();
@@ -6409,6 +6439,7 @@ const APP_VERSION = 30;
             // ── Quote type: compact card layout (image at top, text below) ──
             if (article._pubType === 'quote') {
                 const quoteFrom = article._pubQuoteFrom || '';
+                const quoteOccupation = article._pubQuoteOccupation || '';
                 const quoteDate = article._pubQuoteDate || '';
                 const quoteText = article.summary || article.title || '';
                 const quoteFontSize = Math.round(W * 0.038);
@@ -6438,8 +6469,9 @@ const APP_VERSION = 30;
                 const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
                 const shadowBoxH = qH + shadowPadY * 2;
                 const fromH = quoteFrom ? fromFontSize : 0;
+                const occH = quoteOccupation ? Math.round(fromFontSize * 0.85) : 0;
                 const dateH = quoteDate ? wmFontSize : 0;
-                const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
+                const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + occH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
                 // Image area: same bounds as non-quote cards (max 55% of 1350)
                 const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
                 let imgDrawW = 0, imgDrawH = 0, imgBlockH = 0;
@@ -6559,8 +6591,26 @@ const APP_VERSION = 30;
                     ctx.shadowColor = 'transparent';
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetY = 0;
-                    afterTextY += fromH + medGap;
+                    afterTextY += fromH;
                 }
+                // Occupation / title — RIGHT aligned, italic, like a signature
+                if (quoteOccupation) {
+                    const occFontSize = Math.round(fromFontSize * 0.85);
+                    ctx.textBaseline = 'alphabetic';
+                    const occTextW = ctx.measureText(quoteOccupation).width;
+                    const occX = W - PAD - occTextW;
+                    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                    ctx.shadowBlur = 2;
+                    ctx.shadowOffsetY = 1;
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.font = 'italic ' + occFontSize + 'px Georgia, "Times New Roman", serif';
+                    ctx.fillText(quoteOccupation, occX, afterTextY + occH);
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetY = 0;
+                    afterTextY += occH;
+                }
+                afterTextY += medGap;
                 // Separator line — right-aligned, fading (matching cards view: 60% width)
                 const sepW = Math.round(textW * 0.6);
                 const sepX = W - PAD - sepW;

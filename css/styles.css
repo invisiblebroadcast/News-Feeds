@@ -6421,10 +6421,17 @@ a.nav-icon-only svg {
   font-weight: 600;
   color: var(--text-primary);
   margin-top: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .quote-from-label {
   color: var(--text-tertiary);
+}
+.quote-occupation {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-align: right;
 }
 .quote-watermark {
   font-size: 0.72rem;
@@ -6446,6 +6453,15 @@ a.nav-icon-only svg {
   text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
 }
+.quote-occupation-overlay {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: rgba(255,255,255,0.8);
+  margin-top: 2px;
+  text-align: right;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  padding-right: 0;
+}
 .quote-separator {
   width: 60%;
   height: 1px;
@@ -6462,7 +6478,6 @@ a.nav-icon-only svg {
   text-align: left;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   padding-left: 0;
-}
 }
 
 /* Hide meta for quote cards */

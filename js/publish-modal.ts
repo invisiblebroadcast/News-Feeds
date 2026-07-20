@@ -104,6 +104,8 @@ const PublishModal = (() => {
   }
 
   async function handlePublish() {
+    // Skip if we're in edit mode (app-home.ts sets this flag)
+    if ((window as any)._ibSkipPublish) { (window as any)._ibSkipPublish = false; return; }
     const title = $('#publish-title')?.value?.trim();
     const desc = $('#publish-desc')?.value?.trim();
     const url = $('#publish-url')?.value?.trim();
@@ -188,8 +190,11 @@ const PublishModal = (() => {
   }
 
   async function handlePublishQuote() {
+    // Skip if we're in edit mode (app-home.ts sets this flag)
+    if ((window as any)._ibSkipPublish) { (window as any)._ibSkipPublish = false; return; }
     const desc = $('#quote-desc')?.value?.trim();
     const quoteFrom = $('#quote-from')?.value?.trim();
+    const quoteOccupation = $('#quote-occupation')?.value?.trim() || '';
     const quoteDate = $('#quote-date')?.value || '';
     const sourceLink = $('#quote-source-link')?.value?.trim();
     const scopeVal = $('#quote-scope-select')?.value || 'global';
@@ -220,7 +225,8 @@ const PublishModal = (() => {
           category: 'quotes',
           type: 'quote',
           quote_from: quoteFrom || '',
-          quote_date: quoteDate
+          quote_date: quoteDate,
+          quote_occupation: quoteOccupation
         })
         .select('post_id')
         .single();
@@ -246,6 +252,7 @@ const PublishModal = (() => {
       setMsg(msg, 'Quote published successfully!', 'success');
       _quoteImageFile = null;
       if ($('#quote-from')) $('#quote-from').value = '';
+      if ($('#quote-occupation')) $('#quote-occupation').value = '';
       if ($('#quote-desc')) $('#quote-desc').value = '';
       if ($('#quote-date')) $('#quote-date').value = '';
       if ($('#quote-source-link')) $('#quote-source-link').value = '';

@@ -15,6 +15,10 @@ ALTER TABLE published_articles
 ALTER TABLE published_articles
   ADD COLUMN IF NOT EXISTS quote_date text NOT NULL DEFAULT '';
 
+-- 'quote_occupation' stores the quoter's qualification/title (e.g. MP, MLA, Musician).
+ALTER TABLE published_articles
+  ADD COLUMN IF NOT EXISTS quote_occupation text NOT NULL DEFAULT '';
+
 -- Index for filtering by type
 CREATE INDEX IF NOT EXISTS idx_published_articles_type
   ON published_articles (type);
