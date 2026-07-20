@@ -6478,9 +6478,12 @@ const APP_VERSION = 30;
                 const occH = quoteOccupation ? Math.round(fromFontSize * 0.85) : 0;
                 const dateH = quoteDate ? wmFontSize : 0;
                 const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + occH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
-                // Canvas height: compact, grows with content. Min 1350.
-                const textOnlyH = textBlockH;
-                const canvasH = Math.max(1350, textOnlyH + Math.round(W * 0.08));
+                // Canvas height: must fit image (60%) + text + padding.
+                // Solve: canvasH = 0.6*canvasH + gap + textBlockH + padding
+                //   → canvasH = (gap + textBlockH + padding) / 0.4
+                const padding = Math.round(W * 0.08);
+                const neededH = Math.ceil((gap + textBlockH + padding) / 0.4);
+                const canvasH = Math.max(1350, neededH);
                 c.height = canvasH * dpr;
                 ctx.scale(dpr, dpr);
                 ctx.imageSmoothingQuality = 'high';
@@ -6495,9 +6498,9 @@ const APP_VERSION = 30;
                     imgDrawH = Math.round(imgH * scale);
                     imgBlockH = ibHeaderH + maxH;
                 }
-                // Center content vertically
+                // Center content vertically (only if it fits)
                 const totalContentH = (hasImg ? imgBlockH + gap : 0) + textBlockH;
-                const topOffset = Math.round((canvasH - totalContentH) / 2);
+                const topOffset = totalContentH < canvasH ? Math.round((canvasH - totalContentH) / 2) : 0;
                 // Black background
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, canvasH);
