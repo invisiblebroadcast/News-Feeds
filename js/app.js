@@ -1446,7 +1446,8 @@ const APP_VERSION = 6;
             imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;
             imgWrap.classList.remove('no-image');
             imgWrap.style.display = '';
-            imgEl.dataset.fb = 'https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg';
+            const altUrl = article._imageUrlPng || article._imageUrlJpg || '';
+            imgEl.dataset.fb = altUrl || ('https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg');
             imgEl.onerror = function () {
                 if (this.dataset.fb) {
                     this.src = this.dataset.fb;

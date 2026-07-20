@@ -1684,7 +1684,9 @@ const APP_VERSION = 30;
       imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;
       imgWrap.classList.remove('no-image');
       imgWrap.style.display = '';
-      imgEl.dataset.fb = 'https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg';
+      // For published posts, try .png if .jpg fails (uploaded extension may differ)
+      const altUrl = article._imageUrlPng || article._imageUrlJpg || '';
+      imgEl.dataset.fb = altUrl || ('https://wsrv.nl/?url=' + encodeURIComponent(imgUrl) + '&output=jpg');
       imgEl.onerror = function() {
         if (this.dataset.fb) { this.src = this.dataset.fb; this.dataset.fb = ''; }
         else { imgWrap.classList.add('no-image'); }
@@ -2832,6 +2834,8 @@ const APP_VERSION = 30;
           let imageUrl = '';
           if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
             imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg';
+            r._imageUrlJpg = imageUrl;
+            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.png';
           }
           return {
             id: r.id,
@@ -6040,7 +6044,7 @@ const APP_VERSION = 30;
       ctx.imageSmoothingQuality = 'high';
       ctx.scale(dpr, dpr);
 
-      // ── Quote type: separate card layout ──
+      // ── Quote type: compact card layout (image at top, text below) ──
       if (article._pubType === 'quote') {
         const quoteFrom = article._pubQuoteFrom || '';
         const quoteText = article.summary || article.title || '';
@@ -6053,8 +6057,7 @@ const APP_VERSION = 30;
         const shadowPadX = Math.round(W * 0.04);
         const shadowPadY = Math.round(W * 0.025);
 
-        // Measure quote text first to calculate dynamic canvas height
-        // Split by \n to preserve paragraph breaks (matches cards view <br> behavior)
+        // Measure quote text
         const quoteParagraphs = quoteText.split('\n').filter(p => p.trim());
         const paraGap = Math.round(quoteLineH * 0.5);
         ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
@@ -6070,65 +6073,87 @@ const APP_VERSION = 30;
         const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
         const shadowBoxH = qH + shadowPadY * 2;
         const fromH = quoteFrom ? fromFontSize : 0;
+        const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize;
 
-        // Total content below the 65% text-start line
-        const textBlockContentH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + medGap + medGap + wmFontSize;
-        // Canvas height: text starts at 65%, so canvasH * 0.35 must fit textBlockContentH
-        // Minimum 1920 (9:16) for visual consistency
-        const canvasH = Math.max(1920, Math.ceil(textBlockContentH / 0.35));
+        // Image area: same bounds as non-quote cards (max 55% of 1350)
+        const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
+        let imgDrawW = 0, imgDrawH = 0, imgBlockH = 0;
+        if (hasImg) {
+          const maxH = imgMaxAreaH - ibHeaderH;
+          const scale = Math.max(W / imgW, maxH / imgH);
+          imgDrawW = Math.round(imgW * scale);
+          imgDrawH = Math.round(imgH * scale);
+          imgBlockH = ibHeaderH + maxH;
+        }
+
+        // Canvas height: compact, grows with content
+        const totalContentH = (hasImg ? imgBlockH + gap : 0) + textBlockH;
+        const canvasH = Math.max(1350, totalContentH + Math.round(W * 0.08));
         c.height = canvasH * dpr;
         ctx.scale(dpr, dpr);
         ctx.imageSmoothingQuality = 'high';
+
+        // Center content vertically
+        const topOffset = Math.round((canvasH - totalContentH) / 2);
 
         // Black background
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, canvasH);
 
-        // Draw image to fill canvas (object-fit: cover)
+        let cursorY = topOffset;
+
+        // Draw image (cover mode, centered)
         if (hasImg) {
-          const imgScale = Math.max(W / imgW, canvasH / imgH);
-          const drawW = Math.round(imgW * imgScale);
-          const drawH = Math.round(imgH * imgScale);
-          const imgX = Math.round((W - drawW) / 2);
-          const imgY = Math.round((canvasH - drawH) / 2);
-          ctx.drawImage(img, imgX, imgY, drawW, drawH);
-        }
+          const maxH = imgMaxAreaH - ibHeaderH;
+          const drawX = Math.round((W - imgDrawW) / 2);
+          const drawY = cursorY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
+          const imageTopY = cursorY + ibHeaderH;
 
-        // Gradient: matches web card exactly
-        const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.35, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.55, 'rgba(0,0,0,0.15)');
-        grad.addColorStop(0.7, 'rgba(0,0,0,0.5)');
-        grad.addColorStop(0.85, 'rgba(0,0,0,0.85)');
-        grad.addColorStop(1, 'rgba(0,0,0,1)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, W, canvasH);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, imageTopY, W, maxH);
+          ctx.clip();
 
-        // Text starts at 65% (matching web card padding-top: 65%)
-        const textStartY = Math.round(canvasH * 0.65);
-
-        // Sample image brightness behind text area
-        let shadowAlpha = 0.45;
-        if (hasImg) {
-          try {
-            const sx = Math.max(0, Math.round(PAD * dpr));
-            const sy = Math.max(0, Math.round((textStartY + quoteOpenSize) * dpr));
-            const sw = Math.min(c.width - sx, Math.round(textW * dpr));
-            const sh = Math.min(c.height - sy, Math.round(shadowBoxH * dpr));
-            if (sw > 0 && sh > 0) {
-              const pixels = ctx.getImageData(sx, sy, sw, sh).data;
-              let totalBrightness = 0;
-              const sampleCount = Math.min(pixels.length / 4, 2000);
-              const step = Math.max(4, Math.floor((pixels.length / 4) / sampleCount));
-              for (let i = 0; i < pixels.length; i += step * 4) {
-                totalBrightness += (pixels[i] * 0.299 + pixels[i+1] * 0.587 + pixels[i+2] * 0.114);
-              }
-              const avgBrightness = totalBrightness / sampleCount;
-              shadowAlpha = avgBrightness > 128 ? 0.7 + (avgBrightness - 128) / 255 * 0.2 : 0.35 + avgBrightness / 128 * 0.2;
+          // Multi-pass downscale for sharper output
+          if (imgW > imgDrawW * 2) {
+            let curW = imgW, curH = imgH;
+            let curSrc = img;
+            while (curW > imgDrawW * 2) {
+              const nextW = Math.max(imgDrawW, Math.floor(curW / 2));
+              const nextH = Math.max(Math.round(curH * nextW / curW), 1);
+              const off = document.createElement('canvas');
+              off.width = nextW; off.height = nextH;
+              const octx = off.getContext('2d');
+              octx.imageSmoothingEnabled = true;
+              octx.imageSmoothingQuality = 'high';
+              octx.drawImage(curSrc, 0, 0, nextW, nextH);
+              curSrc = off;
+              curW = nextW; curH = nextH;
             }
-          } catch {}
+            ctx.drawImage(curSrc, drawX, drawY, imgDrawW, imgDrawH);
+          } else {
+            ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
+          }
+
+          // Top/bottom fades within image bounds
+          const fadeH = Math.round(maxH * 0.2);
+          const topGrad = ctx.createLinearGradient(0, imageTopY, 0, imageTopY + fadeH);
+          topGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
+          topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = topGrad;
+          ctx.fillRect(0, imageTopY, W, fadeH);
+          const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - fadeH, 0, imageTopY + maxH);
+          botGrad.addColorStop(0, 'rgba(0,0,0,0)');
+          botGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
+          ctx.fillStyle = botGrad;
+          ctx.fillRect(0, imageTopY + maxH - fadeH, W, fadeH);
+
+          ctx.restore();
+          cursorY += imgBlockH + gap;
         }
+
+        // Text area starts here
+        const textStartY = cursorY;
 
         // Big red opening quote
         ctx.fillStyle = '#ff2929';
@@ -6144,8 +6169,8 @@ const APP_VERSION = 30;
           sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.15,
           sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.55
         );
-        sbGrad.addColorStop(0, `rgba(0,0,0,${shadowAlpha})`);
-        sbGrad.addColorStop(0.5, `rgba(0,0,0,${shadowAlpha * 0.6})`);
+        sbGrad.addColorStop(0, `rgba(0,0,0,0.5)`);
+        sbGrad.addColorStop(0.5, `rgba(0,0,0,0.3)`);
         sbGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = sbGrad;
         const sbR = Math.round(W * 0.015);
