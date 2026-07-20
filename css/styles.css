@@ -6481,9 +6481,12 @@ a.nav-icon-only svg {
   padding-left: 0;
 }
 
-/* Hide meta for quote cards */
+/* Quote cards: hide elements, fix layout */
 .reels-card.quote-type-card .reels-count-row {
   display: none;
+}
+.reels-card.quote-type-card .reels-live-trending {
+  display: none !important;
 }
 .reels-card.quote-type-card .reels-source {
   display: none;
@@ -6492,11 +6495,19 @@ a.nav-icon-only svg {
   display: block;
   text-align: right;
   font-size: 0.72rem;
+  font-weight: 600;
   color: rgba(255,255,255,0.6);
   margin-top: 4px;
 }
 .reels-card.quote-type-card .reels-read-btn {
   display: none !important;
+}
+/* Remove top glitch — no border, no shadow, flush to top */
+.reels-card.quote-type-card {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  clip-path: none;
 }
 
 @media (max-width: 767px) {
