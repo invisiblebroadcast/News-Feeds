@@ -4801,7 +4801,17 @@ const APP_VERSION = 30;
             _persist();
         }
         const perSourceCap = 100;
-        const allResults = await Promise.allSettled(feeds.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
+        // Process feeds in small batches with yields to prevent browser freeze
+        const BATCH = 4;
+        const allResults = [];
+        for (let i = 0; i < feeds.length; i += BATCH) {
+            const batch = feeds.slice(i, i + BATCH);
+            const settled = await Promise.allSettled(batch.map(f => FeedFetcher.fetchFeed(f, perSourceCap)));
+            for (const s of settled)
+                allResults.push(s);
+            // Yield to browser so UI stays responsive
+            await new Promise(r => setTimeout(r, 0));
+        }
         const groups = {};
         for (let j = 0; j < allResults.length; j++) {
             const result = allResults[j];
@@ -4851,19 +4861,17 @@ const APP_VERSION = 30;
         if (isBackgroundRefreshing)
             return;
         isBackgroundRefreshing = true;
-        showLoadingOverlay('Refreshing feeds\u2026');
+        // No blocking overlay — just show clock icon while loading (non-freezing)
         showRefreshSpinner();
         try {
             await _fetchAndCache();
             isBackgroundRefreshing = false;
             showRecentButton();
-            hideLoadingOverlay();
         }
         catch (err) {
             console.error('Background refresh failed:', err);
             isBackgroundRefreshing = false;
             hideRefreshStatus();
-            hideLoadingOverlay();
         }
     }
     // Fetch fresh data and immediately apply it (used by the clock icon click).
@@ -4871,7 +4879,12 @@ const APP_VERSION = 30;
         if (isBackgroundRefreshing)
             return;
         isBackgroundRefreshing = true;
-        showLoadingOverlay('Loading new feeds\u2026');
+        // Show a non-blocking mini loading state on the clock icon itself
+        const rb = $('#ib-recent-btn');
+        if (rb) {
+            rb.classList.add('ib-loading-new');
+            rb.title = 'Loading new feeds\u2026';
+        }
         try {
             await _fetchAndCache();
             applyRecentAndShowLive();
@@ -4881,13 +4894,13 @@ const APP_VERSION = 30;
         }
         finally {
             isBackgroundRefreshing = false;
-            hideLoadingOverlay();
+            if (rb)
+                rb.classList.remove('ib-loading-new');
         }
     }
     // Called when user clicks the "show recent" button. Re-renders the
     // visible content with the freshly-fetched articles, sorted by most
-    // recent first. (Live is the only mode; the function name is kept
-    // for the call sites that still wire it up.)
+    // recent first. Always forces list view.
     function applyRecentAndShowLive() {
         if (currentSection !== 'feeds')
             return;
@@ -4897,6 +4910,17 @@ const APP_VERSION = 30;
         liveAllArticles = null;
         hasFreshBackground = false;
         hideRefreshStatus();
+        // Force list view on refresh (reels → list)
+        if (currentView !== 'list') {
+            currentView = 'list';
+            _persist();
+            document.body.classList.remove('cards-view');
+            $$('#view-toggle .mode-btn, [data-view-toggle-inline] .mode-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.view === currentView);
+            });
+            if (typeof syncViewToggleBtn === 'function')
+                syncViewToggleBtn();
+        }
         displayCurrentSubcat();
     }
     // Periodic auto-refresh interval (5 minutes). The user can click IB to
@@ -8884,6 +8908,12 @@ const APP_VERSION = 30;
             console.error(err);
             return;
         }
+        // Populate the footer bar immediately so it shows the section title
+        // (feeds/topics/conflicts) without waiting for the full fetch chain.
+        try {
+            updateStickyHeader();
+        }
+        catch (e) { /* noop */ }
         // First-run subscription initialisation. Previously this only
         // ran when the user opened the Settings modal (via
         // renderSubscriptionList), so an incognito user — who never

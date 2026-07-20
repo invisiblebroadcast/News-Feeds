@@ -7711,3 +7711,24 @@ a.nav-icon-only svg {
 /* Coming soon */
 .coming-soon-text { color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 40px 0; }
 .rr-loading { text-align: center; padding: 20px; color: var(--text-tertiary); }
+/* IB row — clock icon loading state (non-blocking) */
+.ib-recent-btn.ib-loading-new {
+  position: relative;
+  pointer-events: none;
+}
+.ib-recent-btn.ib-loading-new::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid rgba(77, 171, 247, 0.3);
+  border-top-color: #4dabf7;
+  border-radius: 50%;
+  animation: ib-spin 0.8s linear infinite;
+}
+@keyframes ib-spin {
+  to { transform: rotate(360deg); }
+}
