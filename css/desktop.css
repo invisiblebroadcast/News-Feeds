@@ -6575,6 +6575,9 @@ a.nav-icon-only svg {
 .reels-stack .reels-card.quote-type-card .reels-toolbar-row .reels-tool-btn {
   pointer-events: auto;
 }
+.reels-stack .reels-card.quote-type-card .reels-actions {
+  z-index: 5;
+}
 
 @media (max-width: 767px) {
   .article-card {
