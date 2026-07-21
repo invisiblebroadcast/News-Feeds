@@ -5250,7 +5250,12 @@ const APP_VERSION = 6;
         if (countRow)
             countRow.style.display = 'none';
         try {
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const cardRect = card.getBoundingClientRect();
+            // Target ~1440px output width for crisp screenshots while respecting
+            // the device's native pixel density. Cap at 4× to avoid enormous files
+            // and memory issues on very high-DPR devices.
+            const targetDpr = Math.max(window.devicePixelRatio || 1, 1440 / Math.max(cardRect.width, 1));
+            const dpr = Math.min(targetDpr, 4);
             const blob = await domtoimage.toBlob(card, {
                 quality: 1,
                 backgroundColor: '#000000',
