@@ -1455,6 +1455,7 @@ body.cards-fullscreen .layout-row-5 {
 }
 body.cards-fullscreen .layout-row-4 {
   height: 100vh !important;
+  height: 100dvh !important;
 }
 body.cards-fullscreen .reels-container {
   padding: 0;
@@ -1474,7 +1475,9 @@ body.cards-fullscreen .reels-stack .reels-card {
 .reels-container:fullscreen,
 .reels-container:-webkit-full-screen {
   height: 100vh;
+  height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   padding: 0;
   border-radius: 0;
   background: #000;
@@ -1483,6 +1486,7 @@ body.cards-fullscreen .reels-stack .reels-card {
 .reels-container:-webkit-full-screen .reels-stack {
   border-radius: 0;
   max-height: 100vh;
+  max-height: 100dvh;
 }
 .reels-container:fullscreen .reels-card,
 .reels-container:-webkit-full-screen .reels-card {
@@ -2303,7 +2307,9 @@ body.cards-fullscreen .reels-stack .reels-card {
   width: 100vw;
   max-width: none;
   max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
@@ -2440,6 +2446,7 @@ body.cards-fullscreen .reels-stack .reels-card {
   justify-content: flex-end;
   gap: 8px;
   padding: 16px 24px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border-primary);
 }
 
@@ -2800,6 +2807,7 @@ body.cards-fullscreen .reels-stack .reels-card {
 }
 .modal-full {
   height: 100vh;
+  height: 100dvh;
 }
 .modal-full .modal-body-full {
   flex: 1;
