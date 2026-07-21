@@ -25,10 +25,27 @@
   <meta property="og:image" content="icons/social-3000x3000.png">
   <meta name="twitter:card" content="summary_large_image">
   <title>Invisible Broadcast — Explore</title>
-  <link rel="stylesheet" href="css/desktop.css?v=14">
-  <link rel="stylesheet" href="css/mobile.css?v=6" media="screen and (max-width: 768px)">
+  <link rel="stylesheet" href="css/desktop.css?v=15">
+  <link rel="stylesheet" href="css/mobile.css?v=7" media="screen and (max-width: 768px)">
 </head>
 <body>
+  <!-- PWA install banner (mobile) -->
+  <div id="pwa-install-banner">
+    <img src="icons/icon-192.png" alt="Invisible Broadcast" class="pwa-install-icon">
+    <div class="pwa-install-body">
+      <div class="pwa-install-title">Install Invisible Broadcast</div>
+      <div class="pwa-install-sub">Add to home screen for quick access</div>
+    </div>
+    <button class="pwa-install-btn" aria-label="Install app">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Install
+    </button>
+    <button class="pwa-install-close" aria-label="Dismiss">&times;</button>
+  </div>
   <script>
     (function() {
       try { if (screen.orientation && screen.orientation.lock) { screen.orientation.lock('portrait').catch(function() {}); } } catch (e) {}
@@ -773,5 +790,7 @@
       </div>
     </div>
   </div>
+  <script src="js/pwa-install.js?v=2"></script>
+
 </body>
 </html>

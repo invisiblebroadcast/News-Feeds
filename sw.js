@@ -17,13 +17,15 @@
  * app launch to pick them up immediately, not after the user
  * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v31';
+const CACHE_VERSION = 'ib-v32';
 const SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './data/feeds.json',
   './css/styles.css',
+  './css/desktop.css',
+  './css/mobile.css',
   './js/settings.js',
   './js/source-health.js',
   './js/supabase-store.js',
@@ -41,6 +43,7 @@ const SHELL_ASSETS = [
   './js/categories-modal.js',
   './js/app.js',
   './js/app-home.js',
+  './js/pwa-install.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
