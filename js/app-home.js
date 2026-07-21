@@ -6580,19 +6580,19 @@ const APP_VERSION = 30;
                 const regionH = canvasH - padTop - padBottom;
                 const textStartY = padTop + Math.max(0, Math.round((regionH - textBlockH) / 2));
                 // ── Row 1: quote mark far left + date far right (PAD on each side),
-                // sharing one baseline so their bottom edges align (same as the
-                // cards view flex row: space-between + baseline) ──
+                // sharing one vertical center so they sit on the same row (matching
+                // the cards view flex row: space-between + center) ──
                 const dateText = quoteDate ? formatDateActual(quoteDate) : '';
-                const rowBaselineY = textStartY + quoteRowH;
-                ctx.textBaseline = 'alphabetic';
+                const rowCenterY = textStartY + Math.round(quoteRowH / 2);
+                ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ff2929';
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
-                ctx.fillText('\u201C', PAD, rowBaselineY);
+                ctx.fillText('\u201C', PAD, rowCenterY);
                 if (dateText) {
                     ctx.fillStyle = 'rgba(255,255,255,0.6)';
                     ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
                     const dateW = ctx.measureText(dateText).width;
-                    ctx.fillText(dateText, W - PAD - dateW, rowBaselineY);
+                    ctx.fillText(dateText, W - PAD - dateW, rowCenterY);
                 }
                 // Shadow box behind quote text
                 const sbX = PAD;
