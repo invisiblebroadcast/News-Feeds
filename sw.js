@@ -17,7 +17,7 @@
  * app launch to pick them up immediately, not after the user
  * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v24';
+const CACHE_VERSION = 'ib-v25';
 const SHELL_ASSETS = [
   './',
   './index.html',

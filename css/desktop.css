@@ -6375,6 +6375,7 @@ a.nav-icon-only svg {
 .quote-text {
   font-style: italic;
   font-weight: 700;
+  color: #fff;
   font-size: var(--font-size-base) !important;
   -webkit-line-clamp: unset !important;
   overflow: visible !important;
@@ -6393,7 +6394,7 @@ a.nav-icon-only svg {
 }
 .quote-from {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin-top: 10px;
   margin-bottom: 2px;
@@ -6403,13 +6404,14 @@ a.nav-icon-only svg {
 }
 .quote-occupation {
   font-size: 0.82rem;
+  font-weight: 700;
   color: var(--text-secondary);
   margin-bottom: 4px;
   text-align: right;
 }
 .quote-watermark {
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-tertiary);
   letter-spacing: 0.5px;
   margin-top: 8px;
@@ -6426,9 +6428,11 @@ a.nav-icon-only svg {
   font-family: Georgia, 'Times New Roman', serif;
   text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  padding-right: 0;
 }
 .quote-occupation-overlay {
   font-size: 0.82rem;
+  font-weight: 700;
   color: #fff;
   margin-top: 2px;
   text-align: right;
@@ -6443,7 +6447,7 @@ a.nav-icon-only svg {
 }
 .quote-watermark-overlay {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(255,255,255,0.7);
   letter-spacing: 0.5px;
   margin-top: 2px;

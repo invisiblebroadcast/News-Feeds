@@ -6607,8 +6607,8 @@ const APP_VERSION = 30;
                 ctx.beginPath();
                 ctx.roundRect(sbX, sbY, sbW, shadowBoxH, sbR);
                 ctx.fill();
-                // Quote text — draw each paragraph with gap between them (italic + bold, matching cards view)
-                ctx.fillStyle = '#e6edf3';
+                // Quote text — draw each paragraph with gap between them (italic + bold, pure white, matching cards view)
+                ctx.fillStyle = '#fff';
                 ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
                 let textY = sbY + shadowPadY + quoteLineH;
                 let paraIdx = 0;
@@ -6638,7 +6638,7 @@ const APP_VERSION = 30;
                     ctx.shadowOffsetY = 0;
                     afterTextY += fromH;
                 }
-                // Occupation / title — RIGHT aligned, italic, like a signature
+                // Occupation / title — RIGHT aligned, italic + bold, like a signature
                 if (quoteOccupation) {
                     ctx.textBaseline = 'alphabetic';
                     const occTextW = ctx.measureText(quoteOccupation).width;
@@ -6647,7 +6647,7 @@ const APP_VERSION = 30;
                     ctx.shadowBlur = 2;
                     ctx.shadowOffsetY = 1;
                     ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                    ctx.font = 'italic ' + occFontSize + 'px Georgia, "Times New Roman", serif';
+                    ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
                     ctx.fillText(quoteOccupation, occX, afterTextY + occH);
                     ctx.shadowColor = 'transparent';
                     ctx.shadowBlur = 0;
@@ -6675,7 +6675,7 @@ const APP_VERSION = 30;
                 ctx.shadowBlur = 3;
                 ctx.shadowOffsetY = 1;
                 ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                ctx.font = '600 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
+                ctx.font = '700 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
                 ctx.shadowColor = 'transparent';
