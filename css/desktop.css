@@ -6514,17 +6514,28 @@ a.nav-icon-only svg {
   color: var(--accent, #ff2929);
   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
-/* Quote symbol + date share ONE row: the quote mark sits far left and the
-   date far right (the overlay supplies the side padding), and the two are
-   aligned to each other's bottom edge (shared text baseline). On regular
-   posts the wrapper is display:contents — zero layout effect. No absolute
-   positioning anywhere, so the pair renders identically in normal and
-   fullscreen cards view. */
+/* Quote symbol + date: forced into a single table-row so they are
+   pixel-perfectly aligned regardless of font-size difference.
+   On regular posts the wrapper is display:contents — zero layout effect. */
 .reels-quote-head { display: contents; }
 .reels-stack .reels-card.quote-type-card .reels-quote-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  padding: 0;
+}
+.reels-stack .reels-card.quote-type-card .reels-quote-head .reels-title {
+  display: table-cell;
+  vertical-align: middle;
+  width: 1%;
+  white-space: nowrap;
+}
+.reels-stack .reels-card.quote-type-card .reels-quote-head .reels-meta {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: right;
+  width: 99%;
 }
 .reels-stack .reels-card.quote-type-card .reels-meta {
   font-size: 0.72rem;
@@ -6535,6 +6546,7 @@ a.nav-icon-only svg {
 .reels-stack .reels-card.quote-type-card .reels-summary-wrap {
   margin: 0;
   padding: 0;
+  margin-top: 0.5em;
 }
 /* Quote cards: the image is absolutely positioned from the very top of the
    card, i.e. behind the toolbar row. Keep the toolbar transparent so it

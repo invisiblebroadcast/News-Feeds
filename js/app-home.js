@@ -6484,9 +6484,9 @@ const APP_VERSION = 30;
                 const wmFontSize = Math.round(W * 0.029);
                 const dateFontSize = Math.round(W * 0.03);
                 const quoteOpenSize = Math.round(W * 0.19);
-                const medGap = Math.round(W * 0.025);
+                const medGap = 0;
                 const shadowPadX = Math.round(W * 0.04);
-                const shadowPadY = Math.round(W * 0.025);
+                const shadowPadY = Math.round(W * 0.015);
                 // Measure quote text
                 const quoteParagraphs = quoteText.split('\n').filter(p => p.trim());
                 const paraGap = Math.round(quoteLineH * 0.5);
