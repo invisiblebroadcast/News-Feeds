@@ -1630,12 +1630,14 @@ const APP_VERSION = 30;
             '<span class="reels-mode-badge"></span>' +
           '</div>' +
         '</div>' +
-        '<h2 class="reels-title"></h2>' +
-        '<div class="reels-meta">' +
-          '<span class="reels-source"></span>' +
-          '<span class="reels-date"></span>' +
-          '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
-          '<span class="reels-flag" style="display:none"></span>' +
+        '<div class="reels-quote-head">' +
+          '<h2 class="reels-title"></h2>' +
+          '<div class="reels-meta">' +
+            '<span class="reels-source"></span>' +
+            '<span class="reels-date"></span>' +
+            '<span class="reels-live-trending" style="display:none"><span class="lrk-arrow">↗</span> <span class="rk-num"></span></span>' +
+            '<span class="reels-flag" style="display:none"></span>' +
+          '</div>' +
         '</div>' +
         '<div class="reels-conflict-panel" style="display:none">' +
           '<div class="rcp-header"><span class="rcp-warn">⚠</span> Conflicting reports</div>' +
@@ -6109,11 +6111,17 @@ const APP_VERSION = 30;
         const quoteOccupation = article._pubQuoteOccupation || '';
         const quoteDate = article._pubQuoteDate || '';
         const quoteText = article.summary || article.title || '';
+        // Font sizes mirror the on-screen quote card ratios (card ≈ 390px wide,
+        // root 16px): mark 4.8rem ≈ 0.19W · date 0.72rem ≈ 0.03W ·
+        // quote 0.9rem ≈ 0.038W · from 1.05rem ≈ 0.043W ·
+        // occupation 0.82rem ≈ 0.034W · watermark 0.7rem ≈ 0.029W
         const quoteFontSize = Math.round(W * 0.038);
         const quoteLineH = Math.round(quoteFontSize * 1.5);
-        const fromFontSize = Math.round(W * 0.028);
-        const wmFontSize = Math.round(W * 0.02);
-        const quoteOpenSize = Math.round(W * 0.15);
+        const fromFontSize = Math.round(W * 0.043);
+        const occFontSize = Math.round(W * 0.034);
+        const wmFontSize = Math.round(W * 0.029);
+        const dateFontSize = Math.round(W * 0.03);
+        const quoteOpenSize = Math.round(W * 0.19);
         const medGap = Math.round(W * 0.025);
         const shadowPadX = Math.round(W * 0.04);
         const shadowPadY = Math.round(W * 0.025);
@@ -6121,7 +6129,7 @@ const APP_VERSION = 30;
         // Measure quote text
         const quoteParagraphs = quoteText.split('\n').filter(p => p.trim());
         const paraGap = Math.round(quoteLineH * 0.5);
-        ctx.font = quoteFontSize + 'px Georgia, "Times New Roman", serif';
+        ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
         const maxTextW = textW - shadowPadX * 2;
         let totalQLines = 0;
         const paraLineCounts: number[] = [];
@@ -6134,52 +6142,44 @@ const APP_VERSION = 30;
         const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
         const shadowBoxH = qH + shadowPadY * 2;
         const fromH = quoteFrom ? fromFontSize : 0;
-        const occH = quoteOccupation ? Math.round(fromFontSize * 0.85) : 0;
-        const dateH = quoteDate ? wmFontSize : 0;
-        const textBlockH = quoteOpenSize + shadowPadY + shadowBoxH + shadowPadY + fromH + occH + medGap + medGap + wmFontSize + (quoteDate ? medGap : 0);
+        const occH = quoteOccupation ? occFontSize : 0;
+        // Quote mark + date share one row; the row is as tall as the big mark.
+        const quoteRowH = quoteOpenSize;
+        const textBlockH = quoteRowH + medGap + shadowBoxH + shadowPadY * 2 + fromH + occH + medGap + medGap + wmFontSize;
 
-        // Canvas height: must fit image (60%) + text + padding.
-        // Solve: canvasH = 0.6*canvasH + gap + textBlockH + padding
-        //   → canvasH = (gap + textBlockH + padding) / 0.4
-        const padding = Math.round(W * 0.08);
-        const neededH = Math.ceil((gap + textBlockH + padding) / 0.4);
+        // Layout mirrors the on-screen card:
+        //   image = top 60% of the canvas height, full width, cover-cropped.
+        //   text  = region starts at 40% of the canvas WIDTH (the overlay's
+        //           padding-top: 40% is width-relative) and the block is
+        //           vertically centered in the remaining space, so the quote
+        //           mark + date row overlaps the image bottom exactly like
+        //           the cards view.
+        const padTop = Math.round(W * 0.4);
+        const padBottom = Math.round(W * 0.04);
+        const neededH = padTop + textBlockH + padBottom;
         const canvasH = Math.max(1350, neededH);
         c.height = canvasH * dpr;
         ctx.scale(dpr, dpr);
         ctx.imageSmoothingQuality = 'high';
 
-        // Image area: top 60% of canvas
-        const imgBlockHCalc = Math.round(canvasH * 0.6);
-        const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
-        let imgDrawW = 0, imgDrawH = 0, imgBlockH = 0;
-        if (hasImg) {
-          const maxH = imgBlockHCalc - ibHeaderH;
-          const scale = Math.max(W / imgW, maxH / imgH);
-          imgDrawW = Math.round(imgW * scale);
-          imgDrawH = Math.round(imgH * scale);
-          imgBlockH = ibHeaderH + maxH;
-        }
-
-        // Center content vertically (only if it fits)
-        const totalContentH = (hasImg ? imgBlockH + gap : 0) + textBlockH;
-        const topOffset = totalContentH < canvasH ? Math.round((canvasH - totalContentH) / 2) : 0;
-
         // Black background
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, canvasH);
 
-        let cursorY = topOffset;
-
-        // Draw image (cover mode, centered)
+        // Image: top 60% of the canvas, cover mode, centered. No fade veil —
+        // matches the on-screen card where the photo renders clear.
+        const imgBlockH = Math.round(canvasH * 0.6);
+        let imgDrawW = 0, imgDrawH = 0;
         if (hasImg) {
-          const maxH = imgBlockHCalc - ibHeaderH;
+          const scale = Math.max(W / imgW, imgBlockH / imgH);
+          imgDrawW = Math.round(imgW * scale);
+          imgDrawH = Math.round(imgH * scale);
           const drawX = Math.round((W - imgDrawW) / 2);
-          const drawY = cursorY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
-          const imageTopY = cursorY + ibHeaderH;
+          const drawY = Math.round((imgBlockH - imgDrawH) / 2);
 
           ctx.save();
           ctx.beginPath();
-          ctx.rect(0, imageTopY, W, maxH);
+          ctx.rect(0, 0, W, imgBlockH);
           ctx.clip();
 
           // Multi-pass downscale for sharper output
@@ -6196,39 +6196,47 @@ const APP_VERSION = 30;
               octx.imageSmoothingQuality = 'high';
               octx.drawImage(curSrc, 0, 0, nextW, nextH);
               curSrc = off;
-              curW = nextW; curH = nextH;
+              curW = nextW;
+              curH = nextH;
             }
             ctx.drawImage(curSrc, drawX, drawY, imgDrawW, imgDrawH);
           } else {
             ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
           }
 
-          // Bottom fade to black — strong 40% of image area for clean blend
-          const botFadeH = Math.round(maxH * 0.4);
-          const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - botFadeH, 0, imageTopY + maxH);
-          botGrad.addColorStop(0, 'rgba(0,0,0,0)');
-          botGrad.addColorStop(0.5, 'rgba(0,0,0,0.5)');
-          botGrad.addColorStop(1, 'rgba(0,0,0,1)');
-          ctx.fillStyle = botGrad;
-          ctx.fillRect(0, imageTopY + maxH - botFadeH, W, botFadeH);
-
           ctx.restore();
-          cursorY += imgBlockH + gap;
         }
 
-        // Text area starts here
-        const textStartY = cursorY;
+        // Text block: vertically centered in [padTop, canvasH - padBottom]
+        const regionH = canvasH - padTop - padBottom;
+        const textStartY = padTop + Math.max(0, Math.round((regionH - textBlockH) / 2));
 
-        // Big red opening quote
+        // ── Row 1: quote mark + date — one centered group, vertically
+        // centered with each other (same as the cards view flex row) ──
+        const dateText = quoteDate ? formatDateActual(quoteDate) : '';
+        const rowCenterY = textStartY + Math.round(quoteRowH / 2);
+        const rowGap = Math.round(W * 0.02);
+        ctx.textBaseline = 'middle';
+        ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
+        const markW = ctx.measureText('\u201C').width;
+        ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
+        const dateW = dateText ? ctx.measureText(dateText).width : 0;
+        const groupW = markW + (dateW ? rowGap + dateW : 0);
+        const groupX = Math.round((W - groupW) / 2);
         ctx.fillStyle = '#ff2929';
         ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
+        ctx.fillText('\u201C', groupX, rowCenterY);
+        if (dateText) {
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
+          ctx.fillText(dateText, groupX + markW + rowGap, rowCenterY);
+        }
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText('\u201C', PAD, textStartY + quoteOpenSize);
 
         // Shadow box behind quote text
         const sbX = PAD;
         const sbW = textW;
-        const sbY = textStartY + quoteOpenSize + shadowPadY;
+        const sbY = textStartY + quoteRowH + medGap + shadowPadY;
         const sbGrad = ctx.createRadialGradient(
           sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.15,
           sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.55
@@ -6276,7 +6284,6 @@ const APP_VERSION = 30;
 
         // Occupation / title — RIGHT aligned, italic, like a signature
         if (quoteOccupation) {
-          const occFontSize = Math.round(fromFontSize * 0.85);
           ctx.textBaseline = 'alphabetic';
           const occTextW = ctx.measureText(quoteOccupation).width;
           const occX = W - PAD - occTextW;
@@ -6309,7 +6316,8 @@ const APP_VERSION = 30;
         ctx.stroke();
         afterTextY += medGap;
 
-        // "Invisible Broadcast" — LEFT aligned, Georgia, with text-shadow (matching cards view)
+        // "Invisible Broadcast" — LEFT aligned, Georgia, with text-shadow (matching cards view).
+        // The date lives up in the quote mark row now (matching cards view), not here.
         ctx.shadowColor = 'rgba(0,0,0,0.6)';
         ctx.shadowBlur = 3;
         ctx.shadowOffsetY = 1;
@@ -6317,12 +6325,6 @@ const APP_VERSION = 30;
         ctx.font = '600 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
         ctx.textBaseline = 'alphabetic';
         ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
-        // Quote date — RIGHT aligned (matching cards view)
-        if (quoteDate) {
-          const dateText = formatDateActual(quoteDate);
-          const dateTextW = ctx.measureText(dateText).width;
-          ctx.fillText(dateText, W - PAD - dateTextW, afterTextY + wmFontSize);
-        }
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;

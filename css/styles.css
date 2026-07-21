@@ -6493,25 +6493,29 @@ a.nav-icon-only svg {
   z-index: 3;
 }
 .reels-stack .reels-card.quote-type-card .reels-title {
-  display: block;
   font-size: 2.4rem;
   line-height: 1;
   margin: 0;
-  text-align: center;
   color: var(--accent, #ff2929);
   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
-/* Quote symbol + date are grouped together as one centered block at the top
-   of the overlay. The date stays in normal flow (static) right after the
-   quote mark — no absolute positioning — so the pair renders identically in
-   normal and fullscreen cards view. */
+/* Quote symbol + date share ONE row: on quote cards the wrapper is a
+   centered flex row, so the pair is centered horizontally as a group and
+   vertically centered with each other. On regular posts the wrapper is
+   display:contents — zero layout effect. No absolute positioning anywhere,
+   so the pair renders identically in normal and fullscreen cards view. */
+.reels-quote-head { display: contents; }
+.reels-stack .reels-card.quote-type-card .reels-quote-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
 .reels-stack .reels-card.quote-type-card .reels-meta {
-  display: block;
-  text-align: center;
   font-size: 0.72rem;
   font-weight: 700;
   color: rgba(255,255,255,0.6);
-  margin: 4px 0 0 0;
+  margin: 0;
 }
 .reels-stack .reels-card.quote-type-card .reels-summary-wrap {
   margin: 0;
