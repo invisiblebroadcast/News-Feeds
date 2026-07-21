@@ -50,6 +50,15 @@ const APP_VERSION = 30;
     get currentUser() { return currentUser; },
     openModal,
     closeModal,
+    refreshCurrentView() {
+      _publishedCache = [];
+      if (currentView === 'reels') {
+        currentReelIndex = 0;
+        showReel();
+      } else {
+        displayCurrentSubcat();
+      }
+    },
     pushFrame(id) { pushedFrameStack.push(id); },
     pushState(state) { pushedStateStack.push(state); },
     dropPushedFrame(id) {
@@ -1762,10 +1771,10 @@ const APP_VERSION = 30;
     const showDesc = Settings.get('showDescription');
 
     // Quote type: show quote text with opening quote mark, hide title
-    if (article._pubType === 'quote') {
+      if (article._pubType === 'quote') {
       cardEl.classList.add('quote-type-card');
       if (title) {
-        title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;">\u201C</span>';
+        title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;text-shadow:0 2px 6px rgba(0,0,0,0.85),0 1px 2px rgba(0,0,0,0.7);">\u201C</span>';
       }
       const quoteFrom = article._pubQuoteFrom || '';
       const quoteOccupation = article._pubQuoteOccupation || '';
@@ -1777,12 +1786,10 @@ const APP_VERSION = 30;
       if (summaryWrap) summaryWrap.style.display = showDesc ? '' : 'none';
       // Hide the source line — we show quote_from + watermark instead
       if (source) source.textContent = '';
-      // Show quote date if set
+      // Move quote date below the watermark (create overlay, hide top date)
       const dateEl = cardEl.querySelector('.reels-date');
-      if (dateEl) {
-        dateEl.textContent = quoteDate ? formatDateActual(quoteDate) : '';
-      }
-      // Add quote_from (red, bold) + occupation + separator + watermark after the summary
+      if (dateEl) dateEl.style.display = 'none';
+      // Add quote_from (red, bold) + occupation + separator + watermark + date after the summary
       const existingFrom = cardEl.querySelector('.quote-from-overlay');
       if (existingFrom) existingFrom.remove();
       const existingOcc = cardEl.querySelector('.quote-occupation-overlay');
@@ -1791,6 +1798,8 @@ const APP_VERSION = 30;
       if (existingSep) existingSep.remove();
       const existingWm = cardEl.querySelector('.quote-watermark-overlay');
       if (existingWm) existingWm.remove();
+      const existingDateOv = cardEl.querySelector('.quote-date-overlay');
+      if (existingDateOv) existingDateOv.remove();
       if (quoteFrom) {
         const fromEl = document.createElement('div');
         fromEl.className = 'quote-from-overlay';
@@ -1812,6 +1821,12 @@ const APP_VERSION = 30;
       wmEl.className = 'quote-watermark-overlay';
       wmEl.textContent = 'Invisible Broadcast';
       sepEl.parentNode.insertBefore(wmEl, sepEl.nextSibling);
+      if (quoteDate) {
+        const dateOvEl = document.createElement('div');
+        dateOvEl.className = 'quote-date-overlay';
+        dateOvEl.textContent = formatDateActual(quoteDate);
+        wmEl.parentNode.insertBefore(dateOvEl, wmEl.nextSibling);
+      }
     } else {
       cardEl.classList.remove('quote-type-card');
       // Clean up any leftover quote elements from a previous render
@@ -1823,6 +1838,10 @@ const APP_VERSION = 30;
       if (oldSep) oldSep.remove();
       const oldWm = cardEl.querySelector('.quote-watermark-overlay');
       if (oldWm) oldWm.remove();
+      const oldDateOv = cardEl.querySelector('.quote-date-overlay');
+      if (oldDateOv) oldDateOv.remove();
+      const topDateEl = cardEl.querySelector('.reels-date');
+      if (topDateEl) topDateEl.style.display = '';
       if (title) title.textContent = article.title;
       if (source) source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
       if (summary) {
@@ -3153,14 +3172,22 @@ const APP_VERSION = 30;
       modal.classList.add('open');
 
       const isQuote = data.type === 'quote';
+      const isYouTube = !isQuote && data.source_name === 'YouTube';
+      const editTab = isQuote ? 'quotes' : (isYouTube ? 'youtube' : 'post');
 
       // Switch to the correct tab
-      if (isQuote) {
-        $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'quotes'));
-        $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'quotes'));
-      } else {
-        $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === 'youtube'));
-        $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === 'youtube'));
+      $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === editTab));
+      $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === editTab));
+
+      // Helper to close modal and refresh the view the user came from
+      function finishEdit() {
+        modal.classList.remove('open');
+        if (currentView === 'reels') {
+          currentReelIndex = 0;
+          showReel();
+        } else {
+          displayCurrentSubcat();
+        }
       }
 
       if (isQuote) {
@@ -3212,14 +3239,14 @@ const APP_VERSION = 30;
               await fetchPublishedArticlesFromSupabase();
               if (quoteMsg) { quoteMsg.innerHTML = '\u2705 Updated!'; quoteMsg.className = 'publish-msg success'; }
               quoteBtn.textContent = '\u2705 Updated';
-              setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
+              setTimeout(finishEdit, 800);
             } catch (e) {
               if (quoteMsg) { quoteMsg.textContent = '\u274c ' + (e.message || 'Update failed'); quoteMsg.className = 'publish-msg error'; }
               quoteBtn.disabled = false; quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
             }
           };
         }
-      } else {
+      } else if (isYouTube) {
         // Pre-fill YouTube fields
         const titleInput = $('#publish-title');
         const descInput = $('#publish-desc');
@@ -3253,10 +3280,134 @@ const APP_VERSION = 30;
               await fetchPublishedArticlesFromSupabase();
               if (pubMsg) { pubMsg.innerHTML = '\u2705 Updated!'; pubMsg.className = 'publish-msg success'; }
               ytBtn.textContent = '\u2705 Updated';
-              setTimeout(() => { modal.classList.remove('open'); displayCurrentSubcat(); }, 1000);
+              setTimeout(finishEdit, 800);
             } catch (e) {
               if (pubMsg) { pubMsg.textContent = '\u274c ' + (e.message || 'Update failed'); pubMsg.className = 'publish-msg error'; }
               ytBtn.disabled = false; ytBtn.textContent = '\uD83D\uDCE4 Update';
+            }
+          };
+        }
+      } else {
+        // Pre-fill Post tab fields
+        const postTitle = $('#post-title');
+        const postDesc = $('#post-desc');
+        const postSourceName = $('#post-source-name');
+        const postSourceLink = $('#post-source-link');
+        const postScope = $('#post-scope-select');
+        const postCategory = $('#post-category-select');
+        const postMsg = $('#post-publish-msg');
+        if (postTitle) postTitle.value = data.title || '';
+        if (postDesc) postDesc.value = data.body || '';
+        if (postSourceName) postSourceName.value = data.source_name || '';
+        if (postSourceLink) postSourceLink.value = data.source_link || '';
+        if (postScope) postScope.value = data.scope || 'global';
+        if (postCategory) postCategory.value = data.category || 'all';
+        if (postMsg) { postMsg.textContent = ''; postMsg.className = 'publish-msg'; }
+
+        // Show existing post image reference if one exists
+        const postImagePreview = $('#post-image-preview');
+        const postImagePreviewImg = $('#post-image-preview-img');
+        const postImageInput = $('#post-image');
+        if (data.post_id && postImagePreview && postImagePreviewImg) {
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg';
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png';
+          const probe = new Image();
+          probe.onload = () => {
+            postImagePreviewImg.src = jpgUrl;
+            postImagePreview.style.display = 'block';
+          };
+          probe.onerror = () => {
+            const probe2 = new Image();
+            probe2.onload = () => {
+              postImagePreviewImg.src = pngUrl;
+              postImagePreview.style.display = 'block';
+            };
+            probe2.onerror = () => {
+              postImagePreview.style.display = 'none';
+            };
+            probe2.src = pngUrl;
+          };
+          probe.src = jpgUrl;
+        }
+        let postImageFile = null;
+        if (postImageInput) {
+          postImageInput.onchange = () => {
+            const file = postImageInput.files[0];
+            if (!file) return;
+            if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+              postImageInput.value = '';
+              return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+              postImageInput.value = '';
+              return;
+            }
+            postImageFile = file;
+            if (postImagePreview && postImagePreviewImg) {
+              postImagePreviewImg.src = URL.createObjectURL(file);
+              postImagePreview.style.display = 'block';
+            }
+          };
+        }
+        const postImageRemove = $('#post-image-remove');
+        if (postImageRemove) {
+          postImageRemove.onclick = () => {
+            postImageFile = null;
+            if (postImageInput) postImageInput.value = '';
+            if (postImagePreview) postImagePreview.style.display = 'none';
+          };
+        }
+
+        const postBtn = $('#post-publish-btn');
+        if (postBtn) {
+          postBtn.textContent = '\uD83D\uDCE4 Update Post';
+          window._ibSkipPublish = true;
+          postBtn.onclick = async () => {
+            const t = $('#post-title')?.value?.trim();
+            const d = $('#post-desc')?.value?.trim();
+            const sName = $('#post-source-name')?.value?.trim() || '';
+            const sLink = $('#post-source-link')?.value?.trim() || '';
+            const pScope = $('#post-scope-select')?.value || 'global';
+            const pCategory = $('#post-category-select')?.value || 'all';
+            if (!t) { _setElMsg(postMsg, 'Please enter a title', 'error'); return; }
+            if (!d) { _setElMsg(postMsg, 'Please enter content', 'error'); return; }
+            postBtn.disabled = true; postBtn.textContent = 'Updating\u2026';
+            try {
+              const c2 = getSupabaseClient();
+              const { error: updErr } = await c2.from('published_articles').update({
+                title: t,
+                body: d,
+                source_name: sName || 'Invisible Broadcast',
+                source_link: sLink || '',
+                scope: pScope,
+                nation: pScope === 'nation' ? 'india' : '',
+                category: pCategory,
+                last_modified: new Date().toISOString()
+              }).eq('id', pubId);
+              if (updErr) throw updErr;
+
+              if (postImageFile && data.post_id) {
+                const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
+                const filePath = formatPostId(data.post_id) + '.' + ext;
+                const { error: uploadErr } = await c2.storage
+                  .from('ib-post-images')
+                  .upload(filePath, postImageFile, {
+                    contentType: postImageFile.type,
+                    upsert: true
+                  });
+                if (uploadErr) {
+                  console.warn('[editPublishedArticle] Post image upload failed:', uploadErr.message);
+                }
+              }
+
+              _publishedCache = [];
+              await fetchPublishedArticlesFromSupabase();
+              if (postMsg) { postMsg.innerHTML = '\u2705 Updated!'; postMsg.className = 'publish-msg success'; }
+              postBtn.textContent = '\u2705 Updated';
+              setTimeout(finishEdit, 800);
+            } catch (e) {
+              if (postMsg) { postMsg.textContent = '\u274c ' + (e.message || 'Update failed'); postMsg.className = 'publish-msg error'; }
+              postBtn.disabled = false; postBtn.textContent = '\uD83D\uDCE4 Update Post';
             }
           };
         }

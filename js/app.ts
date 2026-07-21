@@ -46,6 +46,15 @@ const APP_VERSION = 6;
     get currentSubcat() { return currentSubcat; },
     openModal,
     closeModal,
+    refreshCurrentView() {
+      _publishedCache = [];
+      if (currentView === 'reels') {
+        currentReelIndex = 0;
+        showReel();
+      } else {
+        displayCurrentSubcat();
+      }
+    },
     pushFrame(id) { pushedFrameStack.push(id); },
     pushState(state) { pushedStateStack.push(state); },
     dropPushedFrame(id) {

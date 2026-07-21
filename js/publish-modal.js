@@ -163,6 +163,12 @@ const PublishModal = (() => {
                 $('#publish-desc').value = '';
             if ($('#publish-url'))
                 $('#publish-url').value = '';
+            setTimeout(() => {
+                closeModal();
+                if (window.appState && typeof window.appState.refreshCurrentView === 'function') {
+                    window.appState.refreshCurrentView();
+                }
+            }, 800);
         }
         catch (e) {
             setMsg(msg, e.message || 'Publish failed', 'error');
@@ -297,6 +303,12 @@ const PublishModal = (() => {
                 $('#post-image').value = '';
             if ($('#post-image-preview'))
                 $('#post-image-preview').style.display = 'none';
+            setTimeout(() => {
+                closeModal();
+                if (window.appState && typeof window.appState.refreshCurrentView === 'function') {
+                    window.appState.refreshCurrentView();
+                }
+            }, 800);
         }
         catch (e) {
             setMsg(msg, e.message || 'Publish failed', 'error');
@@ -427,6 +439,12 @@ const PublishModal = (() => {
                 $('#quote-image').value = '';
             if ($('#quote-image-preview'))
                 $('#quote-image-preview').style.display = 'none';
+            setTimeout(() => {
+                closeModal();
+                if (window.appState && typeof window.appState.refreshCurrentView === 'function') {
+                    window.appState.refreshCurrentView();
+                }
+            }, 800);
         }
         catch (e) {
             setMsg(msg, e.message || 'Publish failed', 'error');

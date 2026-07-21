@@ -97,6 +97,7 @@ interface AppStateExposed {
   currentUser?: any;
   openModal: (name: string, modalEl: HTMLElement | null, onClose?: () => void) => void;
   closeModal: (name: string) => void;
+  refreshCurrentView: () => void;
   pushFrame: (id: number) => void;
   pushState: (state: any) => void;
   dropPushedFrame: (id: number) => void;
