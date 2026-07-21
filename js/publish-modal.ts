@@ -152,6 +152,119 @@ const PublishModal = (() => {
     }
   }
 
+  /* ── Posts: publish to Supabase ── */
+  let _postImageFile = null;
+
+  function initPostImageHandlers() {
+    const fileInput = $('#post-image');
+    const preview = $('#post-image-preview');
+    const previewImg = $('#post-image-preview-img');
+    const removeBtn = $('#post-image-remove');
+
+    if (fileInput) {
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+          fileInput.value = '';
+          return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+          fileInput.value = '';
+          return;
+        }
+        _postImageFile = file;
+        if (preview && previewImg) {
+          previewImg.src = URL.createObjectURL(file);
+          preview.style.display = 'block';
+        }
+      });
+    }
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        _postImageFile = null;
+        if (fileInput) fileInput.value = '';
+        if (preview) preview.style.display = 'none';
+      });
+    }
+  }
+
+  async function handlePublishPost() {
+    // Skip if we're in edit mode (app-home.ts sets this flag)
+    if ((window as any)._ibSkipPublish) { (window as any)._ibSkipPublish = false; return; }
+    const title = $('#post-title')?.value?.trim();
+    const desc = $('#post-desc')?.value?.trim();
+    const sourceName = $('#post-source-name')?.value?.trim() || '';
+    const sourceLink = $('#post-source-link')?.value?.trim() || '';
+    const scopeVal = $('#post-scope-select')?.value || 'global';
+    const categoryVal = $('#post-category-select')?.value || 'all';
+    const msg = $('#post-publish-msg');
+
+    if (!currentUser) { setMsg(msg, 'Please sign in first', 'error'); return; }
+    if (!title) { setMsg(msg, 'Please enter a title', 'error'); return; }
+    if (!desc) { setMsg(msg, 'Please enter content', 'error'); return; }
+
+    const publishBtn = $('#post-publish-btn');
+    if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = 'Publishing\u2026'; }
+
+    try {
+      const client = window.SupabaseStore && SupabaseStore.getClient();
+      if (!client) throw new Error('Supabase client not available');
+
+      const { data: inserted, error } = await client
+        .from('published_articles')
+        .insert({
+          user_id: currentUser.id,
+          user_email: currentUser.email || '',
+          author: currentUser.email || '',
+          title: title,
+          body: desc,
+          source_name: sourceName || 'Invisible Broadcast',
+          source_link: sourceLink || '',
+          scope: scopeVal,
+          nation: scopeVal === 'nation' ? 'india' : '',
+          category: categoryVal,
+          type: 'feeds',
+          quote_from: ''
+        })
+        .select('post_id')
+        .single();
+
+      if (error) throw error;
+
+      const postId = inserted?.post_id;
+
+      if (_postImageFile && postId) {
+        const ext = _postImageFile.type === 'image/png' ? 'png' : 'jpg';
+        const filePath = formatPostId(postId) + '.' + ext;
+        const { error: uploadErr } = await client.storage
+          .from('ib-post-images')
+          .upload(filePath, _postImageFile, {
+            contentType: _postImageFile.type,
+            upsert: true
+          });
+        if (uploadErr) {
+          console.warn('[PublishModal] Post image upload failed:', uploadErr.message);
+        }
+      }
+
+      setMsg(msg, 'Post published successfully!', 'success');
+      _postImageFile = null;
+      if ($('#post-title')) $('#post-title').value = '';
+      if ($('#post-desc')) $('#post-desc').value = '';
+      if ($('#post-source-name')) $('#post-source-name').value = '';
+      if ($('#post-source-link')) $('#post-source-link').value = '';
+      if ($('#post-scope-select')) $('#post-scope-select').value = 'global';
+      if ($('#post-category-select')) $('#post-category-select').value = 'all';
+      if ($('#post-image')) $('#post-image').value = '';
+      if ($('#post-image-preview')) $('#post-image-preview').style.display = 'none';
+    } catch (e) {
+      setMsg(msg, e.message || 'Publish failed', 'error');
+    } finally {
+      if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = 'Publish Post'; }
+    }
+  }
+
   /* ── Quotes: publish to Supabase ── */
   let _quoteImageFile = null;
 
@@ -340,6 +453,13 @@ const PublishModal = (() => {
         if (e.target === modal) closeModal();
       });
     }
+
+    // Post tab
+    const postPublishBtn = $('#post-publish-btn');
+    if (postPublishBtn) {
+      postPublishBtn.addEventListener('click', handlePublishPost);
+    }
+    initPostImageHandlers();
 
     // Quotes tab
     const quotePublishBtn = $('#quote-publish-btn');

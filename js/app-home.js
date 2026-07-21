@@ -1878,7 +1878,7 @@ const APP_VERSION = 30;
             if (title)
                 title.textContent = article.title;
             if (source)
-                source.textContent = article.source;
+                source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
             if (summary) {
                 summary.classList.remove('quote-text');
                 summary.textContent = showDesc ? summaryText : '';
@@ -1955,6 +1955,10 @@ const APP_VERSION = 30;
             const hasThumb = reelsImgUrl && reelsImgUrl.startsWith('http');
             el.main.innerHTML =
                 '<div class="reels-container">' +
+                    '<div class="reels-pull-indicator" id="reels-pull-indicator">' +
+                    '<span class="reels-pull-spinner"></span>' +
+                    '<span class="reels-pull-label">Pull to refresh</span>' +
+                    '</div>' +
                     '<div class="reels-progress"></div>' +
                     '<div class="reels-stack" id="reels-stack">' +
                     '<div class="reels-card">' + cardOverlayHtml(true, hasThumb) + '</div>' +
@@ -2165,14 +2169,30 @@ const APP_VERSION = 30;
                 }
             });
             updateNavArrows(container);
-            let swipeStartX = 0, swipeDx = 0, isSwiping = false, swipeDir = 0; // -1 = right, 1 = left
+            let swipeStartX = 0, swipeStartY = 0, swipeDx = 0, swipeDy = 0, isSwiping = false, swipeDir = 0; // -1 = right, 1 = left
+            let isPulling = false, pullTriggered = false;
+            const pullIndicator = container.querySelector('#reels-pull-indicator');
+            const pullLabel = pullIndicator ? pullIndicator.querySelector('.reels-pull-label') : null;
+            const REFRESH_THRESHOLD = 120;
+            function resetPullIndicator() {
+                if (!pullIndicator)
+                    return;
+                pullIndicator.classList.remove('visible', 'releasing');
+                pullIndicator.style.transform = 'translateX(-50%) translateY(-120%)';
+                if (pullLabel)
+                    pullLabel.textContent = 'Pull to refresh';
+            }
             container.addEventListener('touchstart', e => {
                 if (e.touches.length !== 1)
                     return;
                 swipeStartX = e.touches[0].clientX;
+                swipeStartY = e.touches[0].clientY;
                 swipeDx = 0;
+                swipeDy = 0;
                 isSwiping = false;
                 swipeDir = 0;
+                isPulling = false;
+                pullTriggered = false;
             }, { passive: true });
             container.addEventListener('touchmove', e => {
                 if (!swipeStartX)
@@ -2181,9 +2201,23 @@ const APP_VERSION = 30;
                 if (!card)
                     return;
                 const dx = e.touches[0].clientX - swipeStartX;
-                const dy = e.touches[0].clientY - (e.touches[0].clientY - (swipeStartX ? 0 : 0)); // not needed
+                const dy = e.touches[0].clientY - swipeStartY;
+                // Pull-to-refresh: only on the first 3 cards, vertical pull downward
+                if (currentReelIndex < 3 && dy > 0 && (!isSwiping || isPulling) && Math.abs(dy) > Math.abs(dx) && dy > 10) {
+                    isPulling = true;
+                    const pullDist = Math.min(dy, REFRESH_THRESHOLD + 40);
+                    const opacity = Math.min(Math.max((dy - 10) / 60, 0), 1);
+                    if (pullIndicator) {
+                        pullIndicator.classList.add('visible');
+                        pullIndicator.style.opacity = String(opacity);
+                        pullIndicator.style.transform = `translateX(-50%) translateY(${Math.min(pullDist * 0.5 - 10, 16)}px)`;
+                        pullIndicator.classList.toggle('releasing', dy >= REFRESH_THRESHOLD);
+                    }
+                    if (pullLabel)
+                        pullLabel.textContent = dy >= REFRESH_THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
+                }
                 // Determine direction: horizontal swipe if |dx| > |dy| and > threshold
-                if (!isSwiping && Math.abs(dx) > 15 && Math.abs(dx) > Math.abs(dy)) {
+                if (!isSwiping && !isPulling && Math.abs(dx) > 15 && Math.abs(dx) > Math.abs(dy)) {
                     isSwiping = true;
                     swipeDir = dx > 0 ? 1 : -1; // 1 = right, -1 = left
                 }
@@ -2203,14 +2237,31 @@ const APP_VERSION = 30;
                     return;
                 const card = stack.querySelector('.reels-card');
                 const dx = e.changedTouches[0].clientX - swipeStartX;
+                const dy = e.changedTouches[0].clientY - swipeStartY;
                 const wasSwiping = isSwiping;
                 const wasDir = swipeDir;
+                const wasPulling = isPulling;
                 swipeStartX = 0;
+                swipeStartY = 0;
                 swipeDx = 0;
+                swipeDy = 0;
                 isSwiping = false;
                 swipeDir = 0;
+                isPulling = false;
                 if (!card)
                     return;
+                if (wasPulling && !pullTriggered && dy >= REFRESH_THRESHOLD) {
+                    pullTriggered = true;
+                    if (pullLabel)
+                        pullLabel.textContent = 'Refreshing...';
+                    if (pullIndicator)
+                        pullIndicator.classList.add('releasing');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_r', String(Date.now()));
+                    window.location.href = url.toString();
+                    return;
+                }
+                resetPullIndicator();
                 const threshold = 70;
                 if (wasSwiping && wasDir === -1 && dx < -threshold) {
                     // Swipe left — next article

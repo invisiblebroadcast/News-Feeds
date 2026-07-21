@@ -24,7 +24,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
   <title>Invisible Broadcast — Home</title>
-  <link rel="stylesheet" href="css/desktop.css?v=16">
+  <link rel="stylesheet" href="css/desktop.css?v=17">
   <link rel="stylesheet" href="css/mobile.css?v=8" media="screen and (max-width: 768px)">
 </head>
 <body>
@@ -843,6 +843,7 @@
       <div class="modal-body">
         <div class="publish-tabs">
           <button class="publish-tab active" data-publish-tab="youtube">YouTube</button>
+          <button class="publish-tab" data-publish-tab="post">Post</button>
           <button class="publish-tab" data-publish-tab="audio">Audio</button>
           <button class="publish-tab" data-publish-tab="quotes">Quotes</button>
         </div>
@@ -877,6 +878,62 @@
 
           <div class="publish-actions">
             <button class="btn btn-primary" id="yt-publish-btn">Publish</button>
+          </div>
+        </div>
+
+        <!-- Post Tab -->
+        <div class="publish-pane" data-publish-pane="post">
+          <div class="publish-field">
+            <label for="post-title">Title</label>
+            <input type="text" id="post-title" placeholder="Post title">
+          </div>
+          <div class="publish-field">
+            <label for="post-desc">Description (Markdown supported)</label>
+            <textarea id="post-desc" placeholder="Post content..."></textarea>
+          </div>
+          <div class="publish-field">
+            <label for="post-source-name">Source Name</label>
+            <input type="text" id="post-source-name" placeholder="e.g. Reuters, The Hindu">
+          </div>
+          <div class="publish-field">
+            <label for="post-source-link">Source Link</label>
+            <input type="url" id="post-source-link" placeholder="https://...">
+          </div>
+          <div class="publish-field">
+            <label for="post-scope-select">Scope</label>
+            <select id="post-scope-select">
+              <option value="global">Global</option>
+              <option value="nation">India</option>
+            </select>
+          </div>
+          <div class="publish-field">
+            <label for="post-category-select">Category</label>
+            <select id="post-category-select">
+              <option value="all">All</option>
+              <option value="politics">Politics</option>
+              <option value="business">Business</option>
+              <option value="technology">Technology</option>
+              <option value="sports">Sports</option>
+              <option value="entertainment">Entertainment</option>
+              <option value="health">Health</option>
+              <option value="science">Science</option>
+              <option value="world">World</option>
+              <option value="india">India</option>
+            </select>
+          </div>
+          <div class="publish-field">
+            <label for="post-image">Image (optional, PNG/JPG, max 2MB)</label>
+            <input type="file" id="post-image" accept="image/png,image/jpeg">
+            <div id="post-image-preview" style="display:none;margin-top:8px;">
+              <img id="post-image-preview-img" class="image-preview-img">
+              <button class="btn btn-ghost" id="post-image-remove">Remove</button>
+            </div>
+          </div>
+
+          <div class="publish-msg" id="post-publish-msg"></div>
+
+          <div class="publish-actions">
+            <button class="btn btn-primary" id="post-publish-btn">Publish Post</button>
           </div>
         </div>
 
@@ -956,9 +1013,9 @@
   <script src="js/clustering.js?v=31"></script>
   <script src="js/publisher.js?v=31"></script>
   <script src="js/shared-state.js?v=31"></script>
-  <script src="js/publish-modal.js?v=32"></script>
+  <script src="js/publish-modal.js?v=33"></script>
   <script src="js/custom-sources-modal.js?v=31"></script>
-  <script src="js/app-home.js?v=44"></script>
+  <script src="js/app-home.js?v=45"></script>
   <script src="js/pwa-install.js?v=2"></script>
   <script>
     if ('serviceWorker' in navigator) {
