@@ -3207,6 +3207,63 @@ const APP_VERSION = 30;
         if (quoteScopeSelect) quoteScopeSelect.value = data.scope || 'global';
         if (quoteMsg) { quoteMsg.textContent = ''; quoteMsg.className = 'publish-msg'; }
 
+        // Show existing quote image reference if one exists
+        const quoteImagePreview = $('#quote-image-preview');
+        const quoteImagePreviewImg = $('#quote-image-preview-img');
+        const quoteImageInput = $('#quote-image');
+        if (data.post_id && quoteImagePreview && quoteImagePreviewImg) {
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg';
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png';
+          const probe = new Image();
+          probe.onload = () => {
+            quoteImagePreviewImg.src = jpgUrl;
+            quoteImagePreview.style.display = 'block';
+          };
+          probe.onerror = () => {
+            const probe2 = new Image();
+            probe2.onload = () => {
+              quoteImagePreviewImg.src = pngUrl;
+              quoteImagePreview.style.display = 'block';
+            };
+            probe2.onerror = () => {
+              quoteImagePreview.style.display = 'none';
+            };
+            probe2.src = pngUrl;
+          };
+          probe.src = jpgUrl;
+        }
+        let quoteImageFile = null;
+        let quoteImageRemoved = false;
+        if (quoteImageInput) {
+          quoteImageInput.onchange = () => {
+            const file = quoteImageInput.files[0];
+            if (!file) return;
+            if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+              quoteImageInput.value = '';
+              return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+              quoteImageInput.value = '';
+              return;
+            }
+            quoteImageFile = file;
+            quoteImageRemoved = false;
+            if (quoteImagePreview && quoteImagePreviewImg) {
+              quoteImagePreviewImg.src = URL.createObjectURL(file);
+              quoteImagePreview.style.display = 'block';
+            }
+          };
+        }
+        const quoteImageRemove = $('#quote-image-remove');
+        if (quoteImageRemove) {
+          quoteImageRemove.onclick = () => {
+            quoteImageFile = null;
+            quoteImageRemoved = true;
+            if (quoteImageInput) quoteImageInput.value = '';
+            if (quoteImagePreview) quoteImagePreview.style.display = 'none';
+          };
+        }
+
         const quoteBtn = $('#quote-publish-btn');
         if (quoteBtn) {
           quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
@@ -3235,6 +3292,27 @@ const APP_VERSION = 30;
                 last_modified: new Date().toISOString()
               }).eq('id', pubId);
               if (updErr) throw updErr;
+
+              if (data.post_id) {
+                const basePath = formatPostId(data.post_id);
+                if (quoteImageRemoved || quoteImageFile) {
+                  // Remove existing image(s) before replacing/deleting
+                  await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                }
+                if (quoteImageFile) {
+                  const ext = quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
+                  const { error: uploadErr } = await c2.storage
+                    .from('ib-post-images')
+                    .upload(basePath + '.' + ext, quoteImageFile, {
+                      contentType: quoteImageFile.type,
+                      upsert: true
+                    });
+                  if (uploadErr) {
+                    console.warn('[editPublishedArticle] Quote image upload failed:', uploadErr.message);
+                  }
+                }
+              }
+
               _publishedCache = [];
               await fetchPublishedArticlesFromSupabase();
               if (quoteMsg) { quoteMsg.innerHTML = '\u2705 Updated!'; quoteMsg.className = 'publish-msg success'; }
@@ -3330,6 +3408,7 @@ const APP_VERSION = 30;
           probe.src = jpgUrl;
         }
         let postImageFile = null;
+        let postImageRemoved = false;
         if (postImageInput) {
           postImageInput.onchange = () => {
             const file = postImageInput.files[0];
@@ -3343,6 +3422,7 @@ const APP_VERSION = 30;
               return;
             }
             postImageFile = file;
+            postImageRemoved = false;
             if (postImagePreview && postImagePreviewImg) {
               postImagePreviewImg.src = URL.createObjectURL(file);
               postImagePreview.style.display = 'block';
@@ -3353,6 +3433,7 @@ const APP_VERSION = 30;
         if (postImageRemove) {
           postImageRemove.onclick = () => {
             postImageFile = null;
+            postImageRemoved = true;
             if (postImageInput) postImageInput.value = '';
             if (postImagePreview) postImagePreview.style.display = 'none';
           };
@@ -3386,17 +3467,23 @@ const APP_VERSION = 30;
               }).eq('id', pubId);
               if (updErr) throw updErr;
 
-              if (postImageFile && data.post_id) {
-                const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
-                const filePath = formatPostId(data.post_id) + '.' + ext;
-                const { error: uploadErr } = await c2.storage
-                  .from('ib-post-images')
-                  .upload(filePath, postImageFile, {
-                    contentType: postImageFile.type,
-                    upsert: true
-                  });
-                if (uploadErr) {
-                  console.warn('[editPublishedArticle] Post image upload failed:', uploadErr.message);
+              if (data.post_id) {
+                const basePath = formatPostId(data.post_id);
+                if (postImageRemoved || postImageFile) {
+                  // Remove existing image(s) before replacing/deleting
+                  await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                }
+                if (postImageFile) {
+                  const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
+                  const { error: uploadErr } = await c2.storage
+                    .from('ib-post-images')
+                    .upload(basePath + '.' + ext, postImageFile, {
+                      contentType: postImageFile.type,
+                      upsert: true
+                    });
+                  if (uploadErr) {
+                    console.warn('[editPublishedArticle] Post image upload failed:', uploadErr.message);
+                  }
                 }
               }
 
