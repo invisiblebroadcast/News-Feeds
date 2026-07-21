@@ -6564,32 +6564,36 @@ const APP_VERSION = 30;
                     else {
                         ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
                     }
+                    // Smooth fade to black at the bottom edge (matches the cards view:
+                    // gentle start, fully black at the edge — no abrupt cut)
+                    const botFadeH = Math.round(imgBlockH * 0.32);
+                    const botGrad = ctx.createLinearGradient(0, imgBlockH - botFadeH, 0, imgBlockH);
+                    botGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                    botGrad.addColorStop(0.4, 'rgba(0,0,0,0.25)');
+                    botGrad.addColorStop(0.75, 'rgba(0,0,0,0.7)');
+                    botGrad.addColorStop(1, 'rgba(0,0,0,1)');
+                    ctx.fillStyle = botGrad;
+                    ctx.fillRect(0, imgBlockH - botFadeH, W, botFadeH);
                     ctx.restore();
                 }
                 // Text block: vertically centered in [padTop, canvasH - padBottom]
                 const regionH = canvasH - padTop - padBottom;
                 const textStartY = padTop + Math.max(0, Math.round((regionH - textBlockH) / 2));
-                // ── Row 1: quote mark + date — one centered group, vertically
-                // centered with each other (same as the cards view flex row) ──
+                // ── Row 1: quote mark far left + date far right (PAD on each side),
+                // sharing one baseline so their bottom edges align (same as the
+                // cards view flex row: space-between + baseline) ──
                 const dateText = quoteDate ? formatDateActual(quoteDate) : '';
-                const rowCenterY = textStartY + Math.round(quoteRowH / 2);
-                const rowGap = Math.round(W * 0.02);
-                ctx.textBaseline = 'middle';
-                ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
-                const markW = ctx.measureText('\u201C').width;
-                ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
-                const dateW = dateText ? ctx.measureText(dateText).width : 0;
-                const groupW = markW + (dateW ? rowGap + dateW : 0);
-                const groupX = Math.round((W - groupW) / 2);
+                const rowBaselineY = textStartY + quoteRowH;
+                ctx.textBaseline = 'alphabetic';
                 ctx.fillStyle = '#ff2929';
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
-                ctx.fillText('\u201C', groupX, rowCenterY);
+                ctx.fillText('\u201C', PAD, rowBaselineY);
                 if (dateText) {
                     ctx.fillStyle = 'rgba(255,255,255,0.6)';
                     ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
-                    ctx.fillText(dateText, groupX + markW + rowGap, rowCenterY);
+                    const dateW = ctx.measureText(dateText).width;
+                    ctx.fillText(dateText, W - PAD - dateW, rowBaselineY);
                 }
-                ctx.textBaseline = 'alphabetic';
                 // Shadow box behind quote text
                 const sbX = PAD;
                 const sbW = textW;
