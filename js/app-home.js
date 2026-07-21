@@ -9283,12 +9283,6 @@ const APP_VERSION = 30;
             console.error(err);
             return;
         }
-        // Populate the footer bar immediately so it shows the section title
-        // (feeds/topics/conflicts) without waiting for the full fetch chain.
-        try {
-            updateStickyHeader();
-        }
-        catch (e) { /* noop */ }
         // First-run subscription initialisation. Previously this only
         // ran when the user opened the Settings modal (via
         // renderSubscriptionList), so an incognito user — who never
@@ -9370,6 +9364,18 @@ const APP_VERSION = 30;
             if (s.sourceFilter)
                 sourceFilter = s.sourceFilter;
         })();
+        // Sync footer / view state now that persisted state has been restored.
+        // This ensures the category header, Feeds/IB toggle, and view toggle are
+        // visible and correct immediately on a hard refresh.
+        document.body.classList.toggle('cards-view', currentSection === 'feeds' && currentView === 'reels');
+        try {
+            updateStickyHeader();
+        }
+        catch (e) { /* noop */ }
+        try {
+            syncViewToggleBtn();
+        }
+        catch (e) { /* noop */ }
         await SupabaseStore.load();
         // Load custom feeds (Supabase is the source of truth when the
         // user is signed in; localStorage is a cache + the only store
