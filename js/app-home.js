@@ -6557,7 +6557,32 @@ const APP_VERSION = 30;
                 const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
                 const shadowBoxH = qH + shadowPadY * 2;
                 const fromH = quoteFrom ? fromFontSize : 0;
-                const occH = quoteOccupation ? occFontSize : 0;
+                // Occupation may wrap to up to 3 lines; measure wrapped height now
+                const occLineH = Math.round(occFontSize * 1.3);
+                const occMaxW = textW;
+                let occLines = [];
+                let occWrappedH = 0;
+                if (quoteOccupation) {
+                    ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
+                    const occWords = quoteOccupation.split(' ');
+                    let occLine = '';
+                    for (const w of occWords) {
+                        const test = occLine ? occLine + ' ' + w : w;
+                        if (ctx.measureText(test).width > occMaxW && occLine) {
+                            occLines.push(occLine);
+                            occLine = w;
+                        }
+                        else {
+                            occLine = test;
+                        }
+                    }
+                    if (occLine)
+                        occLines.push(occLine);
+                    if (occLines.length > 3)
+                        occLines = occLines.slice(0, 3);
+                    occWrappedH = occLines.length * occLineH;
+                }
+                const occH = quoteOccupation ? occWrappedH : 0;
                 // Quote mark + date share one row; the row is as tall as the big mark.
                 const quoteRowH = quoteOpenSize;
                 const textBlockH = quoteRowH + medGap + shadowBoxH + shadowPadY * 2 + fromH + occH + medGap + medGap + wmFontSize;
@@ -6671,12 +6696,14 @@ const APP_VERSION = 30;
                     paraIdx++;
                 }
                 // Quote from — RIGHT aligned, red, with text-shadow (matching cards view)
+                // with right padding so the name doesn't touch the edge
+                const fromPadRight = Math.round(W * 0.03);
                 let afterTextY = sbY + shadowBoxH + shadowPadY;
                 if (quoteFrom) {
                     const fromText = '\u2014 ' + quoteFrom;
                     ctx.textBaseline = 'alphabetic';
                     const fromTextW = ctx.measureText(fromText).width;
-                    const fromX = W - PAD - fromTextW;
+                    const fromX = W - PAD - fromPadRight - fromTextW;
                     const fromY = afterTextY + fromFontSize;
                     ctx.shadowColor = 'rgba(0,0,0,0.7)';
                     ctx.shadowBlur = 3;
@@ -6689,17 +6716,19 @@ const APP_VERSION = 30;
                     ctx.shadowOffsetY = 0;
                     afterTextY += fromH;
                 }
-                // Occupation / title — RIGHT aligned, italic + bold, like a signature
-                if (quoteOccupation) {
+                // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines)
+                if (quoteOccupation && occLines.length > 0) {
                     ctx.textBaseline = 'alphabetic';
-                    const occTextW = ctx.measureText(quoteOccupation).width;
-                    const occX = W - PAD - occTextW;
                     ctx.shadowColor = 'rgba(0,0,0,0.6)';
                     ctx.shadowBlur = 2;
                     ctx.shadowOffsetY = 1;
                     ctx.fillStyle = 'rgba(255,255,255,0.8)';
                     ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
-                    ctx.fillText(quoteOccupation, occX, afterTextY + occH);
+                    for (let oi = 0; oi < occLines.length; oi++) {
+                        const olw = ctx.measureText(occLines[oi]).width;
+                        const olx = W - PAD - fromPadRight - olw;
+                        ctx.fillText(occLines[oi], olx, afterTextY + occLineH * (oi + 1));
+                    }
                     ctx.shadowColor = 'transparent';
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetY = 0;

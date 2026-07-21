@@ -6408,6 +6408,8 @@ a.nav-icon-only svg {
   color: var(--text-secondary);
   margin-bottom: 4px;
   text-align: right;
+  max-width: 100%;
+  word-break: break-word;
 }
 .quote-watermark {
   font-size: 0.72rem;
@@ -6438,6 +6440,8 @@ a.nav-icon-only svg {
   text-align: right;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   padding-right: 0;
+  max-width: 100%;
+  word-break: break-word;
 }
 .quote-separator {
   width: 60%;
