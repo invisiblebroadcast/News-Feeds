@@ -24,7 +24,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
   <title>Invisible Broadcast — Home</title>
-  <link rel="stylesheet" href="css/desktop.css?v=12">
+  <link rel="stylesheet" href="css/desktop.css?v=13">
   <link rel="stylesheet" href="css/mobile.css?v=6" media="screen and (max-width: 768px)">
 </head>
 <body>
@@ -886,7 +886,7 @@
           </div>
           <div class="publish-field">
             <label for="quote-occupation">Occupation / Title (optional)</label>
-            <input type="text" id="quote-occupation" placeholder="e.g. MP, MLA, Musician, Independent Artist">
+            <textarea id="quote-occupation" rows="3" placeholder="e.g. MP, MLA, Musician, Independent Artist" style="resize:vertical;min-height:60px;"></textarea>
           </div>
           <div class="publish-field">
             <label for="quote-date">Quote Date (when this was said)</label>
@@ -940,7 +940,7 @@
   <script src="js/shared-state.js?v=31"></script>
   <script src="js/publish-modal.js?v=32"></script>
   <script src="js/custom-sources-modal.js?v=31"></script>
-  <script src="js/app-home.js?v=41"></script>
+  <script src="js/app-home.js?v=42"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

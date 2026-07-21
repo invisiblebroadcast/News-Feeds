@@ -1443,7 +1443,7 @@ const APP_VERSION = 30;
                 '<p class="article-summary quote-text">' + formatQuoteText(article.summary) + '</p>' +
                 '</div>' +
                 (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
-                (quoteOccupation ? '<div class="quote-occupation">' + escHtml(quoteOccupation) + '</div>' : '') +
+                (quoteOccupation ? '<div class="quote-occupation">' + escHtml(quoteOccupation).replace(/\n/g, '<br>') + '</div>' : '') +
                 '<div class="quote-watermark">Invisible Broadcast</div>' +
                 '<div class="article-meta">' +
                 '<span class="date">' + formatDateActual(article._pubQuoteDate || article.pubDate) + '</span>' +
@@ -1847,7 +1847,7 @@ const APP_VERSION = 30;
             if (quoteOccupation) {
                 const occEl = document.createElement('div');
                 occEl.className = 'quote-occupation-overlay';
-                occEl.textContent = quoteOccupation;
+                occEl.innerHTML = escHtml(quoteOccupation).replace(/\n/g, '<br>');
                 const fromRef2 = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
                 fromRef2.parentNode.insertBefore(occEl, fromRef2.nextSibling);
             }
@@ -6564,20 +6564,24 @@ const APP_VERSION = 30;
                 let occWrappedH = 0;
                 if (quoteOccupation) {
                     ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
-                    const occWords = quoteOccupation.split(' ');
-                    let occLine = '';
-                    for (const w of occWords) {
-                        const test = occLine ? occLine + ' ' + w : w;
-                        if (ctx.measureText(test).width > occMaxW && occLine) {
+                    // First split on explicit newlines (from textarea), then word-wrap each
+                    const occParagraphs = quoteOccupation.split('\n');
+                    for (const para of occParagraphs) {
+                        const words = para.split(' ');
+                        let occLine = '';
+                        for (const w of words) {
+                            const test = occLine ? occLine + ' ' + w : w;
+                            if (ctx.measureText(test).width > occMaxW && occLine) {
+                                occLines.push(occLine);
+                                occLine = w;
+                            }
+                            else {
+                                occLine = test;
+                            }
+                        }
+                        if (occLine)
                             occLines.push(occLine);
-                            occLine = w;
-                        }
-                        else {
-                            occLine = test;
-                        }
                     }
-                    if (occLine)
-                        occLines.push(occLine);
                     if (occLines.length > 3)
                         occLines = occLines.slice(0, 3);
                     occWrappedH = occLines.length * occLineH;
