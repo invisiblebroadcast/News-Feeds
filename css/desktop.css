@@ -6576,6 +6576,21 @@ a.nav-icon-only svg {
   overflow: hidden;
   z-index: 3;
 }
+/* Shadow box behind quote text only (not the quote symbol). It starts
+   transparent where the image is visible and darkens toward the bottom
+   so the quote text/author/watermark/date stay readable. The fade aligns
+   with the image's bottom gradient so the transition is seamless. */
+.reels-stack .reels-card.quote-type-card.has-image .reels-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.45) 58%, rgba(0,0,0,0.82) 78%, rgba(0,0,0,0.92) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
 .reels-stack .reels-card.quote-type-card .reels-title {
   font-size: 2.4rem;
   line-height: 1;
