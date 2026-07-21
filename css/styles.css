@@ -6523,7 +6523,7 @@ a.nav-icon-only svg {
 .reels-quote-head { display: contents; }
 .reels-stack .reels-card.quote-type-card .reels-quote-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
 }
 .reels-stack .reels-card.quote-type-card .reels-meta {
