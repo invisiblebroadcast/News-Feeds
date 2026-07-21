@@ -5164,11 +5164,11 @@ const APP_VERSION = 6;
         }
         return null;
     }
-    // Capture the current card using html2canvas for an exact visual replica.
-    // Returns a Blob (PNG) or null on failure. Hides toolbar/action buttons
-    // before capture so the output matches the clean card appearance.
-    async function captureCardWithHtml2Canvas() {
-        if (typeof html2canvas === 'undefined')
+    // Capture the current card using dom-to-image-more for an exact visual
+    // replica. Returns a Blob (PNG) or null on failure. Hides toolbar/action
+    // buttons before capture so the output matches the clean card appearance.
+    async function captureCardWithDomImage() {
+        if (typeof domtoimage === 'undefined')
             return null;
         const card = document.querySelector('.reels-stack .reels-card');
         if (!card)
@@ -5189,31 +5189,22 @@ const APP_VERSION = 6;
         if (countRow)
             countRow.style.display = 'none';
         try {
-            const canvas = await html2canvas(card, {
-                useCORS: true,
-                allowTaint: true,
-                scale: Math.min(window.devicePixelRatio || 1, 2),
-                backgroundColor: '#000000',
-                logging: false,
-                imageTimeout: 15000,
-                removeContainer: true,
-            });
-            const rect = card.getBoundingClientRect();
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            const clipW = Math.round(rect.width * dpr);
-            const clipH = Math.round(rect.height * dpr);
-            if (clipW > 0 && clipH > 0 && (canvas.width !== clipW || canvas.height !== clipH)) {
-                const clipped = document.createElement('canvas');
-                clipped.width = clipW;
-                clipped.height = clipH;
-                const ctx = clipped.getContext('2d');
-                ctx.drawImage(canvas, 0, 0, clipW, clipH);
-                return new Promise(r => clipped.toBlob(r, 'image/png'));
-            }
-            return new Promise(r => canvas.toBlob(r, 'image/png'));
+            const blob = await domtoimage.toBlob(card, {
+                quality: 1,
+                backgroundColor: '#000000',
+                pixelRatio: dpr,
+                cacheBust: true,
+                filter: (node) => {
+                    if (node instanceof HTMLElement && node.style.display === 'none')
+                        return false;
+                    return true;
+                },
+            });
+            return blob;
         }
         catch (err) {
-            console.warn('[Share] html2canvas failed:', err.message);
+            console.warn('[Share] dom-to-image-more failed:', err.message);
             return null;
         }
         finally {
@@ -5231,7 +5222,7 @@ const APP_VERSION = 6;
     async function handleShareImage(article, btn, includeImage) {
         btn && btn.classList.add('btn-busy');
         try {
-            // html2canvas doesn't support object-fit:cover, so always use custom canvas
+            // dom-to-image-more doesn't support object-fit:cover, so always use custom canvas
             const hasThumb = article.imageUrl && article.imageUrl.startsWith('http');
             const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
             const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];

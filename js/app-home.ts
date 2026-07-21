@@ -1591,6 +1591,12 @@ const APP_VERSION = 30;
           '</button>' +
           '<button class="reels-tool-btn reels-share-text-img" title="Copy as text image">&#x1F4DD;</button>' +
           (hasThumb ? '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' : '') +
+          '<button class="reels-tool-btn reels-screenshot" title="Screenshot Card">' +
+            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M2 4h2l1-2h6l1 2h2a1 1 0 011 1v8a1 1 0 01-1 1H1a1 1 0 01-1-1V5a1 1 0 011-1z"/>' +
+              '<circle cx="8" cy="8" r="2.5"/>' +
+            '</svg>' +
+          '</button>' +
         '</div>' +
       '</div>';
       // Vertical action bar — right side, center (like YT Shorts / Reels)
@@ -1918,6 +1924,13 @@ const APP_VERSION = 30;
         if (si) {
           e.stopPropagation();
           handleShareImage(currentArticle, si, true);
+          return;
+        }
+          // Screenshot card — actual DOM capture via dom-to-image-more
+        const ssBtn = e.target.closest('.reels-screenshot');
+        if (ssBtn) {
+          e.stopPropagation();
+          handleScreenshot(currentArticle, ssBtn);
           return;
         }
         const home = e.target.closest('.reels-home-btn');
@@ -5956,11 +5969,11 @@ const APP_VERSION = 30;
     return null;
   }
 
-  // Capture the current card using html2canvas for an exact visual replica.
-  // Returns a Blob (PNG) or null on failure. Hides toolbar/action buttons
-  // before capture so the output matches the clean card appearance.
-  async function captureCardWithHtml2Canvas() {
-    if (typeof html2canvas === 'undefined') return null;
+  // Capture the current card using dom-to-image-more for an exact visual
+  // replica. Returns a Blob (PNG) or null on failure. Hides toolbar/action
+  // buttons before capture so the output matches the clean card appearance.
+  async function captureCardWithDomImage() {
+    if (typeof domtoimage === 'undefined') return null;
     const card = document.querySelector('.reels-stack .reels-card');
     if (!card) return null;
 
@@ -5980,40 +5993,21 @@ const APP_VERSION = 30;
     if (countRow) countRow.style.display = 'none';
 
     try {
-      const canvas = await html2canvas(card, {
-        useCORS: true,
-        allowTaint: true,
-        scale: Math.min(window.devicePixelRatio || 1, 2),
-        backgroundColor: '#000000',
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true,
-      });
-      // Clip canvas to the card's visible bounding rect so overflow
-      // (e.g. absolutely-positioned quote images) is trimmed.
-      const rect = card.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const clipW = Math.round(rect.width * dpr);
-      const clipH = Math.round(rect.height * dpr);
-      if (clipW > 0 && clipH > 0 && (canvas.width !== clipW || canvas.height !== clipH)) {
-        const clipped = document.createElement('canvas');
-        clipped.width = clipW;
-        clipped.height = clipH;
-        const ctx = clipped.getContext('2d');
-        const srcW = canvas.width, srcH = canvas.height;
-        const coverScale = Math.max(clipW / srcW, clipH / srcH);
-        const drawW = Math.round(srcW * coverScale);
-        const drawH = Math.round(srcH * coverScale);
-        const drawX = Math.round((clipW - drawW) / 2);
-        const drawY = Math.round((clipH - drawH) / 2);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, clipW, clipH);
-        ctx.drawImage(canvas, drawX, drawY, drawW, drawH);
-        return new Promise(r => clipped.toBlob(r, 'image/png'));
-      }
-      return new Promise(r => canvas.toBlob(r, 'image/png'));
+      const blob = await domtoimage.toBlob(card, {
+        quality: 1,
+        backgroundColor: '#000000',
+        pixelRatio: dpr,
+        cacheBust: true,
+        filter: (node: Element) => {
+          // Exclude hidden elements
+          if (node instanceof HTMLElement && node.style.display === 'none') return false;
+          return true;
+        },
+      });
+      return blob;
     } catch (err) {
-      console.warn('[Share] html2canvas failed:', err.message);
+      console.warn('[Share] dom-to-image-more failed:', err.message);
       return null;
     } finally {
       // Restore hidden elements
@@ -6024,12 +6018,60 @@ const APP_VERSION = 30;
     }
   }
 
+  // Screenshot card — captures the actual DOM element via dom-to-image-more,
+  // hides all controls first, then shares or downloads the result.
+  async function handleScreenshot(article, btn) {
+    btn && btn.classList.add('btn-busy');
+    try {
+      const blob = await captureCardWithDomImage();
+      if (!blob) { btn && btn.classList.remove('btn-busy'); flashCopyButton(btn, 'Screenshot failed'); return; }
+
+      // Copy caption to clipboard (same as handleShareImage)
+      const caption = await buildShareCaption(article);
+      try { await navigator.clipboard.writeText(caption); } catch {}
+
+      const SHARE_MAX_BYTES = 5 * 1024 * 1024;
+      const tooLargeForShare = blob.size > SHARE_MAX_BYTES;
+      const file = new File([blob], 'invisible-broadcast.png', { type: 'image/png' });
+
+      if (navigator.share && !tooLargeForShare) {
+        try {
+          await navigator.share({ files: [file], title: article.title, text: caption });
+          btn && btn.classList.remove('btn-busy');
+          flashCopyButton(btn, 'Caption copied — share opened');
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
+        }
+      }
+
+      try {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'invisible-broadcast.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        const reason = tooLargeForShare
+          ? 'Image too large for share — caption copied, image downloaded'
+          : 'Caption copied — image downloaded';
+        flashCopyButton(btn, reason);
+      } catch {
+        flashCopyButton(btn, 'Caption copied');
+      }
+      btn && btn.classList.remove('btn-busy');
+    } catch (err) {
+      btn && btn.classList.remove('btn-busy');
+      console.warn('Screenshot failed:', err.message);
+      flashCopyButton(btn, 'Screenshot failed');
+    }
+  }
+
   // Generate a share image. includeImage=true will fetch and embed the
   // source image; includeImage=false will produce a text-only card.
   async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
-      // html2canvas doesn't support object-fit:cover, so always use custom canvas
+      // dom-to-image-more doesn't support object-fit:cover, so always use custom canvas
       const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
       const hasThumb = imgUrl && imgUrl.startsWith('http');
       const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';

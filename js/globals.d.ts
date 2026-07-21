@@ -308,7 +308,7 @@ interface Window {
   appState?: AppStateExposed;
   onSignIn?: () => void;
   tf?: any;
-  html2canvas?: any;
+  domtoimage?: any;
   supabase?: any;
 }
 
