@@ -6164,25 +6164,21 @@ const APP_VERSION = 30;
         const wmFontSize = Math.round(W * 0.029);
         const dateFontSize = Math.round(W * 0.03);
         const quoteOpenSize = Math.round(W * 0.19);
-        const medGap = 0;
-        const shadowPadX = Math.round(W * 0.04);
-        const shadowPadY = Math.round(W * 0.015);
+        const medGap = Math.round(quoteLineH * 0.25);
 
         // Measure quote text
         const quoteParagraphs = quoteText.split('\n').filter(p => p.trim());
         const paraGap = Math.round(quoteLineH * 0.5);
         ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        const maxTextW = textW - shadowPadX * 2;
         let totalQLines = 0;
         const paraLineCounts: number[] = [];
         for (const para of quoteParagraphs) {
-          const n = wrapText(ctx, para, 0, 0, maxTextW, quoteLineH);
+          const n = wrapText(ctx, para, 0, 0, textW, quoteLineH);
           paraLineCounts.push(n);
           totalQLines += n;
         }
         if (totalQLines === 0) { paraLineCounts.push(1); totalQLines = 1; }
         const qH = totalQLines * quoteLineH + Math.max(0, quoteParagraphs.length - 1) * paraGap;
-        const shadowBoxH = qH + shadowPadY * 2;
         const fromH = quoteFrom ? fromFontSize : 0;
         // Occupation may wrap to up to 3 lines; measure wrapped height now
         const occLineH = Math.round(occFontSize * 1.3);
@@ -6213,7 +6209,7 @@ const APP_VERSION = 30;
         const occH = quoteOccupation ? occWrappedH : 0;
         // Quote mark + date share one row; the row is as tall as the big mark.
         const quoteRowH = quoteOpenSize;
-        const textBlockH = quoteRowH + medGap + shadowBoxH + shadowPadY * 2 + fromH + occH + medGap + medGap + wmFontSize;
+        const textBlockH = quoteRowH + medGap + qH + fromH + occH + medGap + medGap + wmFontSize;
 
         // Layout mirrors the on-screen card:
         //   image = top 60% of the canvas height, full width, cover-cropped.
@@ -6222,8 +6218,9 @@ const APP_VERSION = 30;
         //           vertically centered in the remaining space, so the quote
         //           mark + date row overlaps the image bottom exactly like
         //           the cards view.
-        const padTop = Math.round(W * 0.4);
-        const padBottom = Math.round(W * 0.04);
+        //   no-image = use the full canvas, center the text block vertically.
+        const padTop = hasImg ? Math.round(W * 0.4) : PAD;
+        const padBottom = hasImg ? Math.round(W * 0.04) : PAD;
         const neededH = padTop + textBlockH + padBottom;
         const canvasH = Math.max(1350, neededH);
         c.height = canvasH * dpr;
@@ -6234,8 +6231,7 @@ const APP_VERSION = 30;
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, W, canvasH);
 
-        // Image: top 60% of the canvas, cover mode, centered. No fade veil —
-        // matches the on-screen card where the photo renders clear.
+        // Image: top 60% of the canvas, cover mode, centered.
         const imgBlockH = Math.round(canvasH * 0.6);
         let imgDrawW = 0, imgDrawH = 0;
         if (hasImg) {
@@ -6272,8 +6268,7 @@ const APP_VERSION = 30;
             ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
           }
 
-          // Smooth fade to black at the bottom edge (matches the cards view:
-          // gentle start, fully black at the edge — no abrupt cut)
+          // Smooth fade to black at the bottom edge (matches the cards view)
           const botFadeH = Math.round(imgBlockH * 0.32);
           const botGrad = ctx.createLinearGradient(0, imgBlockH - botFadeH, 0, imgBlockH);
           botGrad.addColorStop(0, 'rgba(0,0,0,0)');
@@ -6306,73 +6301,44 @@ const APP_VERSION = 30;
           ctx.fillText(dateText, W - PAD - dateW, rowCenterY);
         }
 
-        // Shadow box behind quote text
-        const sbX = PAD;
-        const sbW = textW;
-        const sbY = textStartY + quoteRowH + medGap + shadowPadY;
-        const sbGrad = ctx.createRadialGradient(
-          sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.15,
-          sbX + sbW / 2, sbY + shadowBoxH / 2, sbW * 0.55
-        );
-        sbGrad.addColorStop(0, `rgba(0,0,0,0.5)`);
-        sbGrad.addColorStop(0.5, `rgba(0,0,0,0.3)`);
-        sbGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = sbGrad;
-        const sbR = Math.round(W * 0.015);
-        ctx.beginPath();
-        ctx.roundRect(sbX, sbY, sbW, shadowBoxH, sbR);
-        ctx.fill();
-
-        // Quote text — draw each paragraph with gap between them (italic + bold, pure white, matching cards view)
+        // Quote text — draw each paragraph with gap between them (italic + bold, pure white, no shadow box)
         ctx.fillStyle = '#fff';
         ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        let textY = sbY + shadowPadY + quoteLineH;
+        const textBoxY = textStartY + quoteRowH + medGap;
+        let textY = textBoxY + quoteLineH;
         let paraIdx = 0;
         for (const para of quoteParagraphs) {
           if (paraIdx > 0) textY += paraGap;
-          wrapText(ctx, para, sbX + shadowPadX, textY, maxTextW, quoteLineH);
+          wrapText(ctx, para, PAD, textY, textW, quoteLineH);
           textY += paraLineCounts[paraIdx] * quoteLineH;
           paraIdx++;
         }
 
-        // Quote from — RIGHT aligned, red, with text-shadow (matching cards view)
-        // with right padding so the name doesn't touch the edge
+        // Quote from — RIGHT aligned, red, with right padding so the name doesn't touch the edge
         const fromPadRight = Math.round(W * 0.03);
-        let afterTextY = sbY + shadowBoxH + shadowPadY;
+        let afterTextY = textBoxY + qH;
         if (quoteFrom) {
           const fromText = '\u2014 ' + quoteFrom;
           ctx.textBaseline = 'alphabetic';
           const fromTextW = ctx.measureText(fromText).width;
           const fromX = W - PAD - fromPadRight - fromTextW;
           const fromY = afterTextY + fromFontSize;
-          ctx.shadowColor = 'rgba(0,0,0,0.7)';
-          ctx.shadowBlur = 3;
-          ctx.shadowOffsetY = 1;
           ctx.fillStyle = '#ff2929';
           ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
           ctx.fillText(fromText, fromX, fromY);
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetY = 0;
           afterTextY += fromH;
         }
 
-        // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines)
+        // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines), pure white
         if (quoteOccupation && occLines.length > 0) {
           ctx.textBaseline = 'alphabetic';
-          ctx.shadowColor = 'rgba(0,0,0,0.6)';
-          ctx.shadowBlur = 2;
-          ctx.shadowOffsetY = 1;
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.fillStyle = '#fff';
           ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
           for (let oi = 0; oi < occLines.length; oi++) {
             const olw = ctx.measureText(occLines[oi]).width;
             const olx = W - PAD - fromPadRight - olw;
             ctx.fillText(occLines[oi], olx, afterTextY + occLineH * (oi + 1));
           }
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetY = 0;
           afterTextY += occH;
         }
 
@@ -6393,18 +6359,12 @@ const APP_VERSION = 30;
         ctx.stroke();
         afterTextY += medGap;
 
-        // "Invisible Broadcast" — LEFT aligned, Georgia, with text-shadow (matching cards view).
+        // "Invisible Broadcast" — LEFT aligned, Georgia, pure white (matching cards view).
         // The date lives up in the quote mark row now (matching cards view), not here.
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 3;
-        ctx.shadowOffsetY = 1;
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = '#fff';
         ctx.font = '700 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
         ctx.textBaseline = 'alphabetic';
         ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
 
         const blob = await new Promise(r => c.toBlob(r, 'image/png'));
         if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
