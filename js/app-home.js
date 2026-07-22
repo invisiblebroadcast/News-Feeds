@@ -6922,7 +6922,7 @@ const APP_VERSION = 30;
                 // Quote mark row is just the opening mark now (date moved below watermark)
                 const quoteRowH = quoteOpenSize;
                 const dateBelowH = (quoteDate && quoteDate.trim()) ? dateFontSize + medGap : 0;
-                const textBlockH = quoteRowH + medGap + qH + medGap + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
+                const textBlockH = quoteRowH + medGap + qH + medGap * 2 + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
                 // Layout mirrors the on-screen card:
                 //   image = top 60% of the canvas height, full width, cover-cropped.
                 //   text  = region starts at 40% of the canvas WIDTH (the overlay's
@@ -6996,11 +6996,23 @@ const APP_VERSION = 30;
                 const rowCenterY = textStartY + Math.round(quoteRowH / 2);
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ff2929';
+                ctx.shadowColor = 'rgba(0,0,0,0.7)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 2;
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
                 ctx.fillText('\u201C', PAD, rowCenterY);
-                // Quote text — draw each paragraph with gap between them (italic + bold, pure white, no shadow box)
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                // Quote text — draw each paragraph with gap between them (italic + bold, pure white, with text shadow)
                 ctx.fillStyle = '#fff';
                 ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
+                ctx.shadowColor = 'rgba(0,0,0,0.85)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 2;
                 const textBoxY = textStartY + quoteRowH + medGap;
                 let textY = textBoxY + quoteLineH;
                 let paraIdx = 0;
@@ -7011,8 +7023,12 @@ const APP_VERSION = 30;
                     textY += paraLineCounts[paraIdx] * quoteLineH;
                     paraIdx++;
                 }
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
                 // Quote from — RIGHT aligned, red, with consistent right padding
-                let afterTextY = textBoxY + qH + medGap;
+                let afterTextY = textBoxY + qH + medGap * 2;
                 if (quoteFrom) {
                     const fromText = '\u2014 ' + quoteFrom;
                     ctx.textBaseline = 'alphabetic';
