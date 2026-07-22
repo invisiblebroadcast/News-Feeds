@@ -1599,7 +1599,7 @@ const APP_VERSION = 30;
             '</svg>' +
           '</button>' +
           '<button class="reels-tool-btn reels-share-text-img" title="Copy as text image">&#x1F4DD;</button>' +
-          (hasThumb ? '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' : '') +
+          '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' +
           '<button class="reels-tool-btn reels-screenshot" title="Screenshot Card">' +
             '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
               '<path d="M2 4h2l1-2h6l1 2h2a1 1 0 011 1v8a1 1 0 01-1 1H1a1 1 0 01-1-1V5a1 1 0 011-1z"/>' +
@@ -1703,6 +1703,8 @@ const APP_VERSION = 30;
     const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
     const hasThumb = imgUrl && imgUrl.startsWith('http');
     cardEl.classList.toggle('has-image', !!hasThumb);
+    const shareImgBtn = cardEl.querySelector('.reels-share-image');
+    if (shareImgBtn) shareImgBtn.style.display = hasThumb ? '' : 'none';
     const imgWrap = cardEl.querySelector('.reels-img-wrap');
     const imgEl = cardEl.querySelector('.reels-img');
     if (hasThumb && imgEl && imgWrap) {
