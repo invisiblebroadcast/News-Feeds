@@ -6921,7 +6921,7 @@ const APP_VERSION = 30;
                 const occH = quoteOccupation ? occWrappedH : 0;
                 // Quote mark row is just the opening mark now (date moved below watermark)
                 const quoteRowH = quoteOpenSize;
-                const dateBelowH = dateText ? dateFontSize + medGap : 0;
+                const dateBelowH = (quoteDate && quoteDate.trim()) ? dateFontSize + medGap : 0;
                 const textBlockH = quoteRowH + medGap + qH + medGap + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
                 // Layout mirrors the on-screen card:
                 //   image = top 60% of the canvas height, full width, cover-cropped.
