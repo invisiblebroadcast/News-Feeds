@@ -3500,7 +3500,9 @@ const APP_VERSION = 30;
                                 const basePath = formatPostId(data.post_id);
                                 if (quoteImageRemoved || quoteImageFile) {
                                     // Remove existing image(s) before replacing/deleting
-                                    await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                                    const { error: rmErr } = await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                                    if (rmErr)
+                                        console.warn('[editPublishedArticle] Quote image remove failed:', rmErr.message);
                                 }
                                 if (quoteImageFile) {
                                     const ext = quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
@@ -3718,7 +3720,9 @@ const APP_VERSION = 30;
                                 const basePath = formatPostId(data.post_id);
                                 if (postImageRemoved || postImageFile) {
                                     // Remove existing image(s) before replacing/deleting
-                                    await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                                    const { error: rmErr } = await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                                    if (rmErr)
+                                        console.warn('[editPublishedArticle] Post image remove failed:', rmErr.message);
                                 }
                                 if (postImageFile) {
                                     const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
