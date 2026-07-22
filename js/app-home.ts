@@ -6406,13 +6406,18 @@ const APP_VERSION = 30;
       // Each candidate is fed to loadImageWithFallback which tries multiple
       // CORS proxies. If the first one fails, we move to the next.
       if (includeImage && hasThumb) {
+        // Append cache-buster to bypass CORS proxy cache (wsrv.nl caches
+        // images aggressively so replaced/deleted Supabase images still
+        // return the old version without this).
+        const cacheBust = imgUrl.includes('ib-post-images') ? '?v=' + Date.now() : '';
+        const imgUrlBusted = cacheBust ? imgUrl.split('?')[0] + cacheBust : imgUrl;
         // Build a list of candidate image URLs to try, in priority order.
         const candidates = [];
         // 1. Enhanced version of the RSS image (full-size)
-        const enhanced = enhanceImageUrl(imgUrl);
-        candidates.push(enhanced || imgUrl);
+        const enhanced = enhanceImageUrl(imgUrlBusted);
+        candidates.push(enhanced || imgUrlBusted);
         // 2. Raw RSS image (fallback if enhanced URL fails)
-        if (enhanced) candidates.push(imgUrl);
+        if (enhanced) candidates.push(imgUrlBusted);
         // 3. OG image from the article's HTML (sometimes a different image)
         try {
           const og = await fetchOGImage(article.link);
