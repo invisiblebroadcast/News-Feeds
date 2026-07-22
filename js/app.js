@@ -5231,32 +5231,51 @@ const APP_VERSION = 6;
     async function captureCardWithDomImage() {
         if (typeof domtoimage === 'undefined')
             return null;
-        const card = document.querySelector('.reels-stack .reels-card');
-        if (!card)
+        const stack = document.querySelector('.reels-stack');
+        const card = stack && stack.querySelector('.reels-card');
+        if (!stack || !card)
             return null;
-        const actionsBar = card.querySelector('.reels-actions');
-        const toolbarRow = card.querySelector('.reels-toolbar-row');
-        const navArrows = card.querySelectorAll('.reels-nav');
-        const countRow = card.querySelector('.reels-count-row');
-        const wasActionsHidden = actionsBar && actionsBar.classList.contains('reels-actions-hidden');
-        const wasToolbarDisplay = toolbarRow ? toolbarRow.style.display : '';
-        const navDisplays = Array.from(navArrows).map(n => n.style.display);
-        const wasCountDisplay = countRow ? countRow.style.display : '';
-        if (actionsBar)
-            actionsBar.classList.add('reels-actions-hidden');
-        if (toolbarRow)
-            toolbarRow.style.display = 'none';
-        navArrows.forEach(n => n.style.display = 'none');
-        if (countRow)
-            countRow.style.display = 'none';
+        const rect = card.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0)
+            return null;
+        // Build an off-screen high-resolution clone of the card stack.
+        // We render the clone at 3.5× the on-screen size using CSS zoom so
+        // text and UI are rasterized at a larger size, then capture at the
+        // device's native pixel ratio for the crispest possible output.
+        const ZOOM = 3.5;
+        const dpr = window.devicePixelRatio || 1;
+        const wrapperW = Math.ceil(rect.width * ZOOM);
+        const wrapperH = Math.ceil(rect.height * ZOOM);
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '-99999px';
+        wrapper.style.top = '0';
+        wrapper.style.width = wrapperW + 'px';
+        wrapper.style.height = wrapperH + 'px';
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.zIndex = '-1';
+        wrapper.style.background = '#000';
+        wrapper.style.pointerEvents = 'none';
+        const clone = stack.cloneNode(true);
+        clone.style.width = rect.width + 'px';
+        clone.style.height = rect.height + 'px';
+        clone.style.maxHeight = 'none';
+        clone.style.flex = 'none';
+        clone.style.zoom = String(ZOOM);
+        clone.style.position = 'absolute';
+        clone.style.top = '0';
+        clone.style.left = '0';
+        // Remove interactive overlays / progress dots from the clone so they
+        // never appear in the captured image.
+        clone.querySelector('.reels-actions')?.remove();
+        clone.querySelector('.reels-toolbar-row')?.remove();
+        clone.querySelectorAll('.reels-nav').forEach(n => n.remove());
+        clone.querySelector('.reels-count-row')?.remove();
+        clone.querySelector('.reels-reader')?.remove();
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
         try {
-            const cardRect = card.getBoundingClientRect();
-            // Target ~1440px output width for crisp screenshots while respecting
-            // the device's native pixel density. Cap at 4× to avoid enormous files
-            // and memory issues on very high-DPR devices.
-            const targetDpr = Math.max(window.devicePixelRatio || 1, 1440 / Math.max(cardRect.width, 1));
-            const dpr = Math.min(targetDpr, 4);
-            const blob = await domtoimage.toBlob(card, {
+            const blob = await domtoimage.toBlob(clone, {
                 quality: 1,
                 backgroundColor: '#000000',
                 pixelRatio: dpr,
@@ -5274,13 +5293,7 @@ const APP_VERSION = 6;
             return null;
         }
         finally {
-            if (actionsBar && !wasActionsHidden)
-                actionsBar.classList.remove('reels-actions-hidden');
-            if (toolbarRow)
-                toolbarRow.style.display = wasToolbarDisplay;
-            navArrows.forEach((n, i) => { n.style.display = navDisplays[i]; });
-            if (countRow)
-                countRow.style.display = wasCountDisplay;
+            document.body.removeChild(wrapper);
         }
     }
     // Generate a share image. includeImage=true will fetch and embed the

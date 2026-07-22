@@ -6653,39 +6653,56 @@ const APP_VERSION = 30;
     async function captureCardWithDomImage() {
         if (typeof domtoimage === 'undefined')
             return null;
-        const card = document.querySelector('.reels-stack .reels-card');
-        if (!card)
+        const stack = document.querySelector('.reels-stack');
+        const card = stack && stack.querySelector('.reels-card');
+        if (!stack || !card)
             return null;
-        // Temporarily hide interactive overlays that shouldn't appear in the share
-        const actionsBar = card.querySelector('.reels-actions');
-        const toolbarRow = card.querySelector('.reels-toolbar-row');
-        const navArrows = card.querySelectorAll('.reels-nav');
-        const countRow = card.querySelector('.reels-count-row');
-        const wasActionsHidden = actionsBar && actionsBar.classList.contains('reels-actions-hidden');
-        const wasToolbarDisplay = toolbarRow ? toolbarRow.style.display : '';
-        const navDisplays = Array.from(navArrows).map(n => n.style.display);
-        const wasCountDisplay = countRow ? countRow.style.display : '';
-        if (actionsBar)
-            actionsBar.classList.add('reels-actions-hidden');
-        if (toolbarRow)
-            toolbarRow.style.display = 'none';
-        navArrows.forEach(n => n.style.display = 'none');
-        if (countRow)
-            countRow.style.display = 'none';
+        const rect = card.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0)
+            return null;
+        // Build an off-screen high-resolution clone of the card stack.
+        // We render the clone at 3.5× the on-screen size using CSS zoom so
+        // text and UI are rasterized at a larger size, then capture at the
+        // device's native pixel ratio for the crispest possible output.
+        const ZOOM = 3.5;
+        const dpr = window.devicePixelRatio || 1;
+        const wrapperW = Math.ceil(rect.width * ZOOM);
+        const wrapperH = Math.ceil(rect.height * ZOOM);
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '-99999px';
+        wrapper.style.top = '0';
+        wrapper.style.width = wrapperW + 'px';
+        wrapper.style.height = wrapperH + 'px';
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.zIndex = '-1';
+        wrapper.style.background = '#000';
+        wrapper.style.pointerEvents = 'none';
+        const clone = stack.cloneNode(true);
+        clone.style.width = rect.width + 'px';
+        clone.style.height = rect.height + 'px';
+        clone.style.maxHeight = 'none';
+        clone.style.flex = 'none';
+        clone.style.zoom = String(ZOOM);
+        clone.style.position = 'absolute';
+        clone.style.top = '0';
+        clone.style.left = '0';
+        // Remove interactive overlays / progress dots from the clone so they
+        // never appear in the captured image.
+        clone.querySelector('.reels-actions')?.remove();
+        clone.querySelector('.reels-toolbar-row')?.remove();
+        clone.querySelectorAll('.reels-nav').forEach(n => n.remove());
+        clone.querySelector('.reels-count-row')?.remove();
+        clone.querySelector('.reels-reader')?.remove();
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
         try {
-            const cardRect = card.getBoundingClientRect();
-            // Target ~1440px output width for crisp screenshots while respecting
-            // the device's native pixel density. Cap at 4× to avoid enormous files
-            // and memory issues on very high-DPR devices.
-            const targetDpr = Math.max(window.devicePixelRatio || 1, 1440 / Math.max(cardRect.width, 1));
-            const dpr = Math.min(targetDpr, 4);
-            const blob = await domtoimage.toBlob(card, {
+            const blob = await domtoimage.toBlob(clone, {
                 quality: 1,
                 backgroundColor: '#000000',
                 pixelRatio: dpr,
                 cacheBust: true,
                 filter: (node) => {
-                    // Exclude hidden elements
                     if (node instanceof HTMLElement && node.style.display === 'none')
                         return false;
                     return true;
@@ -6698,14 +6715,7 @@ const APP_VERSION = 30;
             return null;
         }
         finally {
-            // Restore hidden elements
-            if (actionsBar && !wasActionsHidden)
-                actionsBar.classList.remove('reels-actions-hidden');
-            if (toolbarRow)
-                toolbarRow.style.display = wasToolbarDisplay;
-            navArrows.forEach((n, i) => { n.style.display = navDisplays[i]; });
-            if (countRow)
-                countRow.style.display = wasCountDisplay;
+            document.body.removeChild(wrapper);
         }
     }
     // Screenshot card — captures the actual DOM element via dom-to-image-more,
@@ -6832,6 +6842,9 @@ const APP_VERSION = 30;
             const titleLineH = Math.round(titleFontSize * 1.28);
             const bodyLineH = Math.round(bodyFontSize * 1.5);
             const textW = W - PAD * 2;
+            // Extra right padding so text doesn't overlap Instagram's like/comment bar
+            const rightSafePad = Math.round(W * 0.04);
+            const textWR = textW - rightSafePad;
             // Image area: max 55% of the minimum canvas height
             const imgMaxAreaH = Math.round(1350 * 0.55);
             const imgPad = Math.round(W * 0.04);
@@ -6866,7 +6879,7 @@ const APP_VERSION = 30;
                 let totalQLines = 0;
                 const paraLineCounts = [];
                 for (const para of quoteParagraphs) {
-                    const n = wrapText(ctx, para, 0, 0, textW, quoteLineH);
+                    const n = wrapText(ctx, para, 0, 0, textWR, quoteLineH);
                     paraLineCounts.push(n);
                     totalQLines += n;
                 }
@@ -6878,7 +6891,7 @@ const APP_VERSION = 30;
                 const fromH = quoteFrom ? fromFontSize : 0;
                 // Occupation may wrap to up to 3 lines; measure wrapped height now
                 const occLineH = Math.round(occFontSize * 1.3);
-                const occMaxW = textW;
+                const occMaxW = textWR;
                 let occLines = [];
                 let occWrappedH = 0;
                 if (quoteOccupation) {
@@ -6906,9 +6919,10 @@ const APP_VERSION = 30;
                     occWrappedH = occLines.length * occLineH;
                 }
                 const occH = quoteOccupation ? occWrappedH : 0;
-                // Quote mark + date share one row; the row is as tall as the big mark.
+                // Quote mark row is just the opening mark now (date moved below watermark)
                 const quoteRowH = quoteOpenSize;
-                const textBlockH = quoteRowH + medGap + qH + fromH + occH + medGap + medGap + wmFontSize;
+                const dateBelowH = dateText ? dateFontSize + medGap : 0;
+                const textBlockH = quoteRowH + medGap + qH + medGap + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
                 // Layout mirrors the on-screen card:
                 //   image = top 60% of the canvas height, full width, cover-cropped.
                 //   text  = region starts at 40% of the canvas WIDTH (the overlay's
@@ -6977,21 +6991,13 @@ const APP_VERSION = 30;
                 // Text block: vertically centered in [padTop, canvasH - padBottom]
                 const regionH = canvasH - padTop - padBottom;
                 const textStartY = padTop + Math.max(0, Math.round((regionH - textBlockH) / 2));
-                // ── Row 1: quote mark far left + date far right (PAD on each side),
-                // sharing one vertical center so they sit on the same row (matching
-                // the cards view flex row: space-between + center) ──
+                // ── Row 1: quote mark far left (date moved below watermark) ──
                 const dateText = quoteDate ? formatDateActual(quoteDate) : '';
                 const rowCenterY = textStartY + Math.round(quoteRowH / 2);
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ff2929';
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
                 ctx.fillText('\u201C', PAD, rowCenterY);
-                if (dateText) {
-                    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-                    ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
-                    const dateW = ctx.measureText(dateText).width;
-                    ctx.fillText(dateText, W - PAD - dateW, rowCenterY);
-                }
                 // Quote text — draw each paragraph with gap between them (italic + bold, pure white, no shadow box)
                 ctx.fillStyle = '#fff';
                 ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
@@ -7001,23 +7007,22 @@ const APP_VERSION = 30;
                 for (const para of quoteParagraphs) {
                     if (paraIdx > 0)
                         textY += paraGap;
-                    wrapText(ctx, para, PAD, textY, textW, quoteLineH);
+                    wrapText(ctx, para, PAD, textY, textWR, quoteLineH);
                     textY += paraLineCounts[paraIdx] * quoteLineH;
                     paraIdx++;
                 }
-                // Quote from — RIGHT aligned, red, with right padding so the name doesn't touch the edge
-                const fromPadRight = Math.round(W * 0.03);
-                let afterTextY = textBoxY + qH;
+                // Quote from — RIGHT aligned, red, with consistent right padding
+                let afterTextY = textBoxY + qH + medGap;
                 if (quoteFrom) {
                     const fromText = '\u2014 ' + quoteFrom;
                     ctx.textBaseline = 'alphabetic';
                     const fromTextW = ctx.measureText(fromText).width;
-                    const fromX = W - PAD - fromPadRight - fromTextW;
+                    const fromX = W - PAD - rightSafePad - fromTextW;
                     const fromY = afterTextY + fromFontSize;
                     ctx.fillStyle = '#ff2929';
                     ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
                     ctx.fillText(fromText, fromX, fromY);
-                    afterTextY += fromH;
+                    afterTextY += fromH + medGap;
                 }
                 // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines), pure white
                 if (quoteOccupation && occLines.length > 0) {
@@ -7026,10 +7031,10 @@ const APP_VERSION = 30;
                     ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
                     for (let oi = 0; oi < occLines.length; oi++) {
                         const olw = ctx.measureText(occLines[oi]).width;
-                        const olx = W - PAD - fromPadRight - olw;
+                        const olx = W - PAD - rightSafePad - olw;
                         ctx.fillText(occLines[oi], olx, afterTextY + occLineH * (oi + 1));
                     }
-                    afterTextY += occH;
+                    afterTextY += occH + medGap;
                 }
                 afterTextY += medGap;
                 // Separator line — right-aligned, fading (matching cards view: 60% width)
@@ -7046,12 +7051,18 @@ const APP_VERSION = 30;
                 ctx.lineTo(sepX + sepW, afterTextY);
                 ctx.stroke();
                 afterTextY += medGap;
-                // "Invisible Broadcast" — LEFT aligned, Georgia, pure white (matching cards view).
-                // The date lives up in the quote mark row now (matching cards view), not here.
-                ctx.fillStyle = '#fff';
+                // "Invisible Broadcast" — LEFT aligned, dimmed white
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
                 ctx.font = '700 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
+                afterTextY += wmFontSize + medGap;
+                // Date — LEFT aligned below watermark, dimmed (matching cards view)
+                if (dateText) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                    ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
+                    ctx.fillText(dateText, PAD, afterTextY + dateFontSize);
+                }
                 const blob = await new Promise(r => c.toBlob(r, 'image/png'));
                 if (!blob) {
                     btn && btn.classList.remove('btn-busy');
