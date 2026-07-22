@@ -6526,7 +6526,7 @@ const APP_VERSION = 30;
         // Quote mark row is just the opening mark now (date moved below watermark)
         const quoteRowH = quoteOpenSize;
         const dateBelowH = (quoteDate && quoteDate.trim()) ? dateFontSize + medGap : 0;
-        const textBlockH = quoteRowH + medGap + qH + medGap * 2 + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
+        const textBlockH = quoteRowH + medGap + qH + medGap * 3 + fromH + occH + medGap + medGap + wmFontSize + dateBelowH;
 
         // Layout mirrors the on-screen card:
         //   image = top 60% of the canvas height, full width, cover-cropped.
@@ -6640,16 +6640,16 @@ const APP_VERSION = 30;
         ctx.shadowOffsetY = 0;
 
         // Quote from — RIGHT aligned, red, with consistent right padding
-        let afterTextY = textBoxY + qH + medGap * 2;
+        let afterTextY = textBoxY + qH + medGap * 3;
         if (quoteFrom) {
           const fromText = '\u2014 ' + quoteFrom;
           ctx.textBaseline = 'alphabetic';
-          const fromTextW = ctx.measureText(fromText).width;
-          const fromX = W - PAD - rightSafePad - fromTextW;
+          ctx.textAlign = 'right';
           const fromY = afterTextY + fromFontSize;
           ctx.fillStyle = '#ff2929';
           ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
-          ctx.fillText(fromText, fromX, fromY);
+          ctx.fillText(fromText, W - PAD - rightSafePad, fromY);
+          ctx.textAlign = 'left';
           afterTextY += fromH + medGap;
         }
 
@@ -6658,11 +6658,11 @@ const APP_VERSION = 30;
           ctx.textBaseline = 'alphabetic';
           ctx.fillStyle = '#fff';
           ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
+          ctx.textAlign = 'right';
           for (let oi = 0; oi < occLines.length; oi++) {
-            const olw = ctx.measureText(occLines[oi]).width;
-            const olx = W - PAD - rightSafePad - olw;
-            ctx.fillText(occLines[oi], olx, afterTextY + occLineH * (oi + 1));
+            ctx.fillText(occLines[oi], W - PAD - rightSafePad, afterTextY + occLineH * (oi + 1));
           }
+          ctx.textAlign = 'left';
           afterTextY += occH + medGap;
         }
 
