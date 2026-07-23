@@ -933,18 +933,22 @@
 
   function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const lines = [];
-    const words = text.split(' ');
-    let line = '';
-    for (const word of words) {
-      const test = line ? line + ' ' + word : word;
-      if (ctx.measureText(test).width > maxWidth && line) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = test;
+    const paragraphs = text.split('\n');
+    for (const para of paragraphs) {
+      if (para.trim() === '') { lines.push(''); continue; }
+      const words = para.split(' ');
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
       }
+      if (line) lines.push(line);
     }
-    if (line) lines.push(line);
     for (let i = 0; i < lines.length; i++) {
       ctx.fillText(lines[i], x, y + i * lineHeight);
     }
@@ -997,12 +1001,25 @@
 
   function cleanSummary(s) {
     if (!s) return '';
-    return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    return s.split('\n').map(line => line.replace(/[ \t]+/g, ' ').trim()).join('\n').trim();
   }
 
   function stripHtml(s) {
     if (!s) return '';
-    return s.replace(/<[^>]+>/g, '');
+    let t = s;
+    // Preserve structure: block tags become newlines
+    t = t.replace(/<br\s*\/?>/gi, '\n');
+    t = t.replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
+    t = t.replace(/<(p|div|h[1-6])[^>]*>/gi, '\n');
+    // List items get bullet
+    t = t.replace(/<li[^>]*>/gi, '\u2022 ');
+    // Strip remaining tags
+    t = t.replace(/<[^>]+>/g, '');
+    // Decode common entities
+    t = t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
+    // Collapse runs of 3+ newlines to 2
+    t = t.replace(/\n{3,}/g, '\n\n');
+    return t.trim();
   }
 
   async function doAction(action) {
