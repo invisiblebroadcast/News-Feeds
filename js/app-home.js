@@ -3175,6 +3175,8 @@ const APP_VERSION = 30;
                         feedUrl: 'published',
                         feedHint: r.category || 'all',
                         imageUrl: imageUrl,
+                        _imageUrlJpg: r._imageUrlJpg || '',
+                        _imageUrlPng: r._imageUrlPng || '',
                         author: r.author || r.user_email || '',
                         guid: 'pub_' + r.id,
                         _isPublished: true,
