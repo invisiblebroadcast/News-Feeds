@@ -588,7 +588,7 @@ const APP_VERSION = 30;
     function stripHtml(html) {
         const div = document.createElement('div');
         div.innerHTML = html;
-        return div.textContent || div.innerText || '';
+        return div.innerText || div.textContent || '';
     }
     function cleanSummary(text) {
         return text
@@ -608,6 +608,7 @@ const APP_VERSION = 30;
     }
     // Truncate a long description at the nearest sentence end so the summary
     // never cuts off mid-sentence ("...the President said today is"). If no
+    function nl2br(s) { return s ? s.replace(/\n/g, '<br>') : ''; }
     // sentence end is found before `maxLen`, falls back to a hard cut at the
     // last word boundary to avoid splitting in the middle of a word.
     function smartTruncate(text, maxLen) {
@@ -1489,7 +1490,7 @@ const APP_VERSION = 30;
             '<h3 class="article-title"><span class="article-link" data-article="' + encoded + '">' + escHtml(article.title) + '</span></h3>' +
             subjectHtml +
             '</div>' +
-            '<p class="article-summary">' + smartTruncate(cleanSummary(stripHtml(article.summary)), 250) + '</p>' +
+            '<p class="article-summary">' + nl2br(smartTruncate(cleanSummary(stripHtml(article.summary)), 250)) + '</p>' +
             '<div class="article-meta">' +
             '<span class="source">' + escHtml(article.source || '') + '</span>' +
             '<span class="date">' + formatDateShort(article.pubDate) + '</span>' +
@@ -1983,7 +1984,7 @@ const APP_VERSION = 30;
                 source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
             if (summary) {
                 summary.classList.remove('quote-text');
-                summary.textContent = showDesc ? summaryText : '';
+                summary.innerHTML = showDesc ? nl2br(smartTruncate(cleanSummary(stripHtml(article.summary)), 250)) : '';
             }
             if (summaryWrap) {
                 summaryWrap.style.display = showDesc ? '' : 'none';
