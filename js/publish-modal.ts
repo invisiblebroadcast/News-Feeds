@@ -21,10 +21,10 @@ const PublishModal = (() => {
     return 'IB' + String(id).padStart(5, '0');
   }
 
-  /** Normalize PostgREST timestamptz to PostgreSQL ::text format. */
-  function pgTs(ts) {
+  /** Convert timestamptz to epoch milliseconds for safe filenames. */
+  function ibPostKey(ts) {
     if (!ts) return '';
-    return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
+    return String(new Date(ts).getTime());
   }
 
   /* ── YouTube helpers ── */
@@ -249,7 +249,7 @@ const PublishModal = (() => {
 
       if (_postImageFile && postId && lastModified) {
         const ext = _postImageFile.type === 'image/png' ? 'png' : 'jpg';
-        const filePath = 'ibpost' + pgTs(lastModified) + '.' + ext;
+        const filePath = 'ibpost' + ibPostKey(lastModified) + '.' + ext;
         const { error: uploadErr } = await client.storage
           .from('ib-post-images')
           .upload(filePath, _postImageFile, {
@@ -371,7 +371,7 @@ const PublishModal = (() => {
 
       if (_quoteImageFile && postId && lastModified) {
         const ext = _quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
-        const filePath = 'ibpost' + pgTs(lastModified) + '.' + ext;
+        const filePath = 'ibpost' + ibPostKey(lastModified) + '.' + ext;
         const { error: uploadErr } = await client.storage
           .from('ib-post-images')
           .upload(filePath, _quoteImageFile, {
