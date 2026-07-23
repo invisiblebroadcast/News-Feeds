@@ -2960,6 +2960,14 @@ const APP_VERSION = 30;
     try { return SupabaseStore.getClient(); } catch { return null; }
   }
 
+  /** Normalize a timestamptz string from PostgREST ISO format
+   *  ("2026-07-23T09:59:17.850109+00:00") to PostgreSQL ::text format
+   *  ("2026-07-23 09:59:17.850109+00") so image filenames match. */
+  function pgTs(ts) {
+    if (!ts) return '';
+    return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
+  }
+
   async function fetchPublishedArticlesFromSupabase() {
     if (_publishedFetchPromise) return _publishedFetchPromise;
     _publishedFetchPromise = (async () => {
@@ -2978,7 +2986,7 @@ const APP_VERSION = 30;
           // the CDN never serves a stale image.
           let imageUrl = '';
           if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
-            const imgBase = 'ibpost' + r.last_modified;
+            const imgBase = 'ibpost' + pgTs(r.last_modified);
             imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
             r._imageUrlJpg = imageUrl;
             r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
@@ -3249,7 +3257,7 @@ const APP_VERSION = 30;
         const quoteImagePreviewImg = $('#quote-image-preview-img');
         const quoteImageInput = $('#quote-image');
         if (data.post_id && data.last_modified && quoteImagePreview && quoteImagePreviewImg) {
-          const imgBase = 'ibpost' + data.last_modified;
+          const imgBase = 'ibpost' + pgTs(data.last_modified);
           const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
           const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
           const probe = new Image();
@@ -3335,7 +3343,7 @@ const APP_VERSION = 30;
               if (data.post_id) {
                 // Remove old image by old last_modified
                 if (oldModified && (quoteImageRemoved || quoteImageFile)) {
-                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + oldModified + '.jpg', 'ibpost' + oldModified + '.png']);
+                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + pgTs(oldModified) + '.jpg', 'ibpost' + pgTs(oldModified) + '.png']);
                   if (rmErr) console.warn('[editPublishedArticle] Quote image remove failed:', rmErr.message);
                 }
                 // Upload new image by new last_modified
@@ -3343,7 +3351,7 @@ const APP_VERSION = 30;
                   const ext = quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
                   const { error: uploadErr } = await c2.storage
                     .from('ib-post-images')
-                    .upload('ibpost' + newModified + '.' + ext, quoteImageFile, {
+                    .upload('ibpost' + pgTs(newModified) + '.' + ext, quoteImageFile, {
                       contentType: quoteImageFile.type,
                       upsert: true,
                       cacheControl: '0'
@@ -3428,7 +3436,7 @@ const APP_VERSION = 30;
         const postImagePreviewImg = $('#post-image-preview-img');
         const postImageInput = $('#post-image');
         if (data.post_id && data.last_modified && postImagePreview && postImagePreviewImg) {
-          const imgBase = 'ibpost' + data.last_modified;
+          const imgBase = 'ibpost' + pgTs(data.last_modified);
           const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
           const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
           const probe = new Image();
@@ -3513,7 +3521,7 @@ const APP_VERSION = 30;
               if (data.post_id) {
                 // Remove old image by old last_modified
                 if (oldModified && (postImageRemoved || postImageFile)) {
-                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + oldModified + '.jpg', 'ibpost' + oldModified + '.png']);
+                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + pgTs(oldModified) + '.jpg', 'ibpost' + pgTs(oldModified) + '.png']);
                   if (rmErr) console.warn('[editPublishedArticle] Post image remove failed:', rmErr.message);
                 }
                 // Upload new image by new last_modified
@@ -3521,7 +3529,7 @@ const APP_VERSION = 30;
                   const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
                   const { error: uploadErr } = await c2.storage
                     .from('ib-post-images')
-                    .upload('ibpost' + newModified + '.' + ext, postImageFile, {
+                    .upload('ibpost' + pgTs(newModified) + '.' + ext, postImageFile, {
                       contentType: postImageFile.type,
                       upsert: true,
                       cacheControl: '0'

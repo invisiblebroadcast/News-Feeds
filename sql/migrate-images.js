@@ -15,6 +15,12 @@
 (async function migrateImages() {
   const BUCKET = 'ib-post-images';
 
+  // Normalize PostgREST timestamptz to PostgreSQL ::text format
+  function pgTs(ts) {
+    if (!ts) return '';
+    return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
+  }
+
   // Get the Supabase client from the page
   const client = window.SupabaseStore && SupabaseStore.getClient();
   if (!client) {
@@ -44,7 +50,7 @@
 
   for (const row of articles) {
     const oldBase = 'IB' + String(row.post_id).padStart(5, '0');
-    const newBase = 'ibpost' + row.last_modified;
+    const newBase = 'ibpost' + pgTs(row.last_modified);
 
     // Skip if old and new names are the same (shouldn't happen, but safe)
     if (oldBase === newBase) {
