@@ -17,7 +17,7 @@
  * app launch to pick them up immediately, not after the user
  * happens to do a hard reload.
  */
-const CACHE_VERSION = 'ib-v52';
+const CACHE_VERSION = 'ib-v53';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -98,7 +98,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Cross-origin: network only. RSS feeds, Supabase, Gemini etc. are
-  // time-sensitive and we don't want a stale cached response.
+  // Supabase storage: always network, never cache. The CDN (Fastly)
+  // aggressively caches public storage objects and ignores query
+  // params, so even ?v=<timestamp> doesn't bust the cache.
+  // Intercepting here with cache:'no-store' forces a fresh fetch.
+  if (url.hostname.includes('supabase.co') && url.pathname.includes('/storage/')) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
+
+  // Other cross-origin: network only. RSS feeds, CORS proxies, Gemini etc.
   // (We don't intercept; the default fetch behaviour is fine.)
 });

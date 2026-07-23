@@ -1749,7 +1749,32 @@ const APP_VERSION = 30;
         const imgWrap = cardEl.querySelector('.reels-img-wrap');
         const imgEl = cardEl.querySelector('.reels-img');
         if (hasThumb && imgEl && imgWrap) {
-            imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;
+            // For Supabase storage URLs, fetch with cache:'no-store' to bypass
+            // the CDN (Fastly) and browser HTTP cache, then use a blob URL.
+            // This guarantees the latest image is always displayed.
+            const isSupabaseStorage = imgUrl.includes('ib-post-images');
+            if (isSupabaseStorage) {
+                console.log('[updateCard] Fetching IB image with cache:no-store:', imgUrl);
+                imgWrap.classList.remove('no-image');
+                imgWrap.style.display = '';
+                // Show old src briefly while fresh one loads (prevents flash)
+                imgEl.dataset.fb = '';
+                imgEl.onerror = null;
+                fetch(imgUrl, { cache: 'no-store' })
+                    .then(r => { console.log('[updateCard] fetch status:', r.status, 'ok:', r.ok, 'type:', r.type); return r.blob(); })
+                    .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    console.log('[updateCard] blob URL created:', blobUrl.slice(0, 80) + '..., size:', blob.size);
+                    imgEl.src = blobUrl;
+                })
+                    .catch(err => {
+                    console.warn('[updateCard] fetch failed, falling back to direct URL:', err);
+                    imgEl.src = imgUrl;
+                });
+            }
+            else {
+                imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;
+            }
             imgWrap.classList.remove('no-image');
             imgWrap.style.display = '';
             // For published posts, try .png if .jpg fails (uploaded extension may differ)
@@ -3109,6 +3134,7 @@ const APP_VERSION = 30;
                     throw error;
                 console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
                 const nowTs = Date.now();
+                console.log('[fetchPublishedArticlesFromSupabase] building image URLs with cache buster ts=' + nowTs);
                 _publishedCache = (data || []).map(r => {
                     // Build image URL from post_id if present.
                     // Append ?v=<timestamp> so the browser never serves a
@@ -3120,6 +3146,7 @@ const APP_VERSION = 30;
                         imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg?v=' + nowTs;
                         r._imageUrlJpg = imageUrl;
                         r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.png?v=' + nowTs;
+                        console.log('[fetchPublishedArticlesFromSupabase] IB image:', formatPostId(r.post_id), imageUrl);
                     }
                     return {
                         id: r.id,
@@ -6267,7 +6294,17 @@ const APP_VERSION = 30;
         el.articleModalSummary.textContent = cleanSummary(stripHtml(article.summary));
         const modalImgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
         if (modalImgUrl && modalImgUrl.startsWith('http')) {
-            el.articleModalImg.src = modalImgUrl;
+            const isIB = modalImgUrl.includes('ib-post-images');
+            if (isIB) {
+                console.log('[openArticleDetail] Fetching IB modal image with cache:no-store:', modalImgUrl);
+                fetch(modalImgUrl, { cache: 'no-store' })
+                    .then(r => r.blob())
+                    .then(blob => { el.articleModalImg.src = URL.createObjectURL(blob); })
+                    .catch(() => { el.articleModalImg.src = modalImgUrl; });
+            }
+            else {
+                el.articleModalImg.src = modalImgUrl;
+            }
             el.articleModalImgWrap.style.display = 'block';
         }
         else {
