@@ -2949,12 +2949,17 @@ const APP_VERSION = 30;
         if (error) throw error;
         console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
         _publishedCache = (data || []).map(r => {
-          // Build image URL from post_id if present
+          // Build image URL from post_id if present.
+          // Append ?v=<last_modified> so the browser never serves a
+          // stale cached image after an edit (Supabase storage URLs
+          // don't change when the file is replaced).
+          const cacheV = r.last_modified || r.updated_at || r.date_published || '';
+          const vParam = cacheV ? '?v=' + encodeURIComponent(cacheV) : '';
           let imageUrl = '';
           if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
-            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg';
+            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg' + vParam;
             r._imageUrlJpg = imageUrl;
-            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.png';
+            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.png' + vParam;
           }
           return {
             id: r.id,
@@ -3221,8 +3226,10 @@ const APP_VERSION = 30;
         const quoteImagePreviewImg = $('#quote-image-preview-img');
         const quoteImageInput = $('#quote-image');
         if (data.post_id && quoteImagePreview && quoteImagePreviewImg) {
-          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg';
-          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png';
+          const qCacheV = data.last_modified || data.updated_at || '';
+          const qVParam = qCacheV ? '?v=' + encodeURIComponent(qCacheV) : '';
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg' + qVParam;
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png' + qVParam;
           const probe = new Image();
           probe.onload = () => {
             quoteImagePreviewImg.src = jpgUrl;
@@ -3397,8 +3404,10 @@ const APP_VERSION = 30;
         const postImagePreviewImg = $('#post-image-preview-img');
         const postImageInput = $('#post-image');
         if (data.post_id && postImagePreview && postImagePreviewImg) {
-          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg';
-          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png';
+          const pCacheV = data.last_modified || data.updated_at || '';
+          const pVParam = pCacheV ? '?v=' + encodeURIComponent(pCacheV) : '';
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg' + pVParam;
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png' + pVParam;
           const probe = new Image();
           probe.onload = () => {
             postImagePreviewImg.src = jpgUrl;
