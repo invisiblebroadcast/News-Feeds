@@ -1116,8 +1116,12 @@ const APP_VERSION = 30;
         // Cap the "Load All" view at 500 articles for mobile safety. 500 cards
         // is already a lot to scroll; showing 5,000+ would freeze the page.
         const liveTotalCap = 500;
-        if (liveAllLoaded && liveAllArticles) {
-          display = liveAllArticles.slice(0, liveTotalCap);
+        if (liveAllLoaded) {
+          // After Load All, scopeCache is updated with the full set and
+          // displayCurrentSubcat processes it (trending, conflicts, subjects,
+          // search filtering). Use the fully-processed `articles` parameter
+          // rather than raw liveAllArticles which lacks these properties.
+          display = articles.slice(0, liveTotalCap);
         } else {
           // Default live view: exactly ONE article per source, the most recent.
           // This guarantees a manageable initial load no matter how many sources.
@@ -1280,7 +1284,10 @@ const APP_VERSION = 30;
         loadAllState = 'idle';
       }
       if (currentSection !== 'feeds') return;
-      renderArticles(currentArticles);
+      // Re-render via displayCurrentSubcat so the full processed article set
+      // (with trending, conflicts, subjects, search filtering) is used rather
+      // than the stale currentArticles that were captured before Load All.
+      await displayCurrentSubcat();
     });
   }
 
@@ -6765,7 +6772,14 @@ const APP_VERSION = 30;
       const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
       if (hasImg) {
         const maxW = W;
-        const maxH = imgMaxAreaH - ibHeaderH;
+        let maxH = imgMaxAreaH - ibHeaderH;
+        // For portrait images (taller than wide), extend the image block
+        // upward to the top of the canvas instead of cropping the top.
+        const isPortrait = imgH > imgW;
+        if (isPortrait) {
+          // Extend image up to the canvas top: full height from y=0
+          maxH = Math.min(imgH * (maxW / imgW), H);
+        }
         const scale = Math.max(maxW / imgW, maxH / imgH);
         imgDrawW = Math.round(imgW * scale);
         imgDrawH = Math.round(imgH * scale);
@@ -6792,16 +6806,25 @@ const APP_VERSION = 30;
       let imageTopY = 0;
       if (hasImg) {
         const maxW = W;
-        const maxH = imgMaxAreaH - ibHeaderH;
+        let maxH = imgMaxAreaH - ibHeaderH;
+        const isPortrait = imgH > imgW;
+        if (isPortrait) {
+          maxH = Math.min(imgH * (maxW / imgW), H);
+        }
         // Center the oversized image within the bounds (cover mode)
         const drawX = Math.round((maxW - imgDrawW) / 2);
-        const drawY = cursorY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
-        imageTopY = cursorY + ibHeaderH;
+        // For portrait images, start from canvas top; otherwise from cursorY
+        if (isPortrait) {
+          imageTopY = 0;
+        } else {
+          imageTopY = cursorY + ibHeaderH;
+        }
+        const drawY = imageTopY + ibHeaderH + Math.round((maxH - imgDrawH) / 2);
         const imgRadius = 0;
 
         // Clip to bounds so the image is cropped (cover mode)
         ctx.save();
-        roundRect(ctx, 0, imageTopY, W, maxH, imgRadius);
+        roundRect(ctx, 0, imageTopY, W, ibHeaderH + maxH, imgRadius);
         ctx.clip();
 
         // Multi-pass downscale for sharper output when source is much larger than target.
@@ -8803,6 +8826,20 @@ const APP_VERSION = 30;
     } else {
       await renderContent();
     }
+
+    // Ensure the footer bar is always visible after init.
+    // Some rendering paths (loading overlay, reels container sizing)
+    // can cause the footer row to become hidden or collapsed on
+    // hard refresh. Force it visible and re-sync its content.
+    const footerBar = document.getElementById('section-footer-bar');
+    if (footerBar) {
+      footerBar.classList.remove('hidden');
+      footerBar.style.display = '';
+    }
+    const footerRow = document.querySelector('.layout-row-5');
+    if (footerRow) footerRow.style.display = '';
+    try { updateStickyHeader(); } catch (e) { /* noop */ }
+    hideLoadingOverlay();
 
     // Start periodic auto-refresh — fetches silently in the background
     // every 5 minutes. The page never re-renders automatically; user clicks

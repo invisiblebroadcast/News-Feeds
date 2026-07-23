@@ -7460,6 +7460,20 @@ const APP_VERSION = 6;
             CategoriesModal.bindAll();
         }
         await renderContent();
+        // Ensure the footer bar is always visible after init.
+        const footerBar = document.getElementById('section-footer-bar');
+        if (footerBar) {
+            footerBar.classList.remove('hidden');
+            footerBar.style.display = '';
+        }
+        const footerRow = document.querySelector('.layout-row-5');
+        if (footerRow)
+            footerRow.style.display = '';
+        try {
+            updateStickyHeader();
+        }
+        catch (e) { /* noop */ }
+        hideLoadingOverlay();
         // Start periodic auto-refresh — fetches silently in the background
         // every 5 minutes. The page never re-renders automatically; user clicks
         // the "show recent" icon to apply the fresh data.
