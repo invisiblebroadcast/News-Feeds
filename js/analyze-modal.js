@@ -789,6 +789,7 @@ const AnalyzeModal = (() => {
     }
     // Helpers — duplicated to keep this module standalone.
     function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
     function formatDate(d) {
         const date = new Date(d);
         if (isNaN(date.getTime()))

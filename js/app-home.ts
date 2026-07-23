@@ -6550,40 +6550,20 @@ const APP_VERSION = 30;
     }
   }
 
-  // Generate a share image. includeImage=true will fetch and embed the
-  // source image; includeImage=false will produce a text-only card.
+  // Generate a share image. Opens the CanvasEditor modal for live
+  // preview and adjustment before copying/downloading.
   async function handleShareImage(article, btn, includeImage) {
     btn && btn.classList.add('btn-busy');
     try {
-      // dom-to-image-more doesn't support object-fit:cover, so always use custom canvas
       const imgUrl = article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
       const hasThumb = imgUrl && imgUrl.startsWith('http');
-      const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
-      const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
 
       let img = null;
-      let imgW = 0, imgH = 0;
-      // Only attempt to load the source image when the caller asked for it
-      // AND the article actually has an image. We try multiple image sources in
-      // order of reliability:
-      //   1. The RSS-provided article.imageUrl (most reliable — we know it exists
-      //      because the "with image" button is only shown when hasThumb is true)
-      //   2. The OG image fetched from the article's HTML (sometimes a higher-res
-      //      version or a different image entirely)
-      // Each candidate is fed to loadImageWithFallback which tries multiple
-      // CORS proxies. If the first one fails, we move to the next.
       if (includeImage && hasThumb) {
-        // No query params on Supabase URLs (causes 400).
-        // CORS proxy cache is busted by the service worker's
-        // cache:'no-store' interceptor.
-        // Build a list of candidate image URLs to try, in priority order.
         const candidates = [];
-        // 1. Enhanced version of the RSS image (full-size)
         const enhanced = enhanceImageUrl(imgUrl);
         candidates.push(enhanced || imgUrl);
-        // 2. Raw RSS image (fallback if enhanced URL fails)
         if (enhanced) candidates.push(imgUrl);
-        // 3. OG image from the article's HTML (sometimes a different image)
         try {
           const og = await fetchOGImage(article.link);
           if (og && !candidates.includes(og)) candidates.push(og);
@@ -6595,9 +6575,7 @@ const APP_VERSION = 30;
           const loaded = await loadImageWithFallback(candidate);
           if (loaded) {
             img = loaded;
-            imgW = img.naturalWidth;
-            imgH = img.naturalHeight;
-            console.log('[Share] Image loaded:', imgW, 'x', imgH, 'from', candidate);
+            console.log('[Share] Image loaded:', img.naturalWidth, 'x', img.naturalHeight, 'from', candidate);
             break;
           }
         }
@@ -6605,6 +6583,37 @@ const APP_VERSION = 30;
           console.warn('[Share] All image candidates failed. Falling back to text-only.');
         }
       }
+
+      btn && btn.classList.remove('btn-busy');
+
+      // Open the canvas editor modal with live preview
+      if (window.CanvasEditor) {
+        window.CanvasEditor.open(article, includeImage, img, async (canvas, blob) => {
+          // After user copies/downloads from the editor, also copy caption
+          const caption = await buildShareCaption(article);
+          try { await navigator.clipboard.writeText(caption); } catch {}
+        });
+      } else {
+        // Fallback: direct render if CanvasEditor not loaded
+        await handleShareImageDirect(article, btn, includeImage, img);
+      }
+    } catch (err) {
+      btn && btn.classList.remove('btn-busy');
+      console.warn('Image share failed:', err.message);
+      handleShare(article.link, article.title, article.source);
+    }
+  }
+
+  // Direct render fallback (original behavior when CanvasEditor is unavailable)
+  async function handleShareImageDirect(article, btn, includeImage, preloadedImg) {
+    btn && btn.classList.add('btn-busy');
+    try {
+      const fullSummary = Settings.get('showDescription') ? cleanSummary(stripHtml(article.summary)) : '';
+      const titleColor = TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)];
+
+      let img = preloadedImg || null;
+      let imgW = img ? img.naturalWidth : 0;
+      let imgH = img ? img.naturalHeight : 0;
 
       const hasImg = img && imgW > 0;
       // Cap DPR at 2 so the PNG doesn't get too large for mobile share sheets (3× devices
@@ -6790,16 +6799,24 @@ const APP_VERSION = 30;
         const textBoxY = textStartY + quoteRowH + medGap * 0.7;
         // Text box mode: draw semi-transparent background behind quote text + from + occupation
         if (Settings.get('quoteTextBox')) {
-          const boxTop = textBoxY - medGap;
-          const boxBottom = textBoxY + qH + medGap * 6 + fromH + occH + medGap * 3;
+          const tbPadX = 14;
+          const tbPadY = 12;
+          const boxTop = textBoxY - tbPadY;
+          const contentEndY = textBoxY + qH + medGap * 6
+            + (quoteFrom ? fromH + medGap : 0)
+            + (quoteOccupation ? occH + medGap : 0)
+            + medGap;
+          const boxBottom = contentEndY + tbPadY;
           const boxH = boxBottom - boxTop;
+          const boxX = PAD - tbPadX;
+          const boxW = textWR + tbPadX * 2;
           const boxRadius = Math.round(W * 0.012);
           ctx.save();
           ctx.beginPath();
           if (ctx.roundRect) {
-            ctx.roundRect(PAD - 8, boxTop, textWR + 16, boxH, boxRadius);
+            ctx.roundRect(boxX, boxTop, boxW, boxH, boxRadius);
           } else {
-            ctx.rect(PAD - 8, boxTop, textWR + 16, boxH);
+            ctx.rect(boxX, boxTop, boxW, boxH);
           }
           ctx.fillStyle = 'rgba(0,0,0,0.45)';
           ctx.fill();
@@ -7036,27 +7053,35 @@ const APP_VERSION = 30;
         topGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = topGrad;
         ctx.fillRect(0, imageTopY, W, fadeH);
-        // Bottom fade: transparent → black (within bounds)
-        const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - fadeH, 0, imageTopY + maxH);
+        // Bottom fade: transparent → full black (within clip bounds)
+        // Extended fade ensures the image is completely hidden before the
+        // source name text area begins — no image pixels leak through.
+        const clipH = ibHeaderH + maxH;
+        const botFadeH = Math.round(maxH * 0.45);
+        const botGrad = ctx.createLinearGradient(0, imageTopY + clipH - botFadeH, 0, imageTopY + clipH);
         botGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        botGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
+        botGrad.addColorStop(0.5, 'rgba(0,0,0,0.6)');
+        botGrad.addColorStop(0.8, 'rgba(0,0,0,0.92)');
+        botGrad.addColorStop(1, 'rgba(0,0,0,1)');
         ctx.fillStyle = botGrad;
-        ctx.fillRect(0, imageTopY + maxH - fadeH, W, fadeH);
+        ctx.fillRect(0, imageTopY + clipH - botFadeH, W, botFadeH);
         // Left fade: black → transparent
         const fadeW = Math.round(W * 0.18);
         const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
         leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = leftGrad;
-        ctx.fillRect(0, imageTopY, fadeW, maxH);
+        ctx.fillRect(0, imageTopY, fadeW, clipH);
         // Right fade: transparent → black
         const rightGrad = ctx.createLinearGradient(W - fadeW, 0, W, 0);
         rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
         rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = rightGrad;
-        ctx.fillRect(W - fadeW, imageTopY, fadeW, maxH);
+        ctx.fillRect(W - fadeW, imageTopY, fadeW, clipH);
 
         ctx.restore(); // remove clip
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, imageTopY + clipH, W, gap);
         cursorY += imgBlockH + gap;
       }
 
@@ -7659,7 +7684,7 @@ const APP_VERSION = 30;
         const article = findArticleByLink(url);
         const shareCheckImg = article && article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
         if (shareCheckImg && shareCheckImg.startsWith('http')) {
-          handleShareImage(article, se);
+          handleShareImage(article, se, true);
         } else {
           handleShare(url, se.dataset.title, se.dataset.source);
         }
