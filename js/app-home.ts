@@ -6949,6 +6949,8 @@ const APP_VERSION = 30;
       let imgBlockH = 0;
       // Header area above the image for the IB block (only when image is present)
       const ibHeaderH = hasImg ? Math.round(W * 0.08) : 0;
+      const totalContentH_prelim = textBlockH + ibHeaderH + gap;
+      const H_prelim = Math.max(1350, totalContentH_prelim + Math.round(W * 0.08));
       if (hasImg) {
         const maxW = W;
         let maxH = imgMaxAreaH - ibHeaderH;
@@ -6957,7 +6959,7 @@ const APP_VERSION = 30;
         const isPortrait = imgH > imgW;
         if (isPortrait) {
           // Extend image up to the canvas top: full height from y=0
-          maxH = Math.min(imgH * (maxW / imgW), H);
+          maxH = Math.min(imgH * (maxW / imgW), H_prelim - ibHeaderH);
         }
         const scale = Math.max(maxW / imgW, maxH / imgH);
         imgDrawW = Math.round(imgW * scale);
