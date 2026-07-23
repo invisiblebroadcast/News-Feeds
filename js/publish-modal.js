@@ -267,19 +267,21 @@ const PublishModal = (() => {
                 type: 'feeds',
                 quote_from: ''
             })
-                .select('post_id')
+                .select('post_id, last_modified')
                 .single();
             if (error)
                 throw error;
             const postId = inserted?.post_id;
-            if (_postImageFile && postId) {
+            const lastModified = inserted?.last_modified;
+            if (_postImageFile && postId && lastModified) {
                 const ext = _postImageFile.type === 'image/png' ? 'png' : 'jpg';
-                const filePath = formatPostId(postId) + '.' + ext;
+                const filePath = 'ibpost' + lastModified + '.' + ext;
                 const { error: uploadErr } = await client.storage
                     .from('ib-post-images')
                     .upload(filePath, _postImageFile, {
                     contentType: _postImageFile.type,
-                    upsert: true
+                    upsert: true,
+                    cacheControl: '0'
                 });
                 if (uploadErr) {
                     console.warn('[PublishModal] Post image upload failed:', uploadErr.message);
@@ -405,19 +407,21 @@ const PublishModal = (() => {
                 quote_date: quoteDate,
                 quote_occupation: quoteOccupation
             })
-                .select('post_id')
+                .select('post_id, last_modified')
                 .single();
             if (error)
                 throw error;
             const postId = inserted?.post_id;
-            if (_quoteImageFile && postId) {
+            const lastModified = inserted?.last_modified;
+            if (_quoteImageFile && postId && lastModified) {
                 const ext = _quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
-                const filePath = formatPostId(postId) + '.' + ext;
+                const filePath = 'ibpost' + lastModified + '.' + ext;
                 const { error: uploadErr } = await client.storage
                     .from('ib-post-images')
                     .upload(filePath, _quoteImageFile, {
                     contentType: _quoteImageFile.type,
-                    upsert: true
+                    upsert: true,
+                    cacheControl: '0'
                 });
                 if (uploadErr) {
                     console.warn('[PublishModal] Image upload failed:', uploadErr.message);

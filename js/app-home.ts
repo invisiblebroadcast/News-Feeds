@@ -1720,21 +1720,21 @@ const APP_VERSION = 30;
       // This guarantees the latest image is always displayed.
       const isSupabaseStorage = imgUrl.includes('ib-post-images');
       if (isSupabaseStorage) {
-        console.log('[updateCard] Fetching IB image with cache:no-store:', imgUrl);
         imgWrap.classList.remove('no-image');
         imgWrap.style.display = '';
         // Show old src briefly while fresh one loads (prevents flash)
         imgEl.dataset.fb = '';
         imgEl.onerror = null;
         fetch(imgUrl, { cache: 'no-store' })
-          .then(r => { console.log('[updateCard] fetch status:', r.status, 'ok:', r.ok, 'type:', r.type); return r.blob(); })
+          .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.blob();
+          })
           .then(blob => {
             const blobUrl = URL.createObjectURL(blob);
-            console.log('[updateCard] blob URL created:', blobUrl.slice(0, 80) + '..., size:', blob.size);
             imgEl.src = blobUrl;
           })
-          .catch(err => {
-            console.warn('[updateCard] fetch failed, falling back to direct URL:', err);
+          .catch(() => {
             imgEl.src = imgUrl;
           });
       } else {
@@ -2972,20 +2972,16 @@ const APP_VERSION = 30;
           .order('date_published', { ascending: false });
         if (error) throw error;
         console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
-        const nowTs = Date.now();
-        console.log('[fetchPublishedArticlesFromSupabase] building image URLs with cache buster ts=' + nowTs);
         _publishedCache = (data || []).map(r => {
-          // Build image URL from post_id if present.
-          // Append ?v=<timestamp> so the browser never serves a
-          // stale cached image after an edit (Supabase storage URLs
-          // don't change when the file is replaced, and the CDN may
-          // cache aggressively regardless of Cache-Control headers).
+          // Build image URL from last_modified timestamp.
+          // Filename: ibpost<last_modified>.jpg — unique per edit so
+          // the CDN never serves a stale image.
           let imageUrl = '';
           if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
-            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.jpg?v=' + nowTs;
+            const imgBase = 'ibpost' + r.last_modified;
+            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
             r._imageUrlJpg = imageUrl;
-            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(r.post_id) + '.png?v=' + nowTs;
-            console.log('[fetchPublishedArticlesFromSupabase] IB image:', formatPostId(r.post_id), imageUrl);
+            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
           }
           return {
             id: r.id,
@@ -3011,7 +3007,8 @@ const APP_VERSION = 30;
             _pubQuoteDate: r.quote_date || '',
             _pubQuoteOccupation: r.quote_occupation || '',
             _pubSourceName: r.source_name || '',
-            _pubSourceLink: r.source_link || ''
+            _pubSourceLink: r.source_link || '',
+            _lastModified: r.last_modified || ''
           };
         });
         return _publishedCache;
@@ -3251,9 +3248,10 @@ const APP_VERSION = 30;
         const quoteImagePreview = $('#quote-image-preview');
         const quoteImagePreviewImg = $('#quote-image-preview-img');
         const quoteImageInput = $('#quote-image');
-        if (data.post_id && quoteImagePreview && quoteImagePreviewImg) {
-          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg?v=' + Date.now();
-          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png?v=' + Date.now();
+        if (data.post_id && data.last_modified && quoteImagePreview && quoteImagePreviewImg) {
+          const imgBase = 'ibpost' + data.last_modified;
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
           const probe = new Image();
           probe.onload = () => {
             quoteImagePreviewImg.src = jpgUrl;
@@ -3309,7 +3307,7 @@ const APP_VERSION = 30;
           quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
           // Signal to publish-modal.ts to skip its addEventListener handler
           window._ibSkipPublish = true;
-          quoteBtn.onclick = async () => {
+            quoteBtn.onclick = async () => {
             const desc = $('#quote-desc')?.value?.trim();
             const qFrom = $('#quote-from')?.value?.trim();
             const qOccupation = $('#quote-occupation')?.value?.trim() || '';
@@ -3320,7 +3318,8 @@ const APP_VERSION = 30;
             quoteBtn.disabled = true; quoteBtn.textContent = 'Updating\u2026';
             try {
               const c2 = getSupabaseClient();
-              const { error: updErr } = await c2.from('published_articles').update({
+              const oldModified = data.last_modified;
+              const { data: updRow, error: updErr } = await c2.from('published_articles').update({
                 body: desc,
                 source_name: qFrom || '',
                 source_link: qLink || '',
@@ -3328,25 +3327,26 @@ const APP_VERSION = 30;
                 nation: qScope === 'nation' ? 'india' : '',
                 quote_from: qFrom || '',
                 quote_date: qDate,
-                quote_occupation: qOccupation,
-                last_modified: new Date().toISOString()
-              }).eq('id', pubId);
+                quote_occupation: qOccupation
+              }).eq('id', pubId).select('last_modified').single();
               if (updErr) throw updErr;
+              const newModified = updRow?.last_modified;
 
               if (data.post_id) {
-                const basePath = formatPostId(data.post_id);
-                if (quoteImageRemoved || quoteImageFile) {
-                  // Remove existing image(s) before replacing/deleting
-                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                // Remove old image by old last_modified
+                if (oldModified && (quoteImageRemoved || quoteImageFile)) {
+                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + oldModified + '.jpg', 'ibpost' + oldModified + '.png']);
                   if (rmErr) console.warn('[editPublishedArticle] Quote image remove failed:', rmErr.message);
                 }
-                if (quoteImageFile) {
+                // Upload new image by new last_modified
+                if (quoteImageFile && newModified) {
                   const ext = quoteImageFile.type === 'image/png' ? 'png' : 'jpg';
                   const { error: uploadErr } = await c2.storage
                     .from('ib-post-images')
-                    .upload(basePath + '.' + ext, quoteImageFile, {
+                    .upload('ibpost' + newModified + '.' + ext, quoteImageFile, {
                       contentType: quoteImageFile.type,
-                      upsert: true
+                      upsert: true,
+                      cacheControl: '0'
                     });
                   if (uploadErr) {
                     console.warn('[editPublishedArticle] Quote image upload failed:', uploadErr.message);
@@ -3427,9 +3427,10 @@ const APP_VERSION = 30;
         const postImagePreview = $('#post-image-preview');
         const postImagePreviewImg = $('#post-image-preview-img');
         const postImageInput = $('#post-image');
-        if (data.post_id && postImagePreview && postImagePreviewImg) {
-          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.jpg?v=' + Date.now();
-          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + formatPostId(data.post_id) + '.png?v=' + Date.now();
+        if (data.post_id && data.last_modified && postImagePreview && postImagePreviewImg) {
+          const imgBase = 'ibpost' + data.last_modified;
+          const jpgUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
+          const pngUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
           const probe = new Image();
           probe.onload = () => {
             postImagePreviewImg.src = jpgUrl;
@@ -3496,32 +3497,34 @@ const APP_VERSION = 30;
             postBtn.disabled = true; postBtn.textContent = 'Updating\u2026';
             try {
               const c2 = getSupabaseClient();
-              const { error: updErr } = await c2.from('published_articles').update({
+              const oldModified = data.last_modified;
+              const { data: updRow, error: updErr } = await c2.from('published_articles').update({
                 title: t,
                 body: d,
                 source_name: sName || 'Invisible Broadcast',
                 source_link: sLink || '',
                 scope: pScope,
                 nation: pScope === 'nation' ? 'india' : '',
-                category: pCategory,
-                last_modified: new Date().toISOString()
-              }).eq('id', pubId);
+                category: pCategory
+              }).eq('id', pubId).select('last_modified').single();
               if (updErr) throw updErr;
+              const newModified = updRow?.last_modified;
 
               if (data.post_id) {
-                const basePath = formatPostId(data.post_id);
-                if (postImageRemoved || postImageFile) {
-                  // Remove existing image(s) before replacing/deleting
-                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove([basePath + '.jpg', basePath + '.png']);
+                // Remove old image by old last_modified
+                if (oldModified && (postImageRemoved || postImageFile)) {
+                  const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + oldModified + '.jpg', 'ibpost' + oldModified + '.png']);
                   if (rmErr) console.warn('[editPublishedArticle] Post image remove failed:', rmErr.message);
                 }
-                if (postImageFile) {
+                // Upload new image by new last_modified
+                if (postImageFile && newModified) {
                   const ext = postImageFile.type === 'image/png' ? 'png' : 'jpg';
                   const { error: uploadErr } = await c2.storage
                     .from('ib-post-images')
-                    .upload(basePath + '.' + ext, postImageFile, {
+                    .upload('ibpost' + newModified + '.' + ext, postImageFile, {
                       contentType: postImageFile.type,
-                      upsert: true
+                      upsert: true,
+                      cacheControl: '0'
                     });
                   if (uploadErr) {
                     console.warn('[editPublishedArticle] Post image upload failed:', uploadErr.message);
@@ -6508,18 +6511,16 @@ const APP_VERSION = 30;
       // Each candidate is fed to loadImageWithFallback which tries multiple
       // CORS proxies. If the first one fails, we move to the next.
       if (includeImage && hasThumb) {
-        // Append cache-buster to bypass CORS proxy cache (wsrv.nl caches
-        // images aggressively so replaced/deleted Supabase images still
-        // return the old version without this).
-        const cacheBust = imgUrl.includes('ib-post-images') ? '?v=' + Date.now() : '';
-        const imgUrlBusted = cacheBust ? imgUrl.split('?')[0] + cacheBust : imgUrl;
+        // No query params on Supabase URLs (causes 400).
+        // CORS proxy cache is busted by the service worker's
+        // cache:'no-store' interceptor.
         // Build a list of candidate image URLs to try, in priority order.
         const candidates = [];
         // 1. Enhanced version of the RSS image (full-size)
-        const enhanced = enhanceImageUrl(imgUrlBusted);
-        candidates.push(enhanced || imgUrlBusted);
+        const enhanced = enhanceImageUrl(imgUrl);
+        candidates.push(enhanced || imgUrl);
         // 2. Raw RSS image (fallback if enhanced URL fails)
-        if (enhanced) candidates.push(imgUrlBusted);
+        if (enhanced) candidates.push(imgUrl);
         // 3. OG image from the article's HTML (sometimes a different image)
         try {
           const og = await fetchOGImage(article.link);
