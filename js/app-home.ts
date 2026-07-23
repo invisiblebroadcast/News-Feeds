@@ -6769,7 +6769,16 @@ const APP_VERSION = 30;
 
         // Build caption for quote
         const caption = buildQuoteCaption(article);
-        try { await navigator.clipboard.writeText(caption); } catch {}
+
+        // Copy the IMAGE to clipboard
+        try {
+          const item = new ClipboardItem({ 'image/png': blob });
+          await navigator.clipboard.write([item]);
+          flashCopyButton(btn, 'Image copied to clipboard');
+        } catch {
+          try { await navigator.clipboard.writeText(caption); } catch {}
+          flashCopyButton(btn, 'Caption copied');
+        }
 
         const SHARE_MAX_BYTES = 5 * 1024 * 1024;
         const tooLargeForShare = blob.size > SHARE_MAX_BYTES;
@@ -6777,9 +6786,8 @@ const APP_VERSION = 30;
         if (navigator.share && !tooLargeForShare) {
           try {
             await navigator.share({ files: [file], title: 'Quote', text: caption });
-            btn && btn.classList.remove('btn-busy');
-            flashCopyButton(btn, 'Caption copied — share opened');
-            return;
+          btn && btn.classList.remove('btn-busy');
+          flashCopyButton(btn, 'Image copied — share opened');
           } catch (err) {
             if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
           }
@@ -6972,30 +6980,34 @@ const APP_VERSION = 30;
 
       // Watermark removed per user request
 
-      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-      if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
+        const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+        if (!blob) { btn && btn.classList.remove('btn-busy'); handleShare(article.link, article.title, article.source); return; }
 
-      // Build full caption: header (title) + full description + source link + hashtags
-      const sourceName = article._pubSourceName || article.source || '';
-      const sourceLink = article._pubSourceLink || article.link || '';
-      const hashtags = buildHashtags(article).join(' ');
-      const fullDesc = cleanSummary(stripHtml(article.summary || '')).trim();
-      const captionParts = [article.title || ''];
-      if (fullDesc && fullDesc !== (article.title || '')) captionParts.push(fullDesc);
-      if (sourceName) captionParts.push(sourceName);
-      if (sourceLink) captionParts.push(sourceLink);
-      captionParts.push(hashtags);
-      const caption = captionParts.join('\n\n');
+        // Build full caption: header (title) + full description + source link + hashtags
+        const sourceName = article._pubSourceName || article.source || '';
+        const sourceLink = article._pubSourceLink || article.link || '';
+        const hashtags = buildHashtags(article).join(' ');
+        const fullDesc = cleanSummary(stripHtml(article.summary || '')).trim();
+        const captionParts = [article.title || ''];
+        if (fullDesc && fullDesc !== (article.title || '')) captionParts.push(fullDesc);
+        if (sourceName) captionParts.push(sourceName);
+        if (sourceLink) captionParts.push(sourceLink);
+        captionParts.push(hashtags);
+        const caption = captionParts.join('\n\n');
 
-      // Step 1: copy the caption text to the clipboard FIRST. The
-      // user explicitly wants the text in the clipboard for
-      // Instagram (which doesn't accept image+text in the share
-      // sheet the way Twitter does — IG reads from the clipboard
-      // when you paste into a new post). We always do this,
-      // regardless of whether the share / download path succeeds.
-      try { await navigator.clipboard.writeText(caption); } catch {}
+        // Step 1: copy the IMAGE to clipboard so the user can paste
+        // it directly into Instagram / other apps.
+        try {
+          const item = new ClipboardItem({ 'image/png': blob });
+          await navigator.clipboard.write([item]);
+          flashCopyButton(btn, 'Image copied to clipboard');
+        } catch {
+          // Fallback: copy text caption only
+          try { await navigator.clipboard.writeText(caption); } catch {}
+          flashCopyButton(btn, 'Caption copied');
+        }
 
-      // Step 2: hand the image to the OS share sheet if available.
+        // Step 2: hand the image to the OS share sheet if available.
       // If the blob is too large for the share sheet (>5MB), skip
       // share and download instead — the user can still attach the
       // downloaded file manually. 5MB covers every realistic
@@ -7007,7 +7019,7 @@ const APP_VERSION = 30;
         try {
           await navigator.share({ files: [file], title: article.title, text: caption });
           btn && btn.classList.remove('btn-busy');
-          flashCopyButton(btn, 'Caption copied — share opened');
+          flashCopyButton(btn, 'Image copied — share opened');
           return;
         } catch (err) {
           if (err && err.name === 'AbortError') { btn && btn.classList.remove('btn-busy'); return; }
@@ -7017,8 +7029,8 @@ const APP_VERSION = 30;
       // Step 3: either share was unavailable, share was aborted by
       // the OS, or the image was too large. In all three cases
       // download the image to the user's device so they can pick
-      // it up in their gallery / camera roll. The caption is
-      // already in the clipboard from Step 1.
+      // it up in their gallery / camera roll. The image was already
+      // copied to the clipboard in Step 1.
       try {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -7026,11 +7038,11 @@ const APP_VERSION = 30;
         a.click();
         URL.revokeObjectURL(a.href);
         const reason = tooLargeForShare
-          ? 'Image too large for share — caption copied, image downloaded'
-          : 'Caption copied — image downloaded';
+          ? 'Image too large for share — downloaded'
+          : 'Image copied + downloaded';
         flashCopyButton(btn, reason);
       } catch {
-        flashCopyButton(btn, 'Caption copied');
+        flashCopyButton(btn, 'Image copied');
       }
       btn && btn.classList.remove('btn-busy');
     } catch (err) {

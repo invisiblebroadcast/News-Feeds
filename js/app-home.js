@@ -7166,10 +7166,19 @@ const APP_VERSION = 30;
                 }
                 // Build caption for quote
                 const caption = buildQuoteCaption(article);
+                // Copy the IMAGE to clipboard
                 try {
-                    await navigator.clipboard.writeText(caption);
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
+                    flashCopyButton(btn, 'Image copied to clipboard');
                 }
-                catch { }
+                catch {
+                    try {
+                        await navigator.clipboard.writeText(caption);
+                    }
+                    catch { }
+                    flashCopyButton(btn, 'Caption copied');
+                }
                 const SHARE_MAX_BYTES = 5 * 1024 * 1024;
                 const tooLargeForShare = blob.size > SHARE_MAX_BYTES;
                 const file = new File([blob], 'invisible-broadcast-quote.png', { type: 'image/png' });
@@ -7177,8 +7186,7 @@ const APP_VERSION = 30;
                     try {
                         await navigator.share({ files: [file], title: 'Quote', text: caption });
                         btn && btn.classList.remove('btn-busy');
-                        flashCopyButton(btn, 'Caption copied — share opened');
-                        return;
+                        flashCopyButton(btn, 'Image copied — share opened');
                     }
                     catch (err) {
                         if (err && err.name === 'AbortError') {
@@ -7381,16 +7389,21 @@ const APP_VERSION = 30;
                 captionParts.push(sourceLink);
             captionParts.push(hashtags);
             const caption = captionParts.join('\n\n');
-            // Step 1: copy the caption text to the clipboard FIRST. The
-            // user explicitly wants the text in the clipboard for
-            // Instagram (which doesn't accept image+text in the share
-            // sheet the way Twitter does — IG reads from the clipboard
-            // when you paste into a new post). We always do this,
-            // regardless of whether the share / download path succeeds.
+            // Step 1: copy the IMAGE to clipboard so the user can paste
+            // it directly into Instagram / other apps.
             try {
-                await navigator.clipboard.writeText(caption);
+                const item = new ClipboardItem({ 'image/png': blob });
+                await navigator.clipboard.write([item]);
+                flashCopyButton(btn, 'Image copied to clipboard');
             }
-            catch { }
+            catch {
+                // Fallback: copy text caption only
+                try {
+                    await navigator.clipboard.writeText(caption);
+                }
+                catch { }
+                flashCopyButton(btn, 'Caption copied');
+            }
             // Step 2: hand the image to the OS share sheet if available.
             // If the blob is too large for the share sheet (>5MB), skip
             // share and download instead — the user can still attach the
@@ -7403,7 +7416,7 @@ const APP_VERSION = 30;
                 try {
                     await navigator.share({ files: [file], title: article.title, text: caption });
                     btn && btn.classList.remove('btn-busy');
-                    flashCopyButton(btn, 'Caption copied — share opened');
+                    flashCopyButton(btn, 'Image copied — share opened');
                     return;
                 }
                 catch (err) {
@@ -7417,8 +7430,8 @@ const APP_VERSION = 30;
             // Step 3: either share was unavailable, share was aborted by
             // the OS, or the image was too large. In all three cases
             // download the image to the user's device so they can pick
-            // it up in their gallery / camera roll. The caption is
-            // already in the clipboard from Step 1.
+            // it up in their gallery / camera roll. The image was already
+            // copied to the clipboard in Step 1.
             try {
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
@@ -7426,12 +7439,12 @@ const APP_VERSION = 30;
                 a.click();
                 URL.revokeObjectURL(a.href);
                 const reason = tooLargeForShare
-                    ? 'Image too large for share — caption copied, image downloaded'
-                    : 'Caption copied — image downloaded';
+                    ? 'Image too large for share — downloaded'
+                    : 'Image copied + downloaded';
                 flashCopyButton(btn, reason);
             }
             catch {
-                flashCopyButton(btn, 'Caption copied');
+                flashCopyButton(btn, 'Image copied');
             }
             btn && btn.classList.remove('btn-busy');
         }
