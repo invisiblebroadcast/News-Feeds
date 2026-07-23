@@ -1735,7 +1735,17 @@ const APP_VERSION = 30;
             imgEl.src = blobUrl;
           })
           .catch(() => {
-            imgEl.src = imgUrl;
+            const pngUrl = article._imageUrlPng || '';
+            if (pngUrl && pngUrl !== imgUrl) {
+              fetch(pngUrl, { cache: 'no-store' }).then(r2 => {
+                if (!r2.ok) throw new Error('png fallback 404');
+                return r2.blob();
+              }).then(blob2 => {
+                imgEl.src = URL.createObjectURL(blob2);
+              }).catch(() => { imgEl.src = imgUrl; });
+            } else {
+              imgEl.src = imgUrl;
+            }
           });
       } else {
         imgEl.src = enhanceImageUrl(imgUrl) || imgUrl;

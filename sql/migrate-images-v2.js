@@ -1,11 +1,11 @@
 /**
  * migrate-images-v2.js — Rename Supabase Storage images to epoch-ms filenames.
  *
- * Handles both old formats:
- *   IB00043.jpg
- *   ibpost2026-07-23 09:59:17.850109+00.jpg  (broken space format)
- *
- * Target: ibpost<epoch_ms>.jpg
+ * The SQL UPDATE approach only changes metadata, not actual S3 data.
+ * This script uses the Storage API to properly migrate:
+ *   1. Download from old path (IB00043.jpg or ibpost<space>.jpg)
+ *   2. Upload to new path (ibpost<epoch_ms>.jpg)
+ *   3. Delete old path
  *
  * Run in browser console while logged in as admin.
  */
@@ -15,19 +15,28 @@
 
   const client = window.SupabaseStore && SupabaseStore.getClient();
   if (!client) {
-    console.error('[migrate] Not logged in.');
+    console.error('[migrate] SupabaseStore not found. Are you on the app page?');
     return;
   }
 
-  /** Convert PostgREST timestamptz to PostgreSQL ::text format */
-  function toPgText(ts) {
-    if (!ts) return '';
-    return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
+  // Verify authentication
+  const { data: { session }, error: sessErr } = await client.auth.getSession();
+  if (sessErr || !session) {
+    console.error('[migrate] NOT LOGGED IN. Please log in to the app first, then re-run this script.');
+    console.error('[migrate] Session error:', sessErr?.message || 'no session');
+    return;
   }
+  console.log('[migrate] Authenticated as:', session.user.email || session.user.id);
 
   /** Convert timestamp to epoch ms (same as ibPostKey in app code) */
   function toEpochMs(ts) {
     return String(new Date(ts).getTime());
+  }
+
+  /** Convert PostgREST timestamptz to filename-safe format */
+  function toSafeTs(ts) {
+    if (!ts) return '';
+    return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
   }
 
   console.log('[migrate] Fetching articles...');
@@ -50,27 +59,31 @@
   for (const row of articles) {
     const ibId = 'IB' + String(row.post_id).padStart(5, '0');
     const newBase = 'ibpost' + toEpochMs(row.last_modified);
+    const safeTs = toSafeTs(row.last_modified);
 
-    // Check if the target already exists
+    // Check if target already exists (actual upload, not just metadata)
     let alreadyExists = false;
     for (const ext of ['jpg', 'png']) {
       try {
-        const { data: existing } = await client.storage.from(BUCKET).download(newBase + '.' + ext);
-        if (existing) { alreadyExists = true; break; }
+        const { data: existing, error: ckErr } = await client.storage.from(BUCKET).download(newBase + '.' + ext);
+        if (!ckErr && existing) {
+          alreadyExists = true;
+          break;
+        }
       } catch (e) { /* ignore */ }
     }
     if (alreadyExists) {
-      console.log('[migrate] #' + row.id + ' — already at ' + newBase);
+      console.log('[migrate] #' + row.post_id + ' — already at ' + newBase);
       skipped++;
       continue;
     }
 
-    // Try all possible old source paths
+    // Try all possible old source paths (IB original + space-format from first SQL migration)
     const oldPaths = [
       ibId + '.jpg',
       ibId + '.png',
-      'ibpost' + toPgText(row.last_modified) + '.jpg',
-      'ibpost' + toPgText(row.last_modified) + '.png'
+      'ibpost' + safeTs + '.jpg',
+      'ibpost' + safeTs + '.png'
     ];
 
     let sourceFile = null;
@@ -81,14 +94,14 @@
         if (!dlErr && blob) {
           sourceFile = blob;
           sourceExt = path.endsWith('.png') ? 'png' : 'jpg';
-          console.log('[migrate] #' + row.id + ' — found at ' + path);
+          console.log('[migrate] #' + row.post_id + ' — found at ' + path);
           break;
         }
       } catch (e) { /* ignore */ }
     }
 
     if (!sourceFile) {
-      console.warn('[migrate] #' + row.id + ' — no source found, skipping');
+      console.warn('[migrate] #' + row.post_id + ' — no source found, skipping');
       skipped++;
       continue;
     }
@@ -102,17 +115,22 @@
     });
 
     if (upErr) {
-      console.error('[migrate] #' + row.id + ' — upload failed:', upErr.message);
+      console.error('[migrate] #' + row.post_id + ' — upload failed:', upErr.message);
       failed++;
       continue;
     }
 
-    // Delete all old files
+    // Delete old files (best effort)
     for (const path of oldPaths) {
-      await client.storage.from(BUCKET).remove([path]);
+      if (path !== newPath) {
+        const { error: rmErr } = await client.storage.from(BUCKET).remove([path]);
+        if (rmErr) {
+          console.warn('[migrate] #' + row.post_id + ' — delete old ' + path + ' failed:', rmErr.message);
+        }
+      }
     }
 
-    console.log('[migrate] #' + row.id + ' — done (' + newPath + ')');
+    console.log('[migrate] #' + row.post_id + ' — done (' + newPath + ')');
     migrated++;
   }
 
