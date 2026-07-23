@@ -6684,10 +6684,11 @@ const APP_VERSION = 30;
         // Quote text — draw each paragraph with gap between them (italic + bold, pure white, with dual text shadow)
         ctx.fillStyle = '#fff';
         ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
-        const textBoxY = textStartY + quoteRowH + medGap;
+        const textBoxY = textStartY + quoteRowH + medGap * 0.7;
         const paraDrawPasses = [
-          { color: 'rgba(0,0,0,0.85)', blur: 8, offsetY: 2 },  // broad shadow
-          { color: 'rgba(0,0,0,0.7)', blur: 3, offsetY: 1 },   // tight shadow
+          { color: 'rgba(0,0,0,0.9)', blur: 12, offsetY: 3 },  // broad glow
+          { color: 'rgba(0,0,0,0.8)', blur: 6, offsetY: 1 },   // mid shadow
+          { color: 'rgba(0,0,0,0.7)', blur: 3, offsetY: 0 },   // tight inner
           { color: 'transparent', blur: 0, offsetY: 0 }         // clean text
         ];
         for (const pass of paraDrawPasses) {
@@ -6710,7 +6711,7 @@ const APP_VERSION = 30;
         ctx.shadowOffsetY = 0;
 
         // Quote from — RIGHT aligned, red, with consistent right padding + dual shadow
-        let afterTextY = textBoxY + qH + medGap * 3;
+        let afterTextY = textBoxY + qH + medGap * 6;
         if (quoteFrom) {
           const fromText = '\u2014 ' + quoteFrom;
           ctx.textBaseline = 'alphabetic';
@@ -6750,7 +6751,7 @@ const APP_VERSION = 30;
         afterTextY += medGap;
 
         // "Invisible Broadcast" — LEFT aligned, dimmed white + dual shadow
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = '700 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
         ctx.textBaseline = 'alphabetic';
         drawDualShadowTextTight(ctx, 'Invisible Broadcast', PAD, afterTextY + wmFontSize);
@@ -6758,7 +6759,7 @@ const APP_VERSION = 30;
 
         // Date — LEFT aligned below watermark, dimmed (matching cards view) + tight shadow
         if (dateText) {
-          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
           ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
           drawDualShadowTextTight(ctx, dateText, PAD, afterTextY + dateFontSize);
         }
