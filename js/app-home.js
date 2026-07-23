@@ -6506,7 +6506,9 @@ const APP_VERSION = 30;
         }
     }
     function handleShare(url, title, source) {
-        const text = title + ' — ' + (source || 'News') + '\n\nPresented by Invisible Broadcast\n' + url;
+        // Only include title + source in text; url is passed separately to
+        // navigator.share so it must NOT appear in text (avoids duplication).
+        const text = title + ' — ' + (source || 'News') + '\n\nPresented by Invisible Broadcast';
         if (navigator.share) {
             navigator.share({ title: title, text: text, url: url }).catch(() => { });
         }
@@ -6588,6 +6590,68 @@ const APP_VERSION = 30;
             ctx.fillText(lines[i], x, y + i * lineHeight);
         }
         return lines.length;
+    }
+    // Draw text with dual text-shadow matching CSS cards view.
+    // CSS: text-shadow: 0 Y1px B1px C1, 0 Y2px B2px C2
+    // Canvas only supports one shadow at a time, so draw twice with
+    // shadow then once clean on top.
+    function drawDualShadowText(ctx, text, x, y, opts = {}) {
+        const { align = 'left', maxWidth } = opts;
+        const prevAlign = ctx.textAlign;
+        if (align === 'right')
+            ctx.textAlign = 'right';
+        // Shadow 1: broader glow
+        ctx.shadowColor = 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 2;
+        if (maxWidth)
+            ctx.fillText(text, x, y, maxWidth);
+        else
+            ctx.fillText(text, x, y);
+        // Shadow 2: tighter inner shadow
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 1;
+        if (maxWidth)
+            ctx.fillText(text, x, y, maxWidth);
+        else
+            ctx.fillText(text, x, y);
+        // Clean text on top
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        if (maxWidth)
+            ctx.fillText(text, x, y, maxWidth);
+        else
+            ctx.fillText(text, x, y);
+        ctx.textAlign = prevAlign;
+    }
+    // Same as above but for the quote mark and smaller elements that use
+    // tighter shadow values: 0 2px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)
+    function drawDualShadowTextTight(ctx, text, x, y, opts = {}) {
+        const { align = 'left' } = opts;
+        const prevAlign = ctx.textAlign;
+        if (align === 'right')
+            ctx.textAlign = 'right';
+        ctx.shadowColor = 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 2;
+        ctx.fillText(text, x, y);
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 2;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(text, x, y);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillText(text, x, y);
+        ctx.textAlign = prevAlign;
     }
     async function imageToDataUrl(url) {
         try {
@@ -7015,60 +7079,55 @@ const APP_VERSION = 30;
                 const rowCenterY = textStartY + Math.round(quoteRowH / 2);
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ff2929';
-                ctx.shadowColor = 'rgba(0,0,0,0.7)';
-                ctx.shadowBlur = 8;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 2;
                 ctx.font = '700 ' + quoteOpenSize + 'px Georgia, "Times New Roman", serif';
-                ctx.fillText('\u201C', PAD, rowCenterY);
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                // Quote text — draw each paragraph with gap between them (italic + bold, pure white, with text shadow)
+                drawDualShadowTextTight(ctx, '\u201C', PAD, rowCenterY);
+                // Quote text — draw each paragraph with gap between them (italic + bold, pure white, with dual text shadow)
                 ctx.fillStyle = '#fff';
                 ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
-                ctx.shadowColor = 'rgba(0,0,0,0.85)';
-                ctx.shadowBlur = 8;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 2;
                 const textBoxY = textStartY + quoteRowH + medGap;
-                let textY = textBoxY + quoteLineH;
-                let paraIdx = 0;
-                for (const para of quoteParagraphs) {
-                    if (paraIdx > 0)
-                        textY += paraGap;
-                    wrapText(ctx, para, PAD, textY, textWR, quoteLineH);
-                    textY += paraLineCounts[paraIdx] * quoteLineH;
-                    paraIdx++;
+                const paraDrawPasses = [
+                    { color: 'rgba(0,0,0,0.85)', blur: 8, offsetY: 2 }, // broad shadow
+                    { color: 'rgba(0,0,0,0.7)', blur: 3, offsetY: 1 }, // tight shadow
+                    { color: 'transparent', blur: 0, offsetY: 0 } // clean text
+                ];
+                for (const pass of paraDrawPasses) {
+                    ctx.shadowColor = pass.color;
+                    ctx.shadowBlur = pass.blur;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = pass.offsetY;
+                    let tY = textBoxY + quoteLineH;
+                    let pIdx = 0;
+                    for (const para of quoteParagraphs) {
+                        if (pIdx > 0)
+                            tY += paraGap;
+                        wrapText(ctx, para, PAD, tY, textWR, quoteLineH);
+                        tY += paraLineCounts[pIdx] * quoteLineH;
+                        pIdx++;
+                    }
                 }
                 ctx.shadowColor = 'transparent';
                 ctx.shadowBlur = 0;
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
-                // Quote from — RIGHT aligned, red, with consistent right padding
+                // Quote from — RIGHT aligned, red, with consistent right padding + dual shadow
                 let afterTextY = textBoxY + qH + medGap * 3;
                 if (quoteFrom) {
                     const fromText = '\u2014 ' + quoteFrom;
                     ctx.textBaseline = 'alphabetic';
-                    ctx.textAlign = 'right';
                     const fromY = afterTextY + fromFontSize;
                     ctx.fillStyle = '#ff2929';
                     ctx.font = '700 ' + fromFontSize + 'px Georgia, "Times New Roman", serif';
-                    ctx.fillText(fromText, W - PAD - rightSafePad, fromY);
-                    ctx.textAlign = 'left';
+                    drawDualShadowTextTight(ctx, fromText, W - PAD - rightSafePad, fromY, { align: 'right' });
                     afterTextY += fromH + medGap;
                 }
-                // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines), pure white
+                // Occupation / title — RIGHT aligned, italic + bold, multiline (up to 3 lines), pure white + dual shadow
                 if (quoteOccupation && occLines.length > 0) {
                     ctx.textBaseline = 'alphabetic';
                     ctx.fillStyle = '#fff';
                     ctx.font = 'italic 700 ' + occFontSize + 'px Georgia, "Times New Roman", serif';
-                    ctx.textAlign = 'right';
                     for (let oi = 0; oi < occLines.length; oi++) {
-                        ctx.fillText(occLines[oi], W - PAD - rightSafePad, afterTextY + occLineH * (oi + 1));
+                        drawDualShadowTextTight(ctx, occLines[oi], W - PAD - rightSafePad, afterTextY + occLineH * (oi + 1), { align: 'right' });
                     }
-                    ctx.textAlign = 'left';
                     afterTextY += occH + medGap;
                 }
                 afterTextY += medGap;
@@ -7086,17 +7145,17 @@ const APP_VERSION = 30;
                 ctx.lineTo(sepX + sepW, afterTextY);
                 ctx.stroke();
                 afterTextY += medGap;
-                // "Invisible Broadcast" — LEFT aligned, dimmed white
+                // "Invisible Broadcast" — LEFT aligned, dimmed white + dual shadow
                 ctx.fillStyle = 'rgba(255,255,255,0.85)';
                 ctx.font = '700 ' + wmFontSize + 'px Georgia, "Times New Roman", serif';
                 ctx.textBaseline = 'alphabetic';
-                ctx.fillText('Invisible Broadcast', PAD, afterTextY + wmFontSize);
+                drawDualShadowTextTight(ctx, 'Invisible Broadcast', PAD, afterTextY + wmFontSize);
                 afterTextY += wmFontSize + medGap;
-                // Date — LEFT aligned below watermark, dimmed (matching cards view)
+                // Date — LEFT aligned below watermark, dimmed (matching cards view) + tight shadow
                 if (dateText) {
                     ctx.fillStyle = 'rgba(255,255,255,0.6)';
                     ctx.font = '700 ' + dateFontSize + 'px Georgia, "Times New Roman", serif';
-                    ctx.fillText(dateText, PAD, afterTextY + dateFontSize);
+                    drawDualShadowTextTight(ctx, dateText, PAD, afterTextY + dateFontSize);
                 }
                 const blob = await new Promise(r => c.toBlob(r, 'image/png'));
                 if (!blob) {
@@ -7307,14 +7366,20 @@ const APP_VERSION = 30;
                 handleShare(article.link, article.title, article.source);
                 return;
             }
-            // Build the Instagram-style caption. The user asked for a
-            // caption that's "the exact same as the title/summary, but
-            // AI-rephrased without AI" — i.e. social-friendly copy
-            // built from the article's own text, with five hashtags
-            // (#invisiblebroadcast guaranteed, the others derived from
-            // the article's subcat / source). The actual rephrasing is
-            // done in buildShareCaption() — see comment there.
-            const caption = await buildShareCaption(article);
+            // Build full caption: header (title) + full description + source link + hashtags
+            const sourceName = article._pubSourceName || article.source || '';
+            const sourceLink = article._pubSourceLink || article.link || '';
+            const hashtags = buildHashtags(article).join(' ');
+            const fullDesc = cleanSummary(stripHtml(article.summary || '')).trim();
+            const captionParts = [article.title || ''];
+            if (fullDesc && fullDesc !== (article.title || ''))
+                captionParts.push(fullDesc);
+            if (sourceName)
+                captionParts.push(sourceName);
+            if (sourceLink)
+                captionParts.push(sourceLink);
+            captionParts.push(hashtags);
+            const caption = captionParts.join('\n\n');
             // Step 1: copy the caption text to the clipboard FIRST. The
             // user explicitly wants the text in the clipboard for
             // Instagram (which doesn't accept image+text in the share
