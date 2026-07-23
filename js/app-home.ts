@@ -6796,7 +6796,11 @@ const APP_VERSION = 30;
           const boxRadius = Math.round(W * 0.012);
           ctx.save();
           ctx.beginPath();
-          ctx.roundRect(PAD - 8, boxTop, textWR + 16, boxH, boxRadius);
+          if (ctx.roundRect) {
+            ctx.roundRect(PAD - 8, boxTop, textWR + 16, boxH, boxRadius);
+          } else {
+            ctx.rect(PAD - 8, boxTop, textWR + 16, boxH);
+          }
           ctx.fillStyle = 'rgba(0,0,0,0.45)';
           ctx.fill();
           ctx.restore();

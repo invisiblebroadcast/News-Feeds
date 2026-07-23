@@ -7196,10 +7196,15 @@ const APP_VERSION = 30;
                     const boxTop = textBoxY - medGap;
                     const boxBottom = textBoxY + qH + medGap * 6 + fromH + occH + medGap * 3;
                     const boxH = boxBottom - boxTop;
-                    const boxRadius = Math.round(W * 0.012);
+                    const boxX = PAD - 8;
+                    const boxW = textWR + 16;
                     ctx.save();
                     ctx.beginPath();
-                    ctx.roundRect(PAD - 8, boxTop, textWR + 16, boxH, boxRadius);
+                    if (ctx.roundRect) {
+                        ctx.roundRect(boxX, boxTop, boxW, boxH, Math.round(W * 0.012));
+                    } else {
+                        ctx.rect(boxX, boxTop, boxW, boxH);
+                    }
                     ctx.fillStyle = 'rgba(0,0,0,0.45)';
                     ctx.fill();
                     ctx.restore();
