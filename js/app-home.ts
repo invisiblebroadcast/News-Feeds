@@ -1605,6 +1605,14 @@ const APP_VERSION = 30;
                 : '<path d="M2 4h12M2 8h8M2 12h10"/><line x1="2" y1="14" x2="14" y2="2" stroke="var(--accent)"/>') +
             '</svg>' +
           '</button>' +
+          '<button class="reels-tool-btn reels-toggle-textbox' + (Settings.get('quoteTextBox') ? ' active' : '') + '" title="Toggle text box">' +
+            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+              '<rect x="2" y="1" width="12" height="14" rx="2"/>' +
+              '<line x1="5" y1="5" x2="11" y2="5"/>' +
+              '<line x1="5" y1="8" x2="11" y2="8"/>' +
+              '<line x1="5" y1="11" x2="9" y2="11"/>' +
+            '</svg>' +
+          '</button>' +
           '<button class="reels-tool-btn reels-share-text-img" title="Copy as text image">&#x1F4DD;</button>' +
           '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' +
           '<button class="reels-tool-btn reels-screenshot" title="Screenshot Card">' +
@@ -1870,6 +1878,30 @@ const APP_VERSION = 30;
         dateOvEl.textContent = formatDateActual(quoteDate);
         wmEl.parentNode.insertBefore(dateOvEl, wmEl.nextSibling);
       }
+      // Text box mode: wrap quote text + from + occupation in a semi-transparent box
+      const existingTextBox = cardEl.querySelector('.quote-text-box');
+      if (existingTextBox) {
+        while (existingTextBox.firstChild) {
+          existingTextBox.parentNode.insertBefore(existingTextBox.firstChild, existingTextBox);
+        }
+        existingTextBox.remove();
+      }
+      if (Settings.get('quoteTextBox')) {
+        const textBoxWrap = document.createElement('div');
+        textBoxWrap.className = 'quote-text-box';
+        const sWrap = cardEl.querySelector('.reels-summary-wrap');
+        const fEl = cardEl.querySelector('.quote-from-overlay');
+        const oEl = cardEl.querySelector('.quote-occupation-overlay');
+        const insertRef = cardEl.querySelector('.reels-conflict-panel') || cardEl.querySelector('.reels-quote-head');
+        if (sWrap) textBoxWrap.appendChild(sWrap);
+        if (fEl) textBoxWrap.appendChild(fEl);
+        if (oEl) textBoxWrap.appendChild(oEl);
+        if (insertRef && insertRef.nextSibling) {
+          insertRef.parentNode.insertBefore(textBoxWrap, insertRef.nextSibling);
+        } else if (insertRef) {
+          insertRef.parentNode.appendChild(textBoxWrap);
+        }
+      }
     } else {
       cardEl.classList.remove('quote-type-card');
       // Clean up any leftover quote elements from a previous render
@@ -2013,9 +2045,17 @@ const APP_VERSION = 30;
           const current = Settings.get('showDescription');
           Settings.set('showDescription', !current);
           syncSettingsToCloud();
-          // Toggle the active class on the button directly
           toggleDesc.classList.toggle('active', !current);
-          // Re-render the current card to apply the setting
+          showReel();
+          return;
+        }
+        const toggleTextBox = e.target.closest('.reels-toggle-textbox');
+        if (toggleTextBox) {
+          e.stopPropagation();
+          const cur = Settings.get('quoteTextBox');
+          Settings.set('quoteTextBox', !cur);
+          syncSettingsToCloud();
+          toggleTextBox.classList.toggle('active', !cur);
           showReel();
           return;
         }
@@ -6748,6 +6788,19 @@ const APP_VERSION = 30;
         ctx.fillStyle = '#fff';
         ctx.font = 'italic 700 ' + quoteFontSize + 'px Georgia, "Times New Roman", serif';
         const textBoxY = textStartY + quoteRowH + medGap * 0.7;
+        // Text box mode: draw semi-transparent background behind quote text + from + occupation
+        if (Settings.get('quoteTextBox')) {
+          const boxTop = textBoxY - medGap;
+          const boxBottom = textBoxY + qH + medGap * 6 + fromH + occH + medGap * 3;
+          const boxH = boxBottom - boxTop;
+          const boxRadius = Math.round(W * 0.012);
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(PAD - 8, boxTop, textWR + 16, boxH, boxRadius);
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.fill();
+          ctx.restore();
+        }
         const paraDrawPasses = [
           { color: 'rgba(0,0,0,0.9)', blur: 12, offsetY: 3 },  // broad glow
           { color: 'rgba(0,0,0,0.8)', blur: 6, offsetY: 1 },   // mid shadow

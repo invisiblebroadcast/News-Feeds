@@ -6644,6 +6644,13 @@ a.nav-icon-only svg {
   padding: 0;
   margin-top: 0.15em;
 }
+/* Text box mode: semi-transparent background behind quote text + from + occupation */
+.quote-text-box {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 4px 0 2px;
+}
 /* Quote cards: the image is absolutely positioned from the very top of the
    card, i.e. behind the toolbar row. Keep the toolbar transparent so it
    doesn't render as a black box over the photo, and raise it above the
