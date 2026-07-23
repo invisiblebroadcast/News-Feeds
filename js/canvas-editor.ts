@@ -47,6 +47,9 @@
       vignette: true,
       titleColor: TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)],
       bodyColor: 'rgba(255,255,255,0.78)',
+      titleFontSize: 0,
+      bodyFontSize: 0,
+      bodyColorRaw: '#ffffff',
       shadeOpacity: 0,
       shadeColor: '#000000',
       shadePadding: 14,
@@ -135,6 +138,19 @@
                 <button class="ce-color-btn" data-color="rgba(255,240,200,0.85)" style="background:#fff0c8" title="Warm"></button>
               </div>
             </div>
+            <!-- Advanced Text -->
+            <div class="ce-section">
+              <div class="ce-section-title">Advanced Text</div>
+              <label class="ce-label">Title Font Size <span id="ce-titlefontsize-val" class="ce-val">auto</span> <button class="ce-reset-btn" data-slider="ce-titlefontsize" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-titlefontsize" min="16" max="64" step="1" value="0" data-default="0">
+              <label class="ce-label">Body Font Size <span id="ce-bodyfontsize-val" class="ce-val">auto</span> <button class="ce-reset-btn" data-slider="ce-bodyfontsize" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-bodyfontsize" min="10" max="40" step="1" value="0" data-default="0">
+              <label class="ce-label">Body Color</label>
+              <div class="ce-shade-color-row">
+                <input type="color" id="ce-bodycolorraw" value="#ffffff" class="ce-shade-color-input">
+                <span id="ce-bodycolorraw-val" class="ce-val">#ffffff</span>
+              </div>
+            </div>
             <!-- Shade -->
             <div class="ce-section">
               <div class="ce-section-title">Text Shade</div>
@@ -199,6 +215,8 @@
       ['ce-blend', 'blendStart', v => Math.round(v * 100) + '%', 'ce-blend-val'],
       ['ce-shade', 'shadeOpacity', v => Math.round(v * 100) + '%', 'ce-shade-val'],
       ['ce-shadepadding', 'shadePadding', v => v + 'px', 'ce-shadepadding-val'],
+      ['ce-titlefontsize', 'titleFontSize', v => v === 0 ? 'auto' : v + 'px', 'ce-titlefontsize-val'],
+      ['ce-bodyfontsize', 'bodyFontSize', v => v === 0 ? 'auto' : v + 'px', 'ce-bodyfontsize-val'],
     ];
     sliders.forEach(([id, key, fmt, valId]) => {
       const el = overlay.querySelector('#' + id);
@@ -252,6 +270,16 @@
     overlay.querySelector('#ce-shadecolor').addEventListener('input', e => {
       _settings.shadeColor = e.target.value;
       overlay.querySelector('#ce-shadecolor-val').textContent = e.target.value;
+      schedulePreview();
+    });
+
+    // Body color raw picker
+    overlay.querySelector('#ce-bodycolorraw').addEventListener('input', e => {
+      _settings.bodyColorRaw = e.target.value;
+      _settings.bodyColor = e.target.value;
+      overlay.querySelector('#ce-bodycolorraw-val').textContent = e.target.value;
+      // Deselect preset buttons
+      overlay.querySelectorAll('#ce-body-colors .ce-color-btn').forEach(b => b.classList.remove('active'));
       schedulePreview();
     });
 
@@ -396,8 +424,8 @@
     const H = cs.h;
     const pad = settings.padding || Math.round(W * 0.05);
     const gap = Math.round(W * 0.04);
-    const titleFontSize = Math.round(W * 0.052);
-    const bodyFontSize = Math.round(W * 0.028);
+    const titleFontSize = settings.titleFontSize > 0 ? settings.titleFontSize : Math.round(W * 0.052);
+    const bodyFontSize = settings.bodyFontSize > 0 ? settings.bodyFontSize : Math.round(W * 0.028);
     const sourceFontSize = Math.round(W * 0.022);
     const titleLineH = Math.round(titleFontSize * 1.28);
     const bodyLineH = Math.round(bodyFontSize * 1.5);
@@ -492,6 +520,8 @@
       }
 
       // Multi-pass downscale
+      const cropX = settings.imageCropX != null ? settings.imageCropX : 0.5;
+      const cropY = settings.imageCropY != null ? settings.imageCropY : 0.5;
       if (imgW > imgDrawW * 2) {
         let curW = imgW, curH = imgH;
         let curSrc = img;
@@ -507,9 +537,18 @@
           curSrc = off;
           curW = nextW; curH = nextH;
         }
-        ctx.drawImage(curSrc, drawX, drawY, imgDrawW, imgDrawH);
+        // Source crop: pick region based on cropX/cropY
+        const srcVisW = Math.min(imgDrawW, curW);
+        const srcVisH = Math.min(imgDrawH, curH);
+        const srcX = Math.round((curW - srcVisW) * cropX);
+        const srcY = Math.round((curH - srcVisH) * cropY);
+        ctx.drawImage(curSrc, srcX, srcY, srcVisW, srcVisH, drawX, drawY, imgDrawW, imgDrawH);
       } else {
-        ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
+        const srcVisW = Math.min(imgDrawW, imgW);
+        const srcVisH = Math.min(imgDrawH, imgH);
+        const srcX = Math.round((imgW - srcVisW) * cropX);
+        const srcY = Math.round((imgH - srcVisH) * cropY);
+        ctx.drawImage(img, srcX, srcY, srcVisW, srcVisH, drawX, drawY, imgDrawW, imgDrawH);
       }
 
       if (rotation !== 0) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -709,6 +748,8 @@
         ctx.translate(-imgBlockH / 2, -W / 2);
       }
 
+      const cropX = settings.imageCropX != null ? settings.imageCropX : 0.5;
+      const cropY = settings.imageCropY != null ? settings.imageCropY : 0.5;
       if (imgNatW > imgDrawW * 2) {
         let curW = imgNatW, curH = imgNatH;
         let curSrc = img;
@@ -724,9 +765,17 @@
           curSrc = off;
           curW = nextW; curH = nextH;
         }
-        ctx.drawImage(curSrc, drawX, drawY, imgDrawW, imgDrawH);
+        const srcVisW = Math.min(imgDrawW, curW);
+        const srcVisH = Math.min(imgDrawH, curH);
+        const srcX = Math.round((curW - srcVisW) * cropX);
+        const srcY = Math.round((curH - srcVisH) * cropY);
+        ctx.drawImage(curSrc, srcX, srcY, srcVisW, srcVisH, drawX, drawY, imgDrawW, imgDrawH);
       } else {
-        ctx.drawImage(img, drawX, drawY, imgDrawW, imgDrawH);
+        const srcVisW = Math.min(imgDrawW, imgNatW);
+        const srcVisH = Math.min(imgDrawH, imgNatH);
+        const srcX = Math.round((imgNatW - srcVisW) * cropX);
+        const srcY = Math.round((imgNatH - srcVisH) * cropY);
+        ctx.drawImage(img, srcX, srcY, srcVisW, srcVisH, drawX, drawY, imgDrawW, imgDrawH);
       }
 
       if (rotation !== 0) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1028,6 +1077,8 @@
       ['ce-blend', _settings.blendStart],
       ['ce-shade', _settings.shadeOpacity],
       ['ce-shadepadding', _settings.shadePadding],
+      ['ce-titlefontsize', _settings.titleFontSize],
+      ['ce-bodyfontsize', _settings.bodyFontSize],
     ];
     syncMap.forEach(([id, val]) => {
       const el = modal.querySelector('#' + id);
@@ -1041,6 +1092,8 @@
     modal.querySelector('#ce-shade-options').style.display = shadeOn ? '' : 'none';
     modal.querySelector('#ce-shadecolor').value = _settings.shadeColor;
     modal.querySelector('#ce-shadecolor-val').textContent = _settings.shadeColor;
+    modal.querySelector('#ce-bodycolorraw').value = _settings.bodyColorRaw;
+    modal.querySelector('#ce-bodycolorraw-val').textContent = _settings.bodyColorRaw;
     // Show/hide image section
     const imgSection = modal.querySelector('#ce-image-section');
     if (imgSection) imgSection.style.display = (includeImage && loadedImg) ? '' : 'none';
@@ -1070,6 +1123,8 @@
     modal.querySelector('#ce-shadepadding-val').textContent = _settings.shadePadding + 'px';
     modal.querySelector('#ce-offsetx-val').textContent = Math.round(_settings.imageOffsetX * 100) + '%';
     modal.querySelector('#ce-offsety-val').textContent = Math.round(_settings.imageOffsetY * 100) + '%';
+    modal.querySelector('#ce-titlefontsize-val').textContent = _settings.titleFontSize === 0 ? 'auto' : _settings.titleFontSize + 'px';
+    modal.querySelector('#ce-bodyfontsize-val').textContent = _settings.bodyFontSize === 0 ? 'auto' : _settings.bodyFontSize + 'px';
     // Reset divider: preview takes 55%, controls 45%
     const previewWrap = modal.querySelector('#ce-preview-wrap');
     const controlsEl = modal.querySelector('#ce-controls');
