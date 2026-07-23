@@ -43,6 +43,8 @@
       titleColor: TITLE_COLORS[Math.floor(Math.random() * TITLE_COLORS.length)],
       bodyColor: 'rgba(255,255,255,0.78)',
       shadeOpacity: 0,
+      shadeColor: '#000000',
+      shadePadding: 14,
       showImage: true,
       imageOffsetX: 0,
       imageOffsetY: 0,
@@ -84,20 +86,20 @@
             <!-- Image Transform -->
             <div class="ce-section ce-image-section" id="ce-image-section" style="display:none">
               <div class="ce-section-title">Image</div>
-              <label class="ce-label">Zoom <span id="ce-zoom-val" class="ce-val">1.0x</span></label>
-              <input type="range" class="ce-slider" id="ce-zoom" min="0.3" max="3" step="0.05" value="1">
-              <label class="ce-label">Rotation <span id="ce-rotate-val" class="ce-val">0&deg;</span></label>
-              <input type="range" class="ce-slider" id="ce-rotate" min="-180" max="180" step="1" value="0">
-              <label class="ce-label">Crop X <span id="ce-cropx-val" class="ce-val">50%</span></label>
-              <input type="range" class="ce-slider" id="ce-cropx" min="0" max="1" step="0.01" value="0.5">
-              <label class="ce-label">Crop Y <span id="ce-cropy-val" class="ce-val">50%</span></label>
-              <input type="range" class="ce-slider" id="ce-cropy" min="0" max="1" step="0.01" value="0.5">
-              <label class="ce-label">Image Height <span id="ce-imgheight-val" class="ce-val">55%</span></label>
-              <input type="range" class="ce-slider" id="ce-imgheight" min="0.2" max="0.8" step="0.01" value="0.55">
-              <label class="ce-label">Offset X <span id="ce-offsetx-val" class="ce-val">0%</span></label>
-              <input type="range" class="ce-slider" id="ce-offsetx" min="-0.5" max="0.5" step="0.01" value="0">
-              <label class="ce-label">Offset Y <span id="ce-offsety-val" class="ce-val">0%</span></label>
-              <input type="range" class="ce-slider" id="ce-offsety" min="-0.5" max="0.5" step="0.01" value="0">
+              <label class="ce-label">Zoom <span id="ce-zoom-val" class="ce-val">1.0x</span> <button class="ce-reset-btn" data-slider="ce-zoom" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-zoom" min="0.3" max="3" step="0.05" value="1" data-default="1">
+              <label class="ce-label">Rotation <span id="ce-rotate-val" class="ce-val">0&deg;</span> <button class="ce-reset-btn" data-slider="ce-rotate" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-rotate" min="-180" max="180" step="1" value="0" data-default="0">
+              <label class="ce-label">Crop X <span id="ce-cropx-val" class="ce-val">50%</span> <button class="ce-reset-btn" data-slider="ce-cropx" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-cropx" min="0" max="1" step="0.01" value="0.5" data-default="0.5">
+              <label class="ce-label">Crop Y <span id="ce-cropy-val" class="ce-val">50%</span> <button class="ce-reset-btn" data-slider="ce-cropy" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-cropy" min="0" max="1" step="0.01" value="0.5" data-default="0.5">
+              <label class="ce-label">Image Height <span id="ce-imgheight-val" class="ce-val">55%</span> <button class="ce-reset-btn" data-slider="ce-imgheight" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-imgheight" min="0.2" max="0.8" step="0.01" value="0.55" data-default="0.55">
+              <label class="ce-label">Offset X <span id="ce-offsetx-val" class="ce-val">0%</span> <button class="ce-reset-btn" data-slider="ce-offsetx" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-offsetx" min="-0.5" max="0.5" step="0.01" value="0" data-default="0">
+              <label class="ce-label">Offset Y <span id="ce-offsety-val" class="ce-val">0%</span> <button class="ce-reset-btn" data-slider="ce-offsety" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-offsety" min="-0.5" max="0.5" step="0.01" value="0" data-default="0">
               <label class="ce-toggle-row">
                 <input type="checkbox" id="ce-showimage" checked> Show image
               </label>
@@ -105,12 +107,19 @@
             <!-- Layout -->
             <div class="ce-section">
               <div class="ce-section-title">Layout</div>
-              <label class="ce-label">Padding <span id="ce-pad-val" class="ce-val">54px</span></label>
-              <input type="range" class="ce-slider" id="ce-padding" min="20" max="100" step="1" value="54">
-              <label class="ce-label">Text Position <span id="ce-textpos-val" class="ce-val">40%</span></label>
-              <input type="range" class="ce-slider" id="ce-textpos" min="0" max="1" step="0.01" value="0.4">
-              <label class="ce-label">Blend Start <span id="ce-blend-val" class="ce-val">50%</span></label>
-              <input type="range" class="ce-slider" id="ce-blend" min="0" max="1" step="0.01" value="0.5">
+              <label class="ce-label">Padding <span id="ce-pad-val" class="ce-val">54px</span> <button class="ce-reset-btn" data-slider="ce-padding" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-padding" min="20" max="100" step="1" value="54" data-default="54">
+              <label class="ce-label">Text Position <span id="ce-textpos-val" class="ce-val">40%</span> <button class="ce-reset-btn" data-slider="ce-textpos" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-textpos" min="0.1" max="0.9" step="0.01" value="0.4" data-default="0.4">
+            </div>
+            <!-- Effects -->
+            <div class="ce-section">
+              <div class="ce-section-title">Effects</div>
+              <label class="ce-label">Blend Start <span id="ce-blend-val" class="ce-val">50%</span> <button class="ce-reset-btn" data-slider="ce-blend" title="Reset">&#8634;</button></label>
+              <input type="range" class="ce-slider" id="ce-blend" min="0.1" max="0.9" step="0.01" value="0.5" data-default="0.5">
+              <label class="ce-toggle-row">
+                <input type="checkbox" id="ce-vignette" checked> Vignette gradient
+              </label>
             </div>
             <!-- Colors -->
             <div class="ce-section">
@@ -129,11 +138,20 @@
             <!-- Shade -->
             <div class="ce-section">
               <div class="ce-section-title">Text Shade</div>
-              <label class="ce-label">Opacity <span id="ce-shade-val" class="ce-val">0%</span></label>
-              <input type="range" class="ce-slider" id="ce-shade" min="0" max="0.8" step="0.02" value="0">
               <label class="ce-toggle-row">
-                <input type="checkbox" id="ce-vignette" checked> Vignette gradient
+                <input type="checkbox" id="ce-shadeenabled"> Enable shade box
               </label>
+              <div id="ce-shade-options" style="display:none">
+                <label class="ce-label">Opacity <span id="ce-shade-val" class="ce-val">0%</span> <button class="ce-reset-btn" data-slider="ce-shade" title="Reset">&#8634;</button></label>
+                <input type="range" class="ce-slider" id="ce-shade" min="0" max="0.8" step="0.02" value="0" data-default="0">
+                <label class="ce-label">Color</label>
+                <div class="ce-shade-color-row">
+                  <input type="color" id="ce-shadecolor" value="#000000" class="ce-shade-color-input">
+                  <span id="ce-shadecolor-val" class="ce-val">#000000</span>
+                </div>
+                <label class="ce-label">Text Padding <span id="ce-shadepadding-val" class="ce-val">14px</span> <button class="ce-reset-btn" data-slider="ce-shadepadding" title="Reset">&#8634;</button></label>
+                <input type="range" class="ce-slider" id="ce-shadepadding" min="4" max="40" step="1" value="14" data-default="14">
+              </div>
             </div>
           </div>
         </div>
@@ -180,6 +198,7 @@
       ['ce-textpos', 'textPosition', v => Math.round(v * 100) + '%', 'ce-textpos-val'],
       ['ce-blend', 'blendStart', v => Math.round(v * 100) + '%', 'ce-blend-val'],
       ['ce-shade', 'shadeOpacity', v => Math.round(v * 100) + '%', 'ce-shade-val'],
+      ['ce-shadepadding', 'shadePadding', v => v + 'px', 'ce-shadepadding-val'],
     ];
     sliders.forEach(([id, key, fmt, valId]) => {
       const el = overlay.querySelector('#' + id);
@@ -191,6 +210,19 @@
       });
     });
 
+    // Reset buttons
+    overlay.querySelectorAll('.ce-reset-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        const sliderId = btn.dataset.slider;
+        const slider = overlay.querySelector('#' + sliderId);
+        if (!slider) return;
+        const def = parseFloat(slider.dataset.default);
+        slider.value = def;
+        slider.dispatchEvent(new Event('input'));
+      });
+    });
+
     // Checkbox
     overlay.querySelector('#ce-showimage').addEventListener('change', e => {
       _settings.showImage = e.target.checked;
@@ -198,6 +230,28 @@
     });
     overlay.querySelector('#ce-vignette').addEventListener('change', e => {
       _settings.vignette = e.target.checked;
+      schedulePreview();
+    });
+
+    // Shade enable toggle
+    const shadeEnabledEl = overlay.querySelector('#ce-shadeenabled');
+    const shadeOptionsEl = overlay.querySelector('#ce-shade-options');
+    shadeEnabledEl.addEventListener('change', e => {
+      const on = e.target.checked;
+      shadeOptionsEl.style.display = on ? '' : 'none';
+      if (on && _settings.shadeOpacity === 0) {
+        _settings.shadeOpacity = 0.45;
+        overlay.querySelector('#ce-shade').value = 0.45;
+        overlay.querySelector('#ce-shade-val').textContent = '45%';
+      }
+      if (!on) _settings.shadeOpacity = 0;
+      schedulePreview();
+    });
+
+    // Shade color picker
+    overlay.querySelector('#ce-shadecolor').addEventListener('input', e => {
+      _settings.shadeColor = e.target.value;
+      overlay.querySelector('#ce-shadecolor-val').textContent = e.target.value;
       schedulePreview();
     });
 
@@ -727,8 +781,13 @@
     const shadeOp = settings.shadeOpacity || 0;
     if (shadeOp > 0 || (typeof Settings !== 'undefined' && Settings.get('quoteTextBox'))) {
       const effectiveShade = Math.max(shadeOp, shadeOp > 0 ? shadeOp : 0.45);
-      const tbPadX = 14;
-      const tbPadY = 12;
+      const shadePad = settings.shadePadding || 14;
+      const shadeCol = settings.shadeColor || '#000000';
+      const r = parseInt(shadeCol.slice(1,3), 16);
+      const g = parseInt(shadeCol.slice(3,5), 16);
+      const b = parseInt(shadeCol.slice(5,7), 16);
+      const tbPadX = shadePad;
+      const tbPadY = Math.round(shadePad * 0.86);
       const boxTop = textBoxY - tbPadY;
       const contentEndY = textBoxY + qH + medGap * 6
         + (quoteFrom ? fromH + medGap : 0)
@@ -743,7 +802,7 @@
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(boxX, boxTop, boxW, boxH, boxRadius);
       else ctx.rect(boxX, boxTop, boxW, boxH);
-      ctx.fillStyle = 'rgba(0,0,0,' + effectiveShade + ')';
+      ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + effectiveShade + ')';
       ctx.fill();
       ctx.restore();
     }
@@ -968,6 +1027,7 @@
       ['ce-textpos', _settings.textPosition],
       ['ce-blend', _settings.blendStart],
       ['ce-shade', _settings.shadeOpacity],
+      ['ce-shadepadding', _settings.shadePadding],
     ];
     syncMap.forEach(([id, val]) => {
       const el = modal.querySelector('#' + id);
@@ -975,6 +1035,12 @@
     });
     modal.querySelector('#ce-showimage').checked = _settings.showImage;
     modal.querySelector('#ce-vignette').checked = _settings.vignette;
+    // Reset shade state
+    const shadeOn = _settings.shadeOpacity > 0;
+    modal.querySelector('#ce-shadeenabled').checked = shadeOn;
+    modal.querySelector('#ce-shade-options').style.display = shadeOn ? '' : 'none';
+    modal.querySelector('#ce-shadecolor').value = _settings.shadeColor;
+    modal.querySelector('#ce-shadecolor-val').textContent = _settings.shadeColor;
     // Show/hide image section
     const imgSection = modal.querySelector('#ce-image-section');
     if (imgSection) imgSection.style.display = (includeImage && loadedImg) ? '' : 'none';
@@ -1001,6 +1067,7 @@
     modal.querySelector('#ce-textpos-val').textContent = Math.round(_settings.textPosition * 100) + '%';
     modal.querySelector('#ce-blend-val').textContent = Math.round(_settings.blendStart * 100) + '%';
     modal.querySelector('#ce-shade-val').textContent = Math.round(_settings.shadeOpacity * 100) + '%';
+    modal.querySelector('#ce-shadepadding-val').textContent = _settings.shadePadding + 'px';
     modal.querySelector('#ce-offsetx-val').textContent = Math.round(_settings.imageOffsetX * 100) + '%';
     modal.querySelector('#ce-offsety-val').textContent = Math.round(_settings.imageOffsetY * 100) + '%';
     // Reset divider: preview takes 55%, controls 45%
