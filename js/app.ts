@@ -1497,7 +1497,7 @@ const APP_VERSION = 6;
     const summaryWrap = cardEl.querySelector('.reels-summary-wrap');
     const showDesc = Settings.get('showDescription');
     if (summary) {
-      summary.innerHTML = showDesc ? nl2br(summaryText) : '';
+      summary.textContent = showDesc ? summaryText : '';
     }
     if (summaryWrap) {
       summaryWrap.style.display = showDesc ? '' : 'none';

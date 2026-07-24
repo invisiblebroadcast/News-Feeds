@@ -1923,7 +1923,7 @@ const APP_VERSION = 30;
       if (source) source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
       if (summary) {
         summary.classList.remove('quote-text');
-        summary.innerHTML = showDesc ? nl2br(smartTruncate(cleanSummary(stripHtml(article.summary)), 250)) : '';
+        summary.textContent = showDesc ? cleanSummary(stripHtml(article.summary)) : '';
       }
       if (summaryWrap) {
         summaryWrap.style.display = showDesc ? '' : 'none';
