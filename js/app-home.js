@@ -6981,14 +6981,43 @@ const APP_VERSION = 30;
                         candidates.push(og);
                 }
                 catch { }
+                // For Supabase storage URLs, try direct fetch first (same as card rendering)
+                const isSupabaseStorage = imgUrl.includes('ib-post-images');
+                if (isSupabaseStorage) {
+                    console.log('[Share] Supabase storage URL, trying direct fetch first');
+                    try {
+                        const resp = await fetch(imgUrl, { cache: 'no-store' });
+                        if (resp.ok) {
+                            const blob = await resp.blob();
+                            if (blob && blob.size > 0) {
+                                const dataUrl = await new Promise(r => {
+                                    const fr = new FileReader();
+                                    fr.onload = () => r(fr.result);
+                                    fr.onerror = () => r(null);
+                                    fr.readAsDataURL(blob);
+                                });
+                                if (dataUrl) {
+                                    img = await loadImage(dataUrl);
+                                    if (img) {
+                                        console.log('[Share] Image loaded via direct fetch:', img.naturalWidth, 'x', img.naturalHeight);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (e) {
+                        console.warn('[Share] Direct fetch failed:', e && e.message);
+                    }
+                }
                 console.log('[Share] Image candidates:', candidates.length, 'hasThumb:', hasThumb);
                 for (const candidate of candidates) {
+                    if (img)
+                        break;
                     console.log('[Share] Trying:', candidate);
                     const loaded = await loadImageWithFallback(candidate);
                     if (loaded) {
                         img = loaded;
-                        console.log('[Share] Image loaded:', img.naturalWidth, 'x', img.naturalHeight, 'from', candidate);
-                        break;
+                        console.log('[Share] Image loaded via proxy:', img.naturalWidth, 'x', img.naturalHeight, 'from', candidate);
                     }
                 }
                 if (!img) {

@@ -129,7 +129,7 @@
               <div class="ce-section-title">Title Color</div>
               <div class="ce-color-grid" id="ce-title-colors"></div>
             </div>
-            <div class="ce-section">
+            <div class="ce-section" id="ce-bodycolor-section">
               <div class="ce-section-title">Body Color</div>
               <div class="ce-color-presets" id="ce-body-colors">
                 <button class="ce-color-btn active" data-color="rgba(255,255,255,0.78)" style="background:#fff" title="White"></button>
@@ -139,12 +139,12 @@
               </div>
             </div>
             <!-- Advanced Text -->
-            <div class="ce-section">
+            <div class="ce-section" id="ce-advtext-section">
               <div class="ce-section-title">Advanced Text</div>
               <label class="ce-label">Title Font Size <span id="ce-titlefontsize-val" class="ce-val">auto</span> <button class="ce-reset-btn" data-slider="ce-titlefontsize" title="Reset">&#8634;</button></label>
-              <input type="range" class="ce-slider" id="ce-titlefontsize" min="16" max="64" step="1" value="0" data-default="0">
+              <input type="range" class="ce-slider" id="ce-titlefontsize" min="0" max="64" step="1" value="0" data-default="0">
               <label class="ce-label">Body Font Size <span id="ce-bodyfontsize-val" class="ce-val">auto</span> <button class="ce-reset-btn" data-slider="ce-bodyfontsize" title="Reset">&#8634;</button></label>
-              <input type="range" class="ce-slider" id="ce-bodyfontsize" min="10" max="40" step="1" value="0" data-default="0">
+              <input type="range" class="ce-slider" id="ce-bodyfontsize" min="0" max="40" step="1" value="0" data-default="0">
               <label class="ce-label">Body Color</label>
               <div class="ce-shade-color-row">
                 <input type="color" id="ce-bodycolorraw" value="#ffffff" class="ce-shade-color-input">
@@ -1112,6 +1112,12 @@
     // Show/hide image section
     const imgSection = modal.querySelector('#ce-image-section');
     if (imgSection) imgSection.style.display = (includeImage && loadedImg) ? '' : 'none';
+    // For quotes: hide body color and advanced text sections
+    const isQuote = article._pubType === 'quote';
+    const bodyColorSection = modal.querySelector('#ce-bodycolor-section');
+    const advTextSection = modal.querySelector('#ce-advtext-section');
+    if (bodyColorSection) bodyColorSection.style.display = isQuote ? 'none' : '';
+    if (advTextSection) advTextSection.style.display = isQuote ? 'none' : '';
     // Reset color selections
     modal.querySelectorAll('#ce-title-colors .ce-color-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.color === _settings.titleColor);
