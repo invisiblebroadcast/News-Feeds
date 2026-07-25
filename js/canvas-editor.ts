@@ -573,22 +573,22 @@
       // Vignette: top fade + side fades (only when enabled)
       if (settings.vignette) {
         const fadeH = Math.round(maxH * 0.2);
-        const topGrad = ctx.createLinearGradient(0, imageTopY, 0, imageTopY + fadeH);
+        const topGrad = ctx.createLinearGradient(0, cursorY, 0, cursorY + fadeH);
         topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         topGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = topGrad;
-        ctx.fillRect(0, imageTopY, W, fadeH);
+        ctx.fillRect(0, cursorY, W, fadeH);
         const fadeW = Math.round(W * 0.18);
         const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
         leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
         leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = leftGrad;
-        ctx.fillRect(0, imageTopY, fadeW, clipH);
+        ctx.fillRect(0, cursorY, fadeW, clipH);
         const rightGrad = ctx.createLinearGradient(W - fadeW, 0, W, 0);
         rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
         rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = rightGrad;
-        ctx.fillRect(W - fadeW, imageTopY, fadeW, clipH);
+        ctx.fillRect(W - fadeW, cursorY, fadeW, clipH);
       }
 
       ctx.restore();
@@ -796,8 +796,14 @@
         ctx.fillRect(0, blendY, W, botFadeH);
       }
 
-      // Vignette: side fades (only when enabled)
+      // Vignette: top fade + side fades (only when enabled)
       if (settings.vignette) {
+        const fadeH = Math.round(imgBlockH * 0.2);
+        const topGrad = ctx.createLinearGradient(0, 0, 0, fadeH);
+        topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
+        topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(0, 0, W, fadeH);
         const fadeW = Math.round(W * 0.18);
         const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
         leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
