@@ -1,5 +1,5 @@
 // @ts-nocheck
-const APP_VERSION = 30;
+const APP_VERSION = 31;
 
 (async () => {
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -3039,11 +3039,12 @@ const APP_VERSION = 30;
           // Filename: ibpost<last_modified>.jpg — unique per edit so
           // the CDN never serves a stale image.
           let imageUrl = '';
-          if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
-            const imgBase = 'ibpost' + ibPostKey(r.last_modified);
-            imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg';
-            r._imageUrlJpg = imageUrl;
-            r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png';
+                    if (r.post_id && (r.type === 'quote' || r.type === 'feeds')) {
+                        const imgBase = 'ibpost' + ibPostKey(r.last_modified);
+                        const cacheBust = '?v=' + new Date(r.last_modified).getTime();
+                        imageUrl = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.jpg' + cacheBust;
+                        r._imageUrlJpg = imageUrl;
+                        r._imageUrlPng = SUPABASE_URL + '/storage/v1/object/public/ib-post-images/' + imgBase + '.png' + cacheBust;
           }
           return {
             id: r.id,
@@ -3309,8 +3310,10 @@ const APP_VERSION = 30;
         if (quoteScopeSelect) quoteScopeSelect.value = data.scope || 'global';
         if (quoteMsg) { quoteMsg.textContent = ''; quoteMsg.className = 'publish-msg'; }
         // Load existing tags
+        console.log('[editPublishedArticle] quote data.tags:', data.tags, typeof data.tags);
         if (window.PublishModal && PublishModal.quoteTags) {
-          PublishModal.quoteTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+          const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try { return JSON.parse(data.tags); } catch(e) { return []; } })() : []);
+          PublishModal.quoteTags.setTags(parsed);
         }
 
         // Show existing quote image reference if one exists
@@ -3493,8 +3496,10 @@ const APP_VERSION = 30;
         if (postCategory) postCategory.value = data.category || 'all';
         if (postMsg) { postMsg.textContent = ''; postMsg.className = 'publish-msg'; }
         // Load existing tags
+        console.log('[editPublishedArticle] post data.tags:', data.tags, typeof data.tags);
         if (window.PublishModal && PublishModal.postTags) {
-          PublishModal.postTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+          const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try { return JSON.parse(data.tags); } catch(e) { return []; } })() : []);
+          PublishModal.postTags.setTags(parsed);
         }
 
         // Show existing post image reference if one exists
