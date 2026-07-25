@@ -3072,7 +3072,8 @@ const APP_VERSION = 30;
             _pubQuoteOccupation: r.quote_occupation || '',
             _pubSourceName: r.source_name || '',
             _pubSourceLink: r.source_link || '',
-            _lastModified: r.last_modified || ''
+            _lastModified: r.last_modified || '',
+            _tags: Array.isArray(r.tags) ? r.tags : []
           };
         });
         return _publishedCache;
@@ -3307,6 +3308,10 @@ const APP_VERSION = 30;
         if (quoteSourceLink) quoteSourceLink.value = data.source_link || '';
         if (quoteScopeSelect) quoteScopeSelect.value = data.scope || 'global';
         if (quoteMsg) { quoteMsg.textContent = ''; quoteMsg.className = 'publish-msg'; }
+        // Load existing tags
+        if (window.PublishModal && PublishModal.quoteTags) {
+          PublishModal.quoteTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+        }
 
         // Show existing quote image reference if one exists
         const quoteImagePreview = $('#quote-image-preview');
@@ -3391,7 +3396,8 @@ const APP_VERSION = 30;
                 nation: qScope === 'nation' ? 'india' : '',
                 quote_from: qFrom || '',
                 quote_date: qDate,
-                quote_occupation: qOccupation
+                quote_occupation: qOccupation,
+                tags: (window.PublishModal && PublishModal.quoteTags) ? PublishModal.quoteTags.getTags() : []
               }).eq('id', pubId).select('last_modified').single();
               if (updErr) throw updErr;
               const newModified = updRow?.last_modified;
@@ -3486,6 +3492,10 @@ const APP_VERSION = 30;
         if (postScope) postScope.value = data.scope || 'global';
         if (postCategory) postCategory.value = data.category || 'all';
         if (postMsg) { postMsg.textContent = ''; postMsg.className = 'publish-msg'; }
+        // Load existing tags
+        if (window.PublishModal && PublishModal.postTags) {
+          PublishModal.postTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+        }
 
         // Show existing post image reference if one exists
         const postImagePreview = $('#post-image-preview');
@@ -3569,7 +3579,8 @@ const APP_VERSION = 30;
                 source_link: sLink || '',
                 scope: pScope,
                 nation: pScope === 'nation' ? 'india' : '',
-                category: pCategory
+                category: pCategory,
+                tags: (window.PublishModal && PublishModal.postTags) ? PublishModal.postTags.getTags() : []
               }).eq('id', pubId).select('last_modified').single();
               if (updErr) throw updErr;
               const newModified = updRow?.last_modified;
@@ -4712,13 +4723,34 @@ const APP_VERSION = 30;
 
   function applySearch(articles) {
     if (!currentSearch) return articles;
-    return articles.filter(a =>
-      (a.title || '').toLowerCase().includes(currentSearch) ||
-      (a.source || '').toLowerCase().includes(currentSearch) ||
-      (a.summary || '').toLowerCase().includes(currentSearch) ||
-      (a.pubDate || '').toLowerCase().includes(currentSearch) ||
-      (a._pubPostId || '').toLowerCase().includes(currentSearch)
-    );
+    // Field-level prefix search: POSTID:xxx, SOURCE:xxx, DATE:xxx, TAG:xxx
+    const prefixMatch = currentSearch.match(/^(postid|source|date|tag|category)\s*:\s*(.+)/i);
+    if (prefixMatch) {
+      const field = prefixMatch[1].toLowerCase();
+      const val = prefixMatch[2].trim();
+      return articles.filter(a => {
+        if (field === 'postid') return (a._pubPostId || '').toLowerCase().includes(val);
+        if (field === 'source') return (a.source || '').toLowerCase().includes(val) || (a._pubSourceName || '').toLowerCase().includes(val);
+        if (field === 'date') return (a.pubDate || '').toLowerCase().includes(val);
+        if (field === 'tag') {
+          const tags = a._tags || [];
+          return tags.some(t => t.toLowerCase().includes(val));
+        }
+        if (field === 'category') return (a.feedHint || '').toLowerCase().includes(val) || (a._pubCategory || '').toLowerCase().includes(val);
+        return true;
+      });
+    }
+    // Normal search: across all fields including tags
+    return articles.filter(a => {
+      const tags = a._tags || [];
+      const tagMatch = tags.some(t => t.toLowerCase().includes(currentSearch));
+      return (a.title || '').toLowerCase().includes(currentSearch) ||
+        (a.source || '').toLowerCase().includes(currentSearch) ||
+        (a.summary || '').toLowerCase().includes(currentSearch) ||
+        (a.pubDate || '').toLowerCase().includes(currentSearch) ||
+        (a._pubPostId || '').toLowerCase().includes(currentSearch) ||
+        tagMatch;
+    });
   }
   let currentSort = '';
 
@@ -7297,9 +7329,14 @@ const APP_VERSION = 30;
     const postId = article._pubPostId || '';
     if (postId) lines.push(postId);
 
-    // Hashtags
-    const hashtags = buildHashtags(article).join(' ');
-    if (hashtags) lines.push(hashtags);
+    // Hashtags: prefer user tags, fallback to auto-generated
+    const userTags = article._tags || [];
+    if (userTags.length > 0) {
+      lines.push(userTags.map(t => '#' + t).join(' '));
+    } else {
+      const hashtags = buildHashtags(article).join(' ');
+      if (hashtags) lines.push(hashtags);
+    }
 
     return lines.join('\n');
   }

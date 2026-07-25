@@ -8235,3 +8235,96 @@ a.nav-icon-only svg {
   background: var(--bg-secondary);
   cursor: pointer;
 }
+
+/* ── Tags chips input ── */
+.ib-tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  min-height: 38px;
+  cursor: text;
+  transition: border-color 0.2s;
+}
+.ib-tags-wrap:focus-within {
+  border-color: rgba(255,255,255,0.3);
+}
+.ib-tags-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ib-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.ib-tag-chip-remove {
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+.ib-tag-chip-remove:hover { opacity: 1; }
+.ib-tags-input {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+  padding: 2px 0;
+}
+.ib-tags-input::placeholder { color: rgba(255,255,255,0.3); }
+.ib-tags-suggestions {
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.ib-tags-section { margin-bottom: 6px; }
+.ib-tags-section:last-child { margin-bottom: 0; }
+.ib-tags-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.35);
+  display: block;
+  margin-bottom: 4px;
+}
+.ib-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ib-tag-suggestion {
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.75rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.ib-tag-suggestion:hover {
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.85);
+  border-color: rgba(255,255,255,0.15);
+}

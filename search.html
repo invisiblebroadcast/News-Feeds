@@ -122,7 +122,7 @@
       <input type="text" class="search-input" id="searchInput" placeholder="Search by Post ID or date (e.g. IB00042, 2025-07)" autofocus>
       <button class="search-btn" id="searchBtn">Search</button>
     </div>
-    <div class="search-hint">Try: IB00042, 2025-07, Jul 2025, 2025-07-15</div>
+    <div class="search-hint">Try: IB00042, 2025-07, Jul 2025, 2025-07-15 — or use prefixes: POSTID:IB00042, SOURCE:Reuters, DATE:2025-07, TAG:politics, CATEGORY:tech</div>
   </div>
   <div class="results" id="results"></div>
 
@@ -177,14 +177,36 @@
           offset += pageSize;
         }
 
-        // Filter by query
+        // Field-level prefix search
         const q = query.toLowerCase();
-        const filtered = articles.filter(a => {
+        const prefixMatch = q.match(/^(postid|source|date|tag|category)\s*:\s*(.+)/i);
+        let filtered;
+        if (prefixMatch) {
+          const field = prefixMatch[1].toLowerCase();
+          const val = prefixMatch[2].trim().toLowerCase();
+          filtered = articles.filter(a => {
+            if (field === 'postid') {
+              const num = val.match(/^ib(\d+)$/i);
+              if (num) return a.post_id === parseInt(num[1], 10);
+              return String(a.post_id || '').includes(val);
+            }
+            if (field === 'source') return (a.source_name || '').toLowerCase().includes(val);
+            if (field === 'date') return (a.date_published || '').toLowerCase().includes(val) || (a.created_at || '').toLowerCase().includes(val);
+            if (field === 'tag') {
+              const tags = Array.isArray(a.tags) ? a.tags : [];
+              return tags.some(t => t.toLowerCase().includes(val));
+            }
+            if (field === 'category') return (a.category || '').toLowerCase().includes(val);
+            return true;
+          });
+        } else {
+        // Normal search: match across all fields including tags and post_id
+        filtered = articles.filter(a => {
           // Match post_id (IB00042 → 42)
           const postIdMatch = q.match(/^ib(\d+)$/i);
           if (postIdMatch) {
             const num = parseInt(postIdMatch[1], 10);
-            return a.post_id === num;
+            if (a.post_id === num) return true;
           }
           // Match title
           if ((a.title || '').toLowerCase().includes(q)) return true;
@@ -198,8 +220,12 @@
           if ((a.source_name || '').toLowerCase().includes(q)) return true;
           // Match post_id as raw number
           if (a.post_id && String(a.post_id).includes(q)) return true;
+          // Match tags
+          const tags = Array.isArray(a.tags) ? a.tags : [];
+          if (tags.some(t => t.toLowerCase().includes(q))) return true;
           return false;
         });
+        }
 
         if (filtered.length === 0) {
           resultsEl.innerHTML = '<div class="empty">No results found for "' + escapeHtml(query) + '"</div>';
@@ -216,6 +242,7 @@
           const sourceLink = a.source_link || '';
           const sourceName = escapeHtml(a.source_name || '');
           const category = escapeHtml(a.category || '');
+          const tags = Array.isArray(a.tags) ? a.tags : [];
 
           html += '<div class="result-item">';
           html += '<div class="result-title">' + title + '</div>';
@@ -228,6 +255,11 @@
             html += '<span>' + sourceName + '</span>';
           }
           if (category) html += '<span>' + category + '</span>';
+          if (tags.length > 0) {
+            html += '<span style="color:rgba(255,255,255,0.5)">' + tags.slice(0, 3).map(t => '#' + escapeHtml(t)).join(' ');
+            if (tags.length > 3) html += ' +' + (tags.length - 3);
+            html += '</span>';
+          }
           html += '</div>';
           html += '</div>';
         }
