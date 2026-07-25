@@ -3505,6 +3505,10 @@ const APP_VERSION = 30;
                     quoteMsg.textContent = '';
                     quoteMsg.className = 'publish-msg';
                 }
+                // Load existing tags
+                if (window.PublishModal && PublishModal.quoteTags) {
+                    PublishModal.quoteTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+                }
                 // Show existing quote image reference if one exists
                 const quoteImagePreview = $('#quote-image-preview');
                 const quoteImagePreviewImg = $('#quote-image-preview-img');
@@ -3594,7 +3598,8 @@ const APP_VERSION = 30;
                                 nation: qScope === 'nation' ? 'india' : '',
                                 quote_from: qFrom || '',
                                 quote_date: qDate,
-                                quote_occupation: qOccupation
+                                quote_occupation: qOccupation,
+                                tags: (window.PublishModal && PublishModal.quoteTags) ? PublishModal.quoteTags.getTags() : []
                             }).eq('id', pubId).select('last_modified').single();
                             if (updErr)
                                 throw updErr;
@@ -3726,6 +3731,11 @@ const APP_VERSION = 30;
                     postMsg.textContent = '';
                     postMsg.className = 'publish-msg';
                 }
+                // Load existing tags
+                if (window.PublishModal && PublishModal.postTags) {
+                    PublishModal.postTags.setTags(Array.isArray(data.tags) ? data.tags : []);
+                }
+                }
                 // Show existing post image reference if one exists
                 const postImagePreview = $('#post-image-preview');
                 const postImagePreviewImg = $('#post-image-preview-img');
@@ -3817,7 +3827,8 @@ const APP_VERSION = 30;
                                 source_link: sLink || '',
                                 scope: pScope,
                                 nation: pScope === 'nation' ? 'india' : '',
-                                category: pCategory
+                                category: pCategory,
+                                tags: (window.PublishModal && PublishModal.postTags) ? PublishModal.postTags.getTags() : []
                             }).eq('id', pubId).select('last_modified').single();
                             if (updErr)
                                 throw updErr;
