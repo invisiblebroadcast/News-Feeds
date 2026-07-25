@@ -7654,45 +7654,49 @@ const APP_VERSION = 30;
     async function buildShareCaption(article) {
         if (!article)
             return '';
-        const title = cleanTitleForTopic(article.title);
-        const summary = cleanSummary(stripHtml(article.summary || '')).trim();
-        const body = await buildRephrasedBody(title, summary);
-        // Build source line for copied text
+        const isQuote = article._pubType === 'quote';
+        const lines = [];
+        if (isQuote) {
+            const quoteText = (article.summary || '').trim();
+            const quoteFrom = article._pubQuoteFrom || '';
+            const occupation = article._pubQuoteOccupation || '';
+            lines.push('Quote:', '');
+            lines.push(quoteText, '');
+            if (quoteFrom)
+                lines.push('-' + quoteFrom);
+            if (occupation)
+                lines.push(occupation);
+            if (quoteFrom || occupation)
+                lines.push('');
+        }
+        else {
+            const title = (article.title || '').trim();
+            const desc = cleanSummary(stripHtml(article.summary || '')).trim();
+            if (title)
+                lines.push(title);
+            if (desc)
+                lines.push(desc);
+            if (title || desc)
+                lines.push('');
+        }
         const sourceName = article._pubSourceName || '';
         const sourceLink = article._pubSourceLink || article.link || '';
-        const sourceLine = sourceName ? sourceName + '\n' + sourceLink : (sourceLink || '');
-        const hashtags = buildHashtags(article).join(' ');
-        const footer = sourceLine ? sourceLine + '\n\n' + hashtags : hashtags;
-        if (!body) {
-            return (title || cleanSummary(stripHtml(article.title || '')).trim()) +
-                '\n\n' + footer;
+        if (sourceName && sourceName.toLowerCase() !== 'invisible broadcast') {
+            lines.push(sourceName);
         }
-        return body + '\n\n' + footer;
-    }
-    // Build caption for Quote type posts. Format:
-    // "quote text"
-    // — quote_from
-    //
-    // Invisible Broadcast
-    // source link
-    // #invisiblebroadcast
-    function buildQuoteCaption(article) {
-        if (!article)
-            return '';
-        const quoteText = (article.summary || '').trim();
-        const quoteFrom = article._pubQuoteFrom || '';
-        const sourceLink = article._pubSourceLink || article.link || '';
-        const lines = [];
-        lines.push('\u201C' + quoteText + '\u201D');
-        if (quoteFrom)
-            lines.push('\u2014 ' + quoteFrom);
-        lines.push('');
-        lines.push('Invisible Broadcast');
         if (sourceLink)
             lines.push(sourceLink);
         lines.push('');
-        lines.push('#invisiblebroadcast');
+        const postId = article._pubPostId || '';
+        if (postId)
+            lines.push(postId);
+        const hashtags = buildHashtags(article).join(' ');
+        if (hashtags)
+            lines.push(hashtags);
         return lines.join('\n');
+    }
+    function buildQuoteCaption(article) {
+        return buildShareCaption(article);
     }
     // ── Rephraser internals (no AI, all rule-based + TF.js) ──
     // Clean a title for use as the topic in the caption.
@@ -7907,10 +7911,18 @@ const APP_VERSION = 30;
     // the article's subcat, source, and a couple of evergreen
     // news tags. The function de-duplicates and trims to 5.
     function buildHashtags(article) {
+        const MAX_TAG_LEN = 20;
+        const SKIP_TAGS = new Set(['all', 'news', 'today', 'breaking', 'worldnews', 'headlines', 'dailynews']);
         const tags = ['#invisiblebroadcast'];
         const title = (article.title || '').toLowerCase();
         const summary = (article.summary || '').toLowerCase();
         const combined = title + ' ' + summary;
+        function addTag(tag) {
+            const clean = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!clean || clean.length > MAX_TAG_LEN || SKIP_TAGS.has(clean) || tags.includes('#' + clean))
+                return;
+            tags.push('#' + clean);
+        }
         // Emotional keyword → hashtag mappings
         const EMOTION_MAP = [
             [/\b(breakthrough|milestone|discover|invent|pioneer|first-ever|landmark)\b/, '#breakthrough'],
@@ -7957,81 +7969,28 @@ const APP_VERSION = 30;
             [/\b(privacy|surveillance|encryption|data-breach|hack\b|cyberattack)\b/, '#privacy'],
         ];
         for (const [re, tag] of EMOTION_MAP) {
-            if (re.test(combined) && !tags.includes(tag))
-                tags.push(tag);
-            if (tags.length >= 4)
-                break;
+            if (tags.length >= 5) break;
+            if (re.test(combined)) addTag(tag);
         }
         // Extract named entities: capitalized multi-word phrases in the title
         const titleClean = (article.title || '').trim();
-        const entities = [];
         if (titleClean) {
             const rawEntities = titleClean.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
             const stopEntities = new Set(['The', 'This', 'That', 'These', 'Those', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'In', 'On', 'At', 'For', 'With', 'By', 'To', 'From', 'As', 'But', 'Not', 'All', 'One', 'Two', 'New', 'After', 'Before', 'Over', 'Under', 'More', 'Most', 'Some', 'Such', 'Than', 'Then', 'Also', 'Very', 'Just', 'About', 'Into', 'Through', 'During', 'Before', 'After', 'Above', 'Below', 'Between', 'Among', 'Without', 'Within', 'Along', 'Across', 'Behind', 'Beyond', 'Upcoming', 'Ongoing', 'Recent', 'Latest', 'Breaking', 'Update', 'Developing', 'Report', 'Exclusive', 'Alert', 'Video', 'Photo', 'Watch', 'Listen', 'Live']);
             for (const ent of rawEntities) {
+                if (tags.length >= 5) break;
                 const clean = ent.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                 if (clean.length >= 3 && !stopEntities.has(ent)) {
-                    const tag = '#' + clean;
-                    if (!tags.includes(tag)) {
-                        entities.push(tag);
-                    }
-                    if (entities.length >= 2)
-                        break;
+                    addTag(ent);
                 }
             }
         }
-        // Interleave entities first (they're most specific), then emotional tags
-        const result = ['#invisiblebroadcast'];
-        const seen = new Set(result);
-        const interleave = [];
-        const maxE = Math.min(entities.length, 2);
-        for (let i = 0; i < maxE; i++) {
-            if (!seen.has(entities[i])) {
-                interleave.push(entities[i]);
-                seen.add(entities[i]);
-            }
-        }
-        const pool = tags.slice(1); // emotional tags after #invisiblebroadcast
-        for (const t of pool) {
-            if (result.length + interleave.length >= 5)
-                break;
-            if (!seen.has(t)) {
-                interleave.push(t);
-                seen.add(t);
-            }
-        }
-        // Pad with subcat, source, evergreen
-        const fallback = [];
+        // Pad with subcat and source
         const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (subcat && !seen.has('#' + subcat)) {
-            fallback.push('#' + subcat);
-            seen.add('#' + subcat);
-        }
+        if (tags.length < 5) addTag(subcat);
         const source = (article.source || '').toString().toLowerCase().replace(/^the\s+/, '').split(/[\s\-—–|]+/)[0].replace(/[^a-z0-9]/g, '');
-        if (source && source !== subcat && !seen.has('#' + source)) {
-            fallback.push('#' + source);
-            seen.add('#' + source);
-        }
-        for (const f of ['#news', '#today', '#breaking', '#worldnews', '#headlines', '#dailynews']) {
-            if (!seen.has(f)) {
-                fallback.push(f);
-                seen.add(f);
-            }
-            if (fallback.length >= 5 - result.length)
-                break;
-        }
-        // Build final: first entity, then from interleave pool, then fallback
-        for (const item of interleave) {
-            if (result.length >= 5)
-                break;
-            result.push(item);
-        }
-        for (const item of fallback) {
-            if (result.length >= 5)
-                break;
-            result.push(item);
-        }
-        return result.slice(0, 5);
+        if (tags.length < 5 && source !== subcat) addTag(source);
+        return tags.slice(0, 5);
     }
     // Brief "blinking" feedback after a successful copy. We
     // temporarily swap the button's text/title so the user gets a

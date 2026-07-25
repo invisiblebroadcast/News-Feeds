@@ -5477,16 +5477,40 @@ const APP_VERSION = 6;
   // NOT copy the title or summary verbatim.
   async function buildShareCaption(article) {
     if (!article) return '';
-    const title = cleanTitleForTopic(article.title);
-    const summary = cleanSummary(stripHtml(article.summary || '')).trim();
-    const body = await buildRephrasedBody(title, summary);
-    if (!body) {
-      // Absolute fallback: use the topic as-is if everything
-      // else fails (e.g. TF.js not loaded yet, empty summary).
-      return (title || cleanSummary(stripHtml(article.title || '')).trim()) +
-        '\n\n' + buildHashtags(article).join(' ');
+    const isQuote = article._pubType === 'quote';
+    const lines = [];
+    if (isQuote) {
+      const quoteText = (article.summary || '').trim();
+      const quoteFrom = article._pubQuoteFrom || '';
+      const occupation = article._pubQuoteOccupation || '';
+      lines.push('Quote:', '');
+      lines.push(quoteText, '');
+      if (quoteFrom) lines.push('-' + quoteFrom);
+      if (occupation) lines.push(occupation);
+      if (quoteFrom || occupation) lines.push('');
+    } else {
+      const title = (article.title || '').trim();
+      const desc = cleanSummary(stripHtml(article.summary || '')).trim();
+      if (title) lines.push(title);
+      if (desc) lines.push(desc);
+      if (title || desc) lines.push('');
     }
-    return body + '\n\n' + buildHashtags(article).join(' ');
+    const sourceName = article._pubSourceName || '';
+    const sourceLink = article._pubSourceLink || article.link || '';
+    if (sourceName && sourceName.toLowerCase() !== 'invisible broadcast') {
+      lines.push(sourceName);
+    }
+    if (sourceLink) lines.push(sourceLink);
+    lines.push('');
+    const postId = article._pubPostId || '';
+    if (postId) lines.push(postId);
+    const hashtags = buildHashtags(article).join(' ');
+    if (hashtags) lines.push(hashtags);
+    return lines.join('\n');
+  }
+
+  function buildQuoteCaption(article) {
+    return buildShareCaption(article);
   }
 
   // ── Rephraser internals (no AI, all rule-based + TF.js) ──
@@ -5718,36 +5742,87 @@ const APP_VERSION = 6;
   // the article's subcat, source, and a couple of evergreen
   // news tags. The function de-duplicates and trims to 5.
   function buildHashtags(article) {
+    const MAX_TAG_LEN = 20;
+    const SKIP_TAGS = new Set(['all', 'news', 'today', 'breaking', 'worldnews', 'headlines', 'dailynews']);
     const tags = ['#invisiblebroadcast'];
+    const title = (article.title || '').toLowerCase();
+    const summary = (article.summary || '').toLowerCase();
+    const combined = title + ' ' + summary;
+
+    function addTag(tag) {
+      const clean = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!clean || clean.length > MAX_TAG_LEN || SKIP_TAGS.has(clean) || tags.includes('#' + clean)) return;
+      tags.push('#' + clean);
+    }
+
+    const EMOTION_MAP = [
+      [/\b(breakthrough|milestone|discover|invent|pioneer|first-ever|landmark)\b/, '#breakthrough'],
+      [/\b(victory|triumph|win\b|won\b|champion|success|achievement|accomplish)\b/, '#victory'],
+      [/\b(hope|optimis|promising|encouraging|positive|progress|improve|better)\b/, '#progress'],
+      [/\b(innovation|innovative|cutting-edge|next-gen|futur|revolution)\b/, '#innovation'],
+      [/\b(crisis|emergency|disaster|catastrophe|devastat|tragedy|tragic)\b/, '#crisis'],
+      [/\b(warning|warned|alert|danger|threat|risky|hazard)\b/, '#warning'],
+      [/\b(controversy|controversial|scandal|allegation|probe)\b/, '#controversy'],
+      [/\b(concern|worried|worrying|alarming|fears?|anxiety)\b/, '#concern'],
+      [/\b(deadly|kill|death|fatal|casualt|attack|violen|war\b|collide)\b/, '#tragedy'],
+      [/\b(surge|boost|growth|increase|expand|boom|rally)\b/, '#surge'],
+      [/\b(drop|decline|fall|plunge|slump|slowdown|shrink)\b/, '#decline'],
+      [/\b(agreement|deal\b|treaty|alliance|partnership|coalition)\b/, '#deal'],
+      [/\b(approve|approval|clear|greenlit|sanction|ratify)\b/, '#approved'],
+      [/\b(ban\b|banned|restrict|curb|crackdown|outlaw|prohibit)\b/, '#crackdown'],
+      [/\b(resign|resignation|ousted|fired|sack|dismiss|quit\b)\b/, '#resignation'],
+      [/\b(elected|election|vote|ballot|candidate|campaign|poll)\b/, '#election'],
+      [/\b(court|verdict|judge|sue|lawsuit|legal|convict|sentence)\b/, '#legal'],
+      [/\b(protest|rally|demonstrat|strike|walkout|unrest)\b/, '#protest'],
+      [/\b(release|launch|unveil|introduce|debut|rollout|premier)\b/, '#launch'],
+      [/\b(investigate|probe|inquiry|audit|scrutiny|review)\b/, '#investigation'],
+      [/\b(donate|donation|aid\b|relief|charity|fundraiser|philanthropy)\b/, '#philanthropy'],
+      [/\b(health|disease|virus|vaccine|medical|hospital|surgery|treatment)\b/, '#health'],
+      [/\b(climate|weather|storm|flood|earthquake|wildfire|drought|heatwave)\b/, '#climate'],
+      [/\b(tech|digital|ai\b|robot|cyber|software|startup|app\b)\b/, '#tech'],
+      [/\b(science|research|study|lab\b|experiment|academic|scientist)\b/, '#science'],
+      [/\b(space|nasa|satellite|rocket|orbit|astronaut|cosmic|lunar|mars)\b/, '#space'],
+      [/\b(sport|game\b|match\b|tournament|championship|olymp|league)\b/, '#sports'],
+      [/\b(market|stock|trade|tariff|economy|inflation|gdp|budget)\b/, '#economy'],
+      [/\b(music|film|movie|artist|concert|album|actor|award|festival)\b/, '#culture'],
+      [/\b(education|school|university|college|student|teacher|academy)\b/, '#education'],
+      [/\b(energy|oil\b|gas\b|fuel|renewable|solar|wind|nuclear|power)\b/, '#energy'],
+      [/\b(religion|faith|church|temple|mosque|worship|spirit|divine)\b/, '#faith'],
+      [/\b(housing|rent|mortgage|real-estate|property|homeless|shelter)\b/, '#housing'],
+      [/\b(immigration|migrant|asylum|refugee|border|deportation|visa)\b/, '#immigration'],
+      [/\b(crime|criminal|theft|fraud|robbery|smuggling|gang|mafia)\b/, '#crime'],
+      [/\b(diploma|diplomat|ambassador|summit|bilateral|foreign|geopolitical)\b/, '#diplomacy'],
+      [/\b(infrastructure|bridge|road|railway|highway|tunnel|dam|construction)\b/, '#infrastructure'],
+      [/\b(agriculture|farm|farmer|crop|harvest|food|rural|organic)\b/, '#agriculture'],
+      [/\b(peace|ceasefire|truce|reconciliation|armistice|negotiation)\b/, '#peace'],
+      [/\b(memorial|tribute|honor|remembrance|anniversary|legacy)\b/, '#tribute'],
+      [/\b(sanction|embargo|boycott|freeze|blacklist|penalty)\b/, '#sanctions'],
+      [/\b(privacy|surveillance|encryption|data-breach|hack\b|cyberattack)\b/, '#privacy'],
+    ];
+    for (const [re, tag] of EMOTION_MAP) {
+      if (tags.length >= 5) break;
+      if (re.test(combined)) addTag(tag);
+    }
+
+    const titleClean = (article.title || '').trim();
+    if (titleClean) {
+      const rawEntities = titleClean.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+      const stopEntities = new Set(['The', 'This', 'That', 'These', 'Those', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'In', 'On', 'At', 'For', 'With', 'By', 'To', 'From', 'As', 'But', 'Not', 'All', 'One', 'Two', 'New', 'After', 'Before', 'Over', 'Under', 'More', 'Most', 'Some', 'Such', 'Than', 'Then', 'Also', 'Very', 'Just', 'About', 'Into', 'Through', 'During', 'Before', 'After', 'Above', 'Below', 'Between', 'Among', 'Without', 'Within', 'Along', 'Across', 'Behind', 'Beyond', 'Upcoming', 'Ongoing', 'Recent', 'Latest', 'Breaking', 'Update', 'Developing', 'Report', 'Exclusive', 'Alert', 'Video', 'Photo', 'Watch', 'Listen', 'Live']);
+      for (const ent of rawEntities) {
+        if (tags.length >= 5) break;
+        const clean = ent.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        if (clean.length >= 3 && !stopEntities.has(ent)) {
+          addTag(ent);
+        }
+      }
+    }
+
     const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (subcat) tags.push('#' + subcat);
-    const source = (article.source || '').toString().toLowerCase();
-    if (source) {
-      // Use the first word of the source name as a tag (so
-      // "The Hindu — News" becomes #thehindu). Strip common
-      // prefixes and punctuation.
-      const cleaned = source
-        .replace(/^the\s+/, '')
-        .split(/[\s\-—–|]+/)[0]
-        .replace(/[^a-z0-9]/g, '');
-      if (cleaned && cleaned !== subcat) tags.push('#' + cleaned);
-    }
-    tags.push('#news');
-    tags.push('#today');
-    // De-dupe while preserving order, then cap at 5.
-    const seen = new Set();
-    const out = [];
-    for (const t of tags) {
-      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
-      if (out.length === 5) break;
-    }
-    // If we still don't have 5, pad with evergreen tags.
-    const pad = ['#breaking', '#worldnews', '#headlines', '#dailynews', '#update'];
-    for (const p of pad) {
-      if (out.length === 5) break;
-      if (!seen.has(p)) { seen.add(p); out.push(p); }
-    }
-    return out.slice(0, 5);
+    if (tags.length < 5) addTag(subcat);
+    const source = (article.source || '').toString().toLowerCase().replace(/^the\s+/, '').split(/[\s\-—–|]+/)[0].replace(/[^a-z0-9]/g, '');
+    if (tags.length < 5 && source !== subcat) addTag(source);
+
+    return tags.slice(0, 5);
   }
 
   // Brief "blinking" feedback after a successful copy. We

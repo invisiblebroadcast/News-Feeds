@@ -102,7 +102,7 @@
               <label class="ce-label">Offset X <span id="ce-offsetx-val" class="ce-val">0%</span> <button class="ce-reset-btn" data-slider="ce-offsetx" title="Reset">&#8634;</button></label>
               <input type="range" class="ce-slider" id="ce-offsetx" min="-0.5" max="0.5" step="0.01" value="0" data-default="0">
               <label class="ce-label">Offset Y <span id="ce-offsety-val" class="ce-val">0%</span> <button class="ce-reset-btn" data-slider="ce-offsety" title="Reset">&#8634;</button></label>
-              <input type="range" class="ce-slider" id="ce-offsety" min="-0.5" max="0.5" step="0.01" value="0" data-default="0">
+              <input type="range" class="ce-slider" id="ce-offsety" min="-0.8" max="0.5" step="0.01" value="0" data-default="0">
               <label class="ce-toggle-row">
                 <input type="checkbox" id="ce-showimage" checked> Show image
               </label>
@@ -491,7 +491,8 @@
     ctx.scale(dpr, dpr);
     ctx.imageSmoothingQuality = 'high';
     // textPosition shifts content: lower value → image gets more space upward
-    const topOffset = Math.round(H * (1 - textPositionRatio) * 0.15);
+    // Reduced multiplier so image can reach the canvas top
+    const topOffset = Math.round(H * (1 - textPositionRatio) * 0.02);
 
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
@@ -508,7 +509,8 @@
       const drawY = imageTopY + Math.round((maxH - imgDrawH) / 2) + offY;
 
       ctx.save();
-      roundRect(ctx, 0, imageTopY, maxW, maxH, 0);
+      // Clip to image block area — start from cursorY so image can reach canvas top
+      roundRect(ctx, 0, cursorY, maxW, maxH + ibHeaderH, 0);
       ctx.clip();
 
       // Apply rotation
