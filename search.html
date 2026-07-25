@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IB Post Search</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    .search-header {
+      padding: 24px 16px 16px;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .search-header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: rgba(255,255,255,0.9);
+    }
+    .search-row {
+      display: flex;
+      gap: 8px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus {
+      border-color: rgba(255,255,255,0.35);
+    }
+    .search-input::placeholder {
+      color: rgba(255,255,255,0.35);
+    }
+    .search-btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-btn:hover { background: rgba(255,255,255,0.18); }
+    .search-hint {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.35);
+    }
+    .results {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+    .result-count {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 12px;
+    }
+    .result-item {
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .result-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .result-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.4);
+    }
+    .result-meta a {
+      color: rgba(255,100,100,0.7);
+      text-decoration: none;
+    }
+    .result-meta a:hover { text-decoration: underline; }
+    .result-postid {
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: rgba(255,255,255,0.3);
+    }
+    .error {
+      text-align: center;
+      padding: 20px;
+      color: rgba(255,100,100,0.7);
+    }
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: rgba(255,255,255,0.25);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="search-header">
+    <h1>IB Post Search</h1>
+    <div class="search-row">
+      <input type="text" class="search-input" id="searchInput" placeholder="Search by Post ID or date (e.g. IB00042, 2025-07)" autofocus>
+      <button class="search-btn" id="searchBtn">Search</button>
+    </div>
+    <div class="search-hint">Try: IB00042, 2025-07, Jul 2025, 2025-07-15</div>
+  </div>
+  <div class="results" id="results"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://yokftwevcspbpbnwmrnb.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlva2Z0d2V2Y3NwYnBibndtcm5iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNjEzNzEsImV4cCI6MjA5NjgzNzM3MX0.zfdj2115WsFw2KFyFkW54W-ShDNRwtKxQ8UiKNfF7U0';
+
+    const resultsEl = document.getElementById('results');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+
+    function formatPostId(id) {
+      if (id == null) return '';
+      return 'IB' + String(id).padStart(5, '0');
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function search(query) {
+      query = query.trim();
+      if (!query) return;
+
+      resultsEl.innerHTML = '<div class="loading">Searching...</div>';
+
+      try {
+        let articles = [];
+        let offset = 0;
+        const pageSize = 1000;
+        // Fetch all articles (published_articles is small, but paginate for safety)
+        while (true) {
+          const { data, error } = await fetch(
+            `${SUPABASE_URL}/rest/v1/published_articles?select=*&order=date_published.desc&offset=${offset}&limit=${pageSize}`,
+            {
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+              }
+            }
+          ).then(r => r.json());
+
+          if (data) articles = articles.concat(data);
+          if (!data || data.length < pageSize) break;
+          offset += pageSize;
+        }
+
+        // Filter by query
+        const q = query.toLowerCase();
+        const filtered = articles.filter(a => {
+          // Match post_id (IB00042 → 42)
+          const postIdMatch = q.match(/^ib(\d+)$/i);
+          if (postIdMatch) {
+            const num = parseInt(postIdMatch[1], 10);
+            return a.post_id === num;
+          }
+          // Match title
+          if ((a.title || '').toLowerCase().includes(q)) return true;
+          // Match date fields
+          if ((a.date_published || '').toLowerCase().includes(q)) return true;
+          if ((a.created_at || '').toLowerCase().includes(q)) return true;
+          if ((a.last_modified || '').toLowerCase().includes(q)) return true;
+          // Match category
+          if ((a.category || '').toLowerCase().includes(q)) return true;
+          // Match source
+          if ((a.source_name || '').toLowerCase().includes(q)) return true;
+          // Match post_id as raw number
+          if (a.post_id && String(a.post_id).includes(q)) return true;
+          return false;
+        });
+
+        if (filtered.length === 0) {
+          resultsEl.innerHTML = '<div class="empty">No results found for "' + escapeHtml(query) + '"</div>';
+          return;
+        }
+
+        resultsEl.innerHTML = '<div class="result-count">' + filtered.length + ' result' + (filtered.length !== 1 ? 's' : '') + '</div>';
+
+        let html = '';
+        for (const a of filtered) {
+          const title = escapeHtml(a.title || 'Untitled');
+          const postId = formatPostId(a.post_id);
+          const date = formatDate(a.date_published);
+          const sourceLink = a.source_link || '';
+          const sourceName = escapeHtml(a.source_name || '');
+          const category = escapeHtml(a.category || '');
+
+          html += '<div class="result-item">';
+          html += '<div class="result-title">' + title + '</div>';
+          html += '<div class="result-meta">';
+          if (postId) html += '<span class="result-postid">' + postId + '</span>';
+          if (date) html += '<span>' + date + '</span>';
+          if (sourceLink) {
+            html += '<a href="' + escapeHtml(sourceLink) + '" target="_blank" rel="noopener">' + (sourceName || 'Source') + '</a>';
+          } else if (sourceName) {
+            html += '<span>' + sourceName + '</span>';
+          }
+          if (category) html += '<span>' + category + '</span>';
+          html += '</div>';
+          html += '</div>';
+        }
+        resultsEl.innerHTML = html;
+
+      } catch (err) {
+        resultsEl.innerHTML = '<div class="error">Search failed: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    searchBtn.addEventListener('click', () => search(searchInput.value));
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') search(searchInput.value);
+    });
+  </script>
+</body>
+</html>

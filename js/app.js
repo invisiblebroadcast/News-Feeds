@@ -3570,7 +3570,8 @@ const APP_VERSION = 6;
         return articles.filter(a => (a.title || '').toLowerCase().includes(currentSearch) ||
             (a.source || '').toLowerCase().includes(currentSearch) ||
             (a.summary || '').toLowerCase().includes(currentSearch) ||
-            (a.pubDate || '').toLowerCase().includes(currentSearch));
+            (a.pubDate || '').toLowerCase().includes(currentSearch) ||
+            (a._pubPostId || '').toLowerCase().includes(currentSearch));
     }
     let currentSort = '';
     // Apply the user's filter (date range + source set) to the article

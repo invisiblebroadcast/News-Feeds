@@ -4716,7 +4716,8 @@ const APP_VERSION = 30;
       (a.title || '').toLowerCase().includes(currentSearch) ||
       (a.source || '').toLowerCase().includes(currentSearch) ||
       (a.summary || '').toLowerCase().includes(currentSearch) ||
-      (a.pubDate || '').toLowerCase().includes(currentSearch)
+      (a.pubDate || '').toLowerCase().includes(currentSearch) ||
+      (a._pubPostId || '').toLowerCase().includes(currentSearch)
     );
   }
   let currentSort = '';
