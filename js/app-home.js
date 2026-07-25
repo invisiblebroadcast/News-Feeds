@@ -3744,7 +3744,6 @@ const APP_VERSION = 31;
                     console.log('[editPublishedArticle] setting post tags:', parsed);
                     PublishModal.postTags.setTags(parsed);
                 }
-                }
                 // Show existing post image reference if one exists
                 const postImagePreview = $('#post-image-preview');
                 const postImagePreviewImg = $('#post-image-preview-img');
