@@ -24,8 +24,13 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/social-3000x3000.png">
   <title>Invisible Broadcast — Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Raleway:wght@400;700&family=Montserrat:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Inter:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&family=Lora:wght@400;700&family=DM+Sans:wght@400;700&family=Poppins:wght@400;700&family=Nunito:wght@400;700&family=Source+Serif+4:wght@400;700&family=Instrument+Serif:wght@400&family=Instrument+Sans:wght@400;700&family=Fraunces:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://api.fontshare.com/v2/css?f[]=clash-display@400;500;600;700&f[]=satoshi@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css" rel="stylesheet">
   <link rel="stylesheet" href="css/desktop.css?v=19">
-  <link rel="stylesheet" href="css/mobile.css?v=8" media="screen and (max-width: 768px)">
+  <link rel="stylesheet" href="css/mobile.css?v=9" media="screen and (max-width: 768px)">
 </head>
 <body>
   <!-- PWA install banner (mobile) -->
@@ -116,7 +121,7 @@
           </header>
           <div class="header-search-row" id="header-search-row" hidden>
             <div class="page-container">
-              <input type="text" id="search-input" placeholder="Search articles…">
+              <input type="text" id="search-input" placeholder="Search all articles… (source:, tag:, category:, date:, postid:)">
             </div>
           </div>
       </div>
@@ -255,6 +260,21 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="svg-mr6"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Hard Refresh — Clear Cache &amp; Reset
           </button>
+        </div>
+        <div class="setting-group">
+          <label class="setting-label">AI Semantic Search</label>
+          <p class="setting-desc">Downloads a <strong>~25 MB</strong> model (one-time) to power smarter, meaning-based article search.</p>
+          <div id="modal-ai-model-status" class="ai-model-status">
+            <span id="modal-ai-model-status-text">Checking&hellip;</span>
+          </div>
+          <div id="modal-ai-model-actions" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="modal-ai-model-download-btn" style="display:none">Download Model</button>
+            <button class="btn" id="modal-ai-model-remove-btn" style="display:none">Remove Model</button>
+          </div>
+          <div id="modal-ai-model-progress-wrap" style="display:none;margin-top:10px;width:100%;height:6px;background:var(--border-primary);border-radius:3px;overflow:hidden;">
+            <div id="modal-ai-model-progress-bar" style="height:100%;width:0%;background:var(--accent-primary);border-radius:3px;transition:width .3s;"></div>
+          </div>
+          <p id="modal-ai-model-detail" class="setting-desc" style="margin-top:6px;"></p>
         </div>
       </div>
       <div class="modal-footer">
@@ -921,7 +941,7 @@
               <option value="india">India</option>
             </select>
           </div>
-          <div class="publish-field">
+          <div class="publish-field" style="display:none">
             <label for="post-image">Image (optional, PNG/JPG, max 2MB)</label>
             <input type="file" id="post-image" accept="image/png,image/jpeg">
             <div id="post-image-preview" style="display:none;margin-top:8px;">
@@ -945,6 +965,7 @@
 
           <div class="publish-actions">
             <button class="btn btn-primary" id="post-publish-btn">Publish Post</button>
+            <button class="btn btn-ghost" id="post-studio-btn" style="display:none">Design Post</button>
           </div>
         </div>
 
@@ -966,11 +987,12 @@
             <label for="quote-desc">Quote Text</label>
             <textarea id="quote-desc" placeholder="Paste or type the quote here..."></textarea>
           </div>
-          <div class="publish-field">
+          <div class="publish-field" style="position:relative">
             <label for="quote-from">Quote From (who said/wrote this)</label>
-            <input type="text" id="quote-from" placeholder="e.g. Naval Ravikant, Steve Jobs">
+            <input type="text" id="quote-from" placeholder="e.g. Naval Ravikant, Steve Jobs" autocomplete="off">
+            <div id="quoter-dropdown" class="quoter-dropdown" style="display:none"></div>
           </div>
-          <div class="publish-field">
+          <div class="publish-field" style="position:relative">
             <label for="quote-occupation">Occupation / Title (optional)</label>
             <textarea id="quote-occupation" rows="3" placeholder="e.g. MP, MLA, Musician, Independent Artist" style="resize:vertical;min-height:60px;"></textarea>
           </div>
@@ -981,14 +1003,6 @@
           <div class="publish-field">
             <label for="quote-source-link">Source Link (optional)</label>
             <input type="url" id="quote-source-link" placeholder="https://twitter.com/... or https://instagram.com/...">
-          </div>
-          <div class="publish-field">
-            <label for="quote-image">Background Image (optional, PNG/JPG, max 2MB)</label>
-            <input type="file" id="quote-image" accept="image/png,image/jpeg">
-            <div id="quote-image-preview" style="display:none;margin-top:8px;">
-              <img id="quote-image-preview-img" class="image-preview-img">
-              <button class="btn btn-ghost" id="quote-image-remove" class="btn btn-ghost image-remove-btn">Remove</button>
-            </div>
           </div>
           <div class="publish-field">
             <label>Tags <span style="opacity:0.4;font-weight:400;font-size:0.8rem">(up to 5 — comma or Enter to add)</span></label>
@@ -1006,6 +1020,7 @@
 
           <div class="publish-actions">
             <button class="btn btn-primary" id="quote-publish-btn">Publish Quote</button>
+            <button class="btn btn-ghost" id="quote-studio-btn" style="display:none">Design Quote</button>
           </div>
         </div>
       </div>
@@ -1038,6 +1053,8 @@
   <script src="js/publish-modal.js?v=35"></script>
   <script src="js/custom-sources-modal.js?v=31"></script>
   <script src="js/canvas-editor.js?v=2"></script>
+  <script src="js/quote-card-studio.js?v=1"></script>
+  <script src="js/post-designer.js?v=1"></script>
   <script src="js/app-home.js?v=75"></script>
   <script src="js/pwa-install.js?v=2"></script>
   <script>
@@ -1050,9 +1067,9 @@
     }
   </script>
   <!-- Global Loading Overlay -->
-  <div class="modal-overlay" id="app-loading-overlay" class="app-loading-overlay">
+  <div class="modal-overlay app-loading-overlay" id="app-loading-overlay">
     <div class="app-loading-content">
-      <div class="loading-spinner" id="app-loading-spinner" class="loading-spinner-center"></div>
+      <div class="loading-spinner loading-spinner-center" id="app-loading-spinner"></div>
       <p id="app-loading-status" class="app-loading-status">Loading&hellip;</p>
       <div id="app-loading-progress-wrap" style="display:none;margin-top:12px;width:100%;height:6px;background:var(--border-primary);border-radius:3px;overflow:hidden;">
         <div id="app-loading-progress-bar" class="app-loading-progress-bar"></div>
@@ -1060,8 +1077,8 @@
       <div id="app-loading-confirm" style="display:none;margin-top:16px;flex-direction:column;align-items:center;gap:8px;">
         <p class="app-loading-desc">Enable AI-powered semantic search? This downloads a <strong>~25MB model</strong> (one-time).</p>
         <div style="display:flex;gap:10px;justify-content:center;margin-top:4px;">
-          <button class="btn" id="app-loading-skip-btn" class="btn-min90">Skip</button>
-          <button class="btn btn-primary" id="app-loading-download-btn" class="btn-min90">Download</button>
+          <button class="btn btn-min90" id="app-loading-skip-btn">Skip</button>
+          <button class="btn btn-primary btn-min90" id="app-loading-download-btn">Download</button>
         </div>
       </div>
     </div>

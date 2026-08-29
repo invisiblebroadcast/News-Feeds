@@ -24,11 +24,8 @@
   // Get the Supabase client from the page
   const client = window.SupabaseStore && SupabaseStore.getClient();
   if (!client) {
-    console.error('[migrate] Supabase client not available. Make sure you are logged in.');
     return;
   }
-
-  console.log('[migrate] Fetching articles...');
   const { data: articles, error: fetchErr } = await client
     .from('published_articles')
     .select('id, post_id, last_modified, type')
@@ -38,12 +35,8 @@
     .order('id');
 
   if (fetchErr) {
-    console.error('[migrate] Fetch failed:', fetchErr.message);
     return;
   }
-
-  console.log('[migrate] Found ' + articles.length + ' articles with images.');
-
   let migrated = 0;
   let skipped = 0;
   let failed = 0;
@@ -54,7 +47,6 @@
 
     // Skip if old and new names are the same (shouldn't happen, but safe)
     if (oldBase === newBase) {
-      console.log('[migrate] #' + row.id + ' — skip (same name)');
       skipped++;
       continue;
     }
@@ -96,11 +88,9 @@
         }
       }
       if (alreadyMigrated) {
-        console.log('[migrate] #' + row.id + ' — already migrated (' + newBase + ')');
         skipped++;
         continue;
       }
-      console.warn('[migrate] #' + row.id + ' — no source image found (' + oldBase + '.jpg|.png), skipping');
       skipped++;
       continue;
     }
@@ -116,7 +106,6 @@
       });
 
     if (upErr) {
-      console.error('[migrate] #' + row.id + ' — upload failed:', upErr.message);
       failed++;
       continue;
     }
@@ -125,10 +114,6 @@
     for (const ext of ['jpg', 'png']) {
       await client.storage.from(BUCKET).remove([oldBase + '.' + ext]);
     }
-
-    console.log('[migrate] #' + row.id + ' — ' + oldBase + ' → ' + newPath + ' ✓');
     migrated++;
   }
-
-  console.log('[migrate] Done. Migrated: ' + migrated + ', Skipped: ' + skipped + ', Failed: ' + failed);
 })();

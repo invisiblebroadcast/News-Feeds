@@ -42,7 +42,6 @@ const CloudStore = (() => {
             return data;
         }
         catch (err) {
-            console.warn('CloudStore: failed to load from GitHub, using cache:', err.message);
             return readCache();
         }
     }
@@ -105,11 +104,9 @@ const CloudStore = (() => {
             });
             if (!putRes.ok) {
                 const errText = await putRes.text();
-                console.warn('CloudStore: GitHub commit failed (' + putRes.status + '):', errText);
             }
         }
         catch (err) {
-            console.warn('CloudStore: commit error:', err.message);
         }
     }
     function getAll() {

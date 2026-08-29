@@ -516,7 +516,6 @@ const AnalyzeModal = (() => {
     async function runAnalysis(config) {
         if (!config)
             return;
-        console.log('[Analyze] runAnalysis called with', config);
         currentConfig = config;
         // Show progress overlay BEFORE closing the config modal so the
         // user always sees it appear (not a flash of nothing).
@@ -613,11 +612,9 @@ const AnalyzeModal = (() => {
             report.twitterError = twitterError;
             report.config = config;
             cacheReport(config.subject.twitter_handle || config.subject.display_name, report);
-            console.log('[Analyze] report ready, opening dashboard');
             openDashboard(report);
         }
         catch (e) {
-            console.error('Analysis failed:', e);
             setProcessingText('Analysis failed: ' + (e.message || e));
             await tick(1500);
         }
@@ -644,13 +641,14 @@ const AnalyzeModal = (() => {
                 continue;
             for (const cat of Object.keys(cached.groups)) {
                 for (const a of cached.groups[cat] || []) {
-                    if (seen.has(a.link))
+                    const id = a._isPublished ? ('pub_' + a._pubId) : a.link;
+                    if (seen.has(id))
                         continue;
                     if (!a.subject)
                         continue;
                     if (a.subject.display_name !== subject.display_name)
                         continue;
-                    seen.add(a.link);
+                    seen.add(id);
                     out.push(a);
                 }
             }
@@ -693,7 +691,6 @@ const AnalyzeModal = (() => {
             localStorage.setItem('analysis_results_' + key, JSON.stringify(stripped));
         }
         catch (e) {
-            console.warn('Failed to cache analysis:', e);
         }
     }
     function readReport(key) {
@@ -789,7 +786,6 @@ const AnalyzeModal = (() => {
     }
     // Helpers — duplicated to keep this module standalone.
     function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-    function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
     function formatDate(d) {
         const date = new Date(d);
         if (isNaN(date.getTime()))

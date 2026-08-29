@@ -25,7 +25,7 @@
   <meta property="og:image" content="icons/social-3000x3000.png">
   <title>Invisible Broadcast — Activity</title>
   <link rel="stylesheet" href="css/desktop.css?v=19">
-  <link rel="stylesheet" href="css/mobile.css?v=8" media="screen and (max-width: 768px)">
+  <link rel="stylesheet" href="css/mobile.css?v=9" media="screen and (max-width: 768px)">
 </head>
 <body>
   <!-- PWA install banner (mobile) -->
@@ -125,6 +125,9 @@
   <main class="app-main page-enter" id="main-content">
     <div class="page-container">
       <div class="page-header">
+        <button class="page-close-btn" onclick="window.history.back()" title="Go back" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
         <h1>Activity</h1>
       </div>
       <div class="activity-tabs">
@@ -333,9 +336,9 @@
     }
   </script>
   <!-- Global Loading Overlay -->
-  <div class="modal-overlay" id="app-loading-overlay" class="app-loading-overlay">
+  <div class="modal-overlay app-loading-overlay" id="app-loading-overlay">
     <div class="app-loading-content">
-      <div class="loading-spinner" id="app-loading-spinner" class="loading-spinner-center"></div>
+      <div class="loading-spinner loading-spinner-center" id="app-loading-spinner"></div>
       <p id="app-loading-status" class="app-loading-status">Loading&hellip;</p>
       <div id="app-loading-progress-wrap" style="display:none;margin-top:12px;width:100%;height:6px;background:var(--border-primary);border-radius:3px;overflow:hidden;">
         <div id="app-loading-progress-bar" class="app-loading-progress-bar"></div>
@@ -343,8 +346,8 @@
       <div id="app-loading-confirm" style="display:none;margin-top:16px;flex-direction:column;align-items:center;gap:8px;">
         <p class="app-loading-desc">Enable AI-powered semantic search? This downloads a <strong>~25MB model</strong> (one-time).</p>
         <div style="display:flex;gap:10px;justify-content:center;margin-top:4px;">
-          <button class="btn" id="app-loading-skip-btn" class="btn-min90">Skip</button>
-          <button class="btn btn-primary" id="app-loading-download-btn" class="btn-min90">Download</button>
+          <button class="btn btn-min90" id="app-loading-skip-btn">Skip</button>
+          <button class="btn btn-primary btn-min90" id="app-loading-download-btn">Download</button>
         </div>
       </div>
     </div>

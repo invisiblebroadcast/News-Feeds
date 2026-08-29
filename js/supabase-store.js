@@ -36,7 +36,6 @@ const SupabaseStore = (() => {
             .select('*')
             .eq('user_id', session.user.id);
         if (error) {
-            console.warn('SupabaseStore: load error', error.message);
             return readCache();
         }
         const map = {};
@@ -84,8 +83,9 @@ const SupabaseStore = (() => {
         const { error } = await client
             .from('article_activities')
             .upsert(record, { onConflict: 'user_id,article_url' });
-        if (error)
-            console.warn('SupabaseStore: upsert error', error.message);
+        if (error) {
+            // silently ignore
+        }
     }
     function getAll() {
         return readCache();

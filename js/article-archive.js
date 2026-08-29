@@ -86,7 +86,6 @@ const ArticleArchive = (() => {
             // In that case the queue is in-memory only — items will be
             // lost on reload but the archive keeps working for the
             // current session.
-            console.warn('[ArticleArchive] saveQueue failed:', e?.message || e);
         }
     }
     // Look up a feed's lang by matching its feedUrl. The feed object
@@ -190,11 +189,6 @@ const ArticleArchive = (() => {
                 const isRls = /row-level security|violates|401|forbidden|not authorized/i.test(msg);
                 if (isRls) {
                     if (!rlsMessageLogged) {
-                        console.warn('[ArticleArchive] Supabase RLS rejected the upsert (' + msg + '). ' +
-                            'The seen_articles table is blocking inserts for this JWT role. ' +
-                            'Archiving is disabled until the next successful flush (usually after signing in). ' +
-                            'To re-enable: add an INSERT policy on seen_articles for your role, or run:\n' +
-                            '  alter table seen_articles disable row level security;');
                         rlsMessageLogged = true;
                     }
                     // Drop the batch (don't re-queue — it will just fail again
@@ -211,7 +205,6 @@ const ArticleArchive = (() => {
                 // Generic non-RLS failure: throttle the log + re-queue.
                 const now = Date.now();
                 if (now - lastErrorLoggedAt > 30000) {
-                    console.warn('[ArticleArchive] flush failed:', msg);
                     lastErrorLoggedAt = now;
                 }
                 queue.unshift(...batch);
@@ -221,7 +214,6 @@ const ArticleArchive = (() => {
             // Success — the table accepts our inserts. If we were previously
             // disabled by an RLS rejection, clear the flags and re-enable.
             if (disabledUntilAuth) {
-                console.log('[ArticleArchive] RLS issue resolved — archiving re-enabled.');
                 disabledUntilAuth = false;
                 rlsMessageLogged = false;
             }
@@ -233,7 +225,6 @@ const ArticleArchive = (() => {
             // Network error / fetch failed. Retry — these are transient.
             const now = Date.now();
             if (now - lastErrorLoggedAt > 30000) {
-                console.warn('[ArticleArchive] flush threw:', msg);
                 lastErrorLoggedAt = now;
             }
             queue.unshift(...batch);
@@ -256,7 +247,6 @@ const ArticleArchive = (() => {
     function init() {
         queue = loadQueue();
         if (queue.length > 0) {
-            console.log('[ArticleArchive] resuming with', queue.length, 'queued items from last session');
             scheduleFlush();
         }
         // Flush on network reconnect — items that piled up while

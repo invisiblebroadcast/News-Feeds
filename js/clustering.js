@@ -81,31 +81,113 @@ const Clustering = (() => {
         }
         return { find, union };
     }
-    // Derive a short topic label from the most frequent significant
-    // words in a cluster. Returns 2–4 capitalised words.
+    // Derive a short, grammatical topic label from articles in a cluster.
+    // Uses named entity extraction, bigram/trigram phrases, and TF-IDF
+    // scoring to find the most distinctive phrase for this cluster.
     function deriveTopicLabel(articles) {
-        const counts = {};
+        if (!articles || !articles.length) return 'Story';
+        // 1) Extract named entities (capitalized multi-word phrases) from titles.
+        const ENT_RE = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
+        const SKIP = new Set(['The', 'This', 'That', 'These', 'Those', 'It', 'He', 'She',
+            'They', 'We', 'I', 'You', 'A', 'An', 'And', 'But', 'Or',
+            'In', 'On', 'At', 'To', 'For', 'Of', 'With', 'By', 'As',
+            'After', 'Before', 'During', 'According', 'Said', 'Says',
+            'New', 'First', 'Last', 'Also', 'Still', 'Just', 'More',
+            'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+            'News', 'Times', 'Post', 'Express', 'Herald', 'Tribune', 'Report', 'Reports',
+            'Live', 'Update', 'Updates', 'Breaking', 'Watch', 'Video', 'Read', 'Full']);
+        const entityCounts = {};
         for (const a of articles) {
-            const text = ((a.title || '') + '. ' + (a.summary || '')).toLowerCase();
+            const title = a.title || '';
+            let m;
+            const re = new RegExp(ENT_RE.source, 'g');
             const seen = new Set();
-            for (const t of tokenize(text)) {
-                if (STOPWORDS.has(t))
-                    continue;
-                if (t.length < 4)
-                    continue;
-                if (/^\d+$/.test(t))
-                    continue;
-                if (seen.has(t))
-                    continue;
-                seen.add(t);
-                counts[t] = (counts[t] || 0) + 1;
+            while ((m = re.exec(title)) !== null) {
+                const name = m[1];
+                if (SKIP.has(name) || /^\d+$/.test(name)) continue;
+                const key = name.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                entityCounts[key] = (entityCounts[key] || 0) + 1;
             }
         }
-        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-        const top = sorted.slice(0, 3).map(([w]) => w);
-        if (!top.length)
-            return 'Story';
-        return top.map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+        // 2) Extract bigrams and trigrams from titles.
+        const phraseCounts = {};
+        for (const a of articles) {
+            const title = (a.title || '').toLowerCase();
+            const words = title.split(/[^a-z]+/).filter(w => w.length >= 3 && !STOPWORDS.has(w));
+            const seen = new Set();
+            // Bigrams
+            for (let i = 0; i < words.length - 1; i++) {
+                const phrase = words[i] + ' ' + words[i + 1];
+                if (!seen.has(phrase)) {
+                    seen.add(phrase);
+                    phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+                }
+            }
+            // Trigrams
+            for (let i = 0; i < words.length - 2; i++) {
+                const phrase = words[i] + ' ' + words[i + 1] + ' ' + words[i + 2];
+                if (!seen.has(phrase)) {
+                    seen.add(phrase);
+                    phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+                }
+            }
+        }
+        // 3) Merge entities and phrases, score by frequency + entity bonus.
+        const candidates = [];
+        for (const [phrase, count] of Object.entries(entityCounts)) {
+            candidates.push({ phrase, score: count * 2.0, isEntity: true });
+        }
+        for (const [phrase, count] of Object.entries(phraseCounts)) {
+            if (count >= 2) {
+                const isEntity = entityCounts[phrase] > 0;
+                candidates.push({ phrase, score: count * (isEntity ? 1.8 : 1.0), isEntity });
+            }
+        }
+        // Sort by score descending.
+        candidates.sort((a, b) => b.score - a.score);
+        // 4) Build a grammatical title from the best candidates.
+        if (candidates.length === 0) {
+            // Fallback: use most frequent single word.
+            const wordCounts = {};
+            for (const a of articles) {
+                const text = ((a.title || '') + '. ' + (a.summary || '')).toLowerCase();
+                for (const t of tokenize(text)) {
+                    if (STOPWORDS.has(t) || t.length < 4 || /^\d+$/.test(t)) continue;
+                    wordCounts[t] = (wordCounts[t] || 0) + 1;
+                }
+            }
+            const sorted = Object.entries(wordCounts).sort((a, b) => b[1] - a[1]);
+            const top = sorted.slice(0, 3).map(([w]) => w);
+            if (!top.length) return 'Story';
+            return top.map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+        }
+        // Pick the best phrase, then optionally add a second distinctive word.
+        const best = candidates[0].phrase;
+        const bestWords = best.split(' ');
+        // If the best phrase is already 2-3 words, use it as-is.
+        if (bestWords.length >= 2) {
+            const title = bestWords.map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+            // Add a descriptor if available (e.g. "Delhi Police Protests").
+            if (candidates.length > 1) {
+                const second = candidates[1].phrase.split(' ');
+                // Only add if it's not a subset of the best phrase.
+                if (second.length === 1 && !bestWords.includes(second[0])) {
+                    return title + ' ' + second[0][0].toUpperCase() + second[0].slice(1);
+                }
+            }
+            return title;
+        }
+        // Single word best — combine with next best.
+        if (candidates.length >= 2) {
+            const w1 = best;
+            const w2 = candidates[1].phrase.split(' ')[0];
+            if (w1 !== w2) {
+                return w1[0].toUpperCase() + w1.slice(1) + ' ' + w2[0].toUpperCase() + w2.slice(1);
+            }
+        }
+        return best[0].toUpperCase() + best.slice(1);
     }
     // Compute the two derived ratings for a cluster.
     function deriveRatings(articles) {

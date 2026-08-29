@@ -15,19 +15,14 @@
 
   const client = window.SupabaseStore && SupabaseStore.getClient();
   if (!client) {
-    console.error('[migrate] SupabaseStore not found. Are you on the app page?');
     return;
   }
 
   // Verify authentication
   const { data: { session }, error: sessErr } = await client.auth.getSession();
   if (sessErr || !session) {
-    console.error('[migrate] NOT LOGGED IN. Please log in to the app first, then re-run this script.');
-    console.error('[migrate] Session error:', sessErr?.message || 'no session');
     return;
   }
-  console.log('[migrate] Authenticated as:', session.user.email || session.user.id);
-
   /** Convert timestamp to epoch ms (same as ibPostKey in app code) */
   function toEpochMs(ts) {
     return String(new Date(ts).getTime());
@@ -38,8 +33,6 @@
     if (!ts) return '';
     return ts.replace('T', ' ').replace(/([+-]\d{2}):00$/, '$1');
   }
-
-  console.log('[migrate] Fetching articles...');
   const { data: articles, error: fetchErr } = await client
     .from('published_articles')
     .select('id, post_id, last_modified, type')
@@ -49,11 +42,8 @@
     .order('id');
 
   if (fetchErr) {
-    console.error('[migrate] Fetch failed:', fetchErr.message);
     return;
   }
-
-  console.log('[migrate] Found ' + articles.length + ' articles.');
   let migrated = 0, skipped = 0, failed = 0;
 
   for (const row of articles) {
@@ -73,7 +63,6 @@
       } catch (e) { /* ignore */ }
     }
     if (alreadyExists) {
-      console.log('[migrate] #' + row.post_id + ' — already at ' + newBase);
       skipped++;
       continue;
     }
@@ -94,14 +83,12 @@
         if (!dlErr && blob) {
           sourceFile = blob;
           sourceExt = path.endsWith('.png') ? 'png' : 'jpg';
-          console.log('[migrate] #' + row.post_id + ' — found at ' + path);
           break;
         }
       } catch (e) { /* ignore */ }
     }
 
     if (!sourceFile) {
-      console.warn('[migrate] #' + row.post_id + ' — no source found, skipping');
       skipped++;
       continue;
     }
@@ -115,7 +102,6 @@
     });
 
     if (upErr) {
-      console.error('[migrate] #' + row.post_id + ' — upload failed:', upErr.message);
       failed++;
       continue;
     }
@@ -125,14 +111,9 @@
       if (path !== newPath) {
         const { error: rmErr } = await client.storage.from(BUCKET).remove([path]);
         if (rmErr) {
-          console.warn('[migrate] #' + row.post_id + ' — delete old ' + path + ' failed:', rmErr.message);
         }
       }
     }
-
-    console.log('[migrate] #' + row.post_id + ' — done (' + newPath + ')');
     migrated++;
   }
-
-  console.log('[migrate] Complete. Migrated: ' + migrated + ', Skipped: ' + skipped + ', Failed: ' + failed);
 })();

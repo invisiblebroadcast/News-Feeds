@@ -111,5 +111,80 @@
   }
 }
 
+/* ─── Fix: list view horizontal overflow on mobile (feeds) ─── */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .app-layout {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .app-layout > .layout-row-1,
+  .app-layout > .layout-row-2,
+  .app-layout > .layout-row-3,
+  .app-layout > .layout-row-4,
+  .app-layout > .layout-row-5 {
+    min-width: 0;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .app-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  .article-grid {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  .article-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .article-card * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .list-canvas-wrap,
+  .list-canvas,
+  .list-canvas-header,
+  .article-body,
+  .article-title,
+  .article-summary,
+  .article-meta {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  canvas.list-canvas,
+  canvas.qcs-canvas-card {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  .page-container,
+  .section-footer-inner,
+  .app-header-inner,
+  .top-tabs-row .page-container,
+  .section-tabs-row .page-container {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+}
+
 /* Bottom bar mobile adjustments handled by desktop.css media queries */
 /* Additional mobile-specific overrides can be added here */

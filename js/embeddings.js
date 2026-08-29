@@ -39,12 +39,10 @@ const Embeddings = (() => {
                 const { pipeline } = await import('https://esm.sh/@huggingface/transformers@3.4.2');
                 model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
                 isReady = true;
-                console.log('[Embeddings] all-MiniLM-L6-v2 model loaded');
                 return model;
             }
             catch (e) {
                 loadError = e;
-                console.warn('[Embeddings] all-MiniLM-L6-v2 load failed:', e && e.message);
                 return null;
             }
         })().finally(() => {
@@ -85,14 +83,12 @@ const Embeddings = (() => {
                 isReady = true;
                 if (onProgress)
                     onProgress({ status: 'ready', progress: 1 });
-                console.log('[Embeddings] all-MiniLM-L6-v2 model loaded');
                 return model;
             }
             catch (e) {
                 loadError = e;
                 if (onProgress)
                     onProgress({ status: 'error', error: e && e.message });
-                console.warn('[Embeddings] all-MiniLM-L6-v2 load failed:', e && e.message);
                 return null;
             }
         })().finally(() => {
@@ -111,7 +107,6 @@ const Embeddings = (() => {
             return Array.from(result.data);
         }
         catch (e) {
-            console.warn('[Embeddings] embed failed:', e && e.message);
             return null;
         }
     }
@@ -133,7 +128,6 @@ const Embeddings = (() => {
             return out;
         }
         catch (e) {
-            console.warn('[Embeddings] embedBatch failed:', e && e.message);
             return [];
         }
     }

@@ -3,7 +3,6 @@ const APP_VERSION = 6;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
-    console.log('[NewsFeeds] App version: ' + APP_VERSION);
     let currentScope = 'nation';
     let currentNation = FeedManager.getSelectedNation();
     let currentSubcat = 'all';
@@ -730,11 +729,11 @@ const APP_VERSION = 6;
                 continue;
             for (const cat of Object.keys(cached.groups)) {
                 for (const a of cached.groups[cat]) {
-                    if (!a || !a.link)
-                        continue;
-                    if (seen.has(a.link))
-                        continue;
-                    seen.add(a.link);
+                    if (!a) continue;
+                    const id = a._isPublished ? ('pub_' + a._pubId) : a.link;
+                    if (!id) continue;
+                    if (seen.has(id)) continue;
+                    seen.add(id);
                     out.push(a);
                 }
             }
@@ -882,7 +881,6 @@ const APP_VERSION = 6;
         // (potentially long) render kicks off.
         requestAnimationFrame(() => {
             displayCurrentSubcat().catch(err => {
-                console.warn('displayCurrentSubcat failed:', err);
             });
         });
     }
@@ -1045,7 +1043,6 @@ const APP_VERSION = 6;
             }
         }
         catch (e) {
-            console.error('renderArticles failed:', e);
             showError('Failed to render list view. Try refreshing.');
         }
     }
@@ -1121,7 +1118,6 @@ const APP_VERSION = 6;
                 loadAllState = 'idle';
             }
             catch (e) {
-                console.warn('Load-all background fetch failed:', e);
                 loadAllState = 'idle';
             }
             // Re-render so the view flips to the full set and the
@@ -1311,12 +1307,13 @@ const APP_VERSION = 6;
                 showEmpty();
                 return;
             }
+            const listChanged = !currentArticles || currentArticles.length !== articles.length ||
+                currentArticles[0] !== articles[0];
             currentArticles = articles;
-            currentReelIndex = 0;
+            if (listChanged) currentReelIndex = 0;
             showReel();
         }
         catch (e) {
-            console.error('renderReels failed:', e);
             showError('Failed to render cards view. Try refreshing.');
         }
     }
@@ -1971,7 +1968,6 @@ const APP_VERSION = 6;
                 return doc.body.innerHTML;
             }
             catch (err) {
-                console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
             }
         }
         return null;
@@ -2047,7 +2043,7 @@ const APP_VERSION = 6;
         if (!c)
             return;
         if (c.requestFullscreen) {
-            c.requestFullscreen().catch(err => console.warn('Fullscreen request failed:', err.message));
+            c.requestFullscreen().catch(() => {});
         }
         else if (c.webkitRequestFullscreen) {
             c.webkitRequestFullscreen();
@@ -2066,7 +2062,7 @@ const APP_VERSION = 6;
         }
         else {
             if (container.requestFullscreen)
-                container.requestFullscreen().catch(err => console.warn('Fullscreen failed:', err.message));
+                container.requestFullscreen().catch(() => {});
             else if (container.webkitRequestFullscreen)
                 container.webkitRequestFullscreen();
         }
@@ -2120,7 +2116,7 @@ const APP_VERSION = 6;
                 if (!Array.isArray(cached.groups[cat]))
                     continue;
                 for (const a of cached.groups[cat]) {
-                    const id = a.link || a.guid || a.title;
+                    const id = a._isPublished ? ('pub_' + a._pubId) : (a.link || a.guid || a.title);
                     if (!id || seen.has(id))
                         continue;
                     seen.add(id);
@@ -2261,7 +2257,6 @@ const APP_VERSION = 6;
             });
         }
         catch (err) {
-            console.warn('Topics clustering failed:', err && err.message);
             el.main.innerHTML = '<div class="topics-empty"><div class="ce-icon">⚠️</div>' +
                 '<h3>Couldn\'t cluster articles</h3>' +
                 '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
@@ -2389,7 +2384,6 @@ const APP_VERSION = 6;
             renderBuildArticle(article, cluster);
         }
         catch (err) {
-            console.warn('Build article failed:', err && err.message);
             body.innerHTML = '<div class="build-loading"><div class="ce-icon">⚠️</div>' +
                 '<h3>Couldn\'t build article</h3>' +
                 '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
@@ -2520,7 +2514,6 @@ const APP_VERSION = 6;
             }
         }
         catch (e) {
-            console.warn('Copy failed:', e && e.message);
         }
     }
     function closeBuildModal() {
@@ -2883,7 +2876,6 @@ const APP_VERSION = 6;
                     return;
                 const renderStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 displayCurrentSubcat().catch(err => {
-                    console.warn('displayCurrentSubcat failed:', err);
                 }).finally(() => {
                     // Hold the overlay for at least MIN_VIEW_LOADING_MS from
                     // the moment the user clicked. If the underlying work
@@ -2954,7 +2946,6 @@ const APP_VERSION = 6;
             if (token !== pendingViewSwitch)
                 return;
             displayCurrentSubcat().catch(err => {
-                console.warn('displayCurrentSubcat failed:', err);
             }).finally(() => {
                 const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
                 const remaining = Math.max(0, MIN_VIEW_LOADING_MS - elapsed);
@@ -3121,7 +3112,6 @@ const APP_VERSION = 6;
                     }
                 }
                 else {
-                    console.warn('Quick feed failed: ' + quickFeeds[j]?.name, quickResults[j].reason?.message);
                 }
             }
             if (quickCount === 0 && restFeeds.length > 0) {
@@ -3170,7 +3160,6 @@ const APP_VERSION = 6;
             }
         }
         catch (err) {
-            console.error(err);
             showError('Failed to fetch news. Please check your connection.');
             isFetching = false;
         }
@@ -3204,7 +3193,6 @@ const APP_VERSION = 6;
                     }
                 }
                 else {
-                    console.warn('Background feed failed: ' + batch[j]?.name, r.reason?.message);
                 }
             }
             // Merge the new batch into the cache. We don't re-render
@@ -3291,7 +3279,6 @@ const APP_VERSION = 6;
             articles = getFilteredArticles(currentSubcat, cached);
         }
         catch (e) {
-            console.error('Error filtering articles:', e);
             showError('Failed to filter articles. Try refreshing.');
             return;
         }
@@ -3334,7 +3321,6 @@ const APP_VERSION = 6;
                 }
             }
             catch (e) {
-                console.warn('Trending ranking failed:', e);
             }
         }
         // Tag every article with its subject. tagArticleWithSubject
@@ -3384,7 +3370,6 @@ const APP_VERSION = 6;
                 }
             }
             catch (e) {
-                console.warn('Conflict detection failed:', e);
             }
         }
         else {
@@ -3400,7 +3385,6 @@ const APP_VERSION = 6;
             await renderTranslated(articles);
         }
         catch (e) {
-            console.error('Error rendering articles:', e);
             showError('Failed to render articles. Try refreshing.');
         }
         finally {
@@ -3436,6 +3420,7 @@ const APP_VERSION = 6;
         }
     }
     async function renderTranslated(articles) {
+        const savedScrollY = window.scrollY;
         const targetLang = Settings.get('language');
         const translated = targetLang !== 'en'
             ? await Translator.translateArticles(articles, targetLang)
@@ -3446,6 +3431,7 @@ const APP_VERSION = 6;
         else {
             renderArticles(translated);
         }
+        requestAnimationFrame(() => window.scrollTo(0, savedScrollY));
     }
     let currentSearch = '';
     function bindSearch() {
@@ -3561,7 +3547,6 @@ const APP_VERSION = 6;
             }
         }
         catch (e) {
-            console.warn('Semantic rank failed:', e && e.message);
         }
     }
     function applySearch(articles) {
@@ -3572,14 +3557,18 @@ const APP_VERSION = 6;
             const field = prefixMatch[1].toLowerCase();
             const val = prefixMatch[2].trim();
             return articles.filter(a => {
-                if (field === 'postid') return (a._pubPostId || '').toLowerCase().includes(val);
-                if (field === 'source') return (a.source || '').toLowerCase().includes(val) || (a._pubSourceName || '').toLowerCase().includes(val);
-                if (field === 'date') return (a.pubDate || '').toLowerCase().includes(val);
+                if (field === 'postid')
+                    return (a._pubPostId || '').toLowerCase().includes(val);
+                if (field === 'source')
+                    return (a.source || '').toLowerCase().includes(val) || (a._pubSourceName || '').toLowerCase().includes(val);
+                if (field === 'date')
+                    return (a.pubDate || '').toLowerCase().includes(val);
                 if (field === 'tag') {
                     const tags = a._tags || [];
                     return tags.some(t => t.toLowerCase().includes(val));
                 }
-                if (field === 'category') return (a.feedHint || '').toLowerCase().includes(val) || (a._pubCategory || '').toLowerCase().includes(val);
+                if (field === 'category')
+                    return (a.feedHint || '').toLowerCase().includes(val) || (a._pubCategory || '').toLowerCase().includes(val);
                 return true;
             });
         }
@@ -3745,7 +3734,6 @@ const APP_VERSION = 6;
                 }
             }
             catch (e) {
-                console.warn('Cache cleanup failed (continuing anyway):', e);
             }
             // Reload with a cache-bust query string so the HTTP layer
             // doesn't serve the old HTML.
@@ -3838,7 +3826,6 @@ const APP_VERSION = 6;
                     }
                 }
                 else {
-                    console.warn('Feed failed: ' + feeds[j]?.name, result.reason?.message);
                 }
             }
             let allArticles = [];
@@ -3856,7 +3843,6 @@ const APP_VERSION = 6;
             showRecentButton();
         }
         catch (err) {
-            console.error('Background refresh failed:', err);
             isBackgroundRefreshing = false;
             hideRefreshStatus();
         }
@@ -3983,7 +3969,6 @@ const APP_VERSION = 6;
                     setTimeout(() => { clearAll.textContent = 'Clear tweet cache'; }, 2500);
                 }
                 catch (e) {
-                    console.warn('Nitter cache clear failed:', e);
                 }
             });
         }
@@ -4432,7 +4417,6 @@ const APP_VERSION = 6;
             await FeedManager.addCustomFeed(name, url, scope, nation, subcat, 'en');
         }
         catch (e) {
-            console.warn('addCustomFeed failed:', e && e.message);
         }
         validatedFeed = null;
         if (el.feedUrlInput)
@@ -4466,7 +4450,6 @@ const APP_VERSION = 6;
                     await FeedManager.removeCustomFeed(btn.dataset.url);
                 }
                 catch (e) {
-                    console.warn('removeCustomFeed failed:', e && e.message);
                 }
                 await renderCustomFeedList();
             });
@@ -5067,7 +5050,6 @@ const APP_VERSION = 6;
                 return;
             }
             catch (err) {
-                console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
             }
         }
         // Iframe fallback — proxies don't support CORS, load via iframe
@@ -5237,13 +5219,11 @@ const APP_VERSION = 6;
                 const img = await loadImage(dataUrl);
                 if (img) {
                     const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
-                    console.log('[Share] Image loaded via proxy:', proxyHost);
                     return img;
                 }
             }
             catch (e) {
                 const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
-                console.warn('[Share] Proxy failed:', proxyHost, e && e.message);
             }
         }
         return null;
@@ -5312,7 +5292,6 @@ const APP_VERSION = 6;
             return blob;
         }
         catch (err) {
-            console.warn('[Share] dom-to-image-more failed:', err.message);
             return null;
         }
         finally {
@@ -5342,7 +5321,6 @@ const APP_VERSION = 6;
                 const imgUrl = article.imageUrl || '';
                 const isSupabaseStorage = imgUrl.includes('ib-post-images');
                 if (isSupabaseStorage) {
-                    console.log('[Share] Supabase storage URL, trying direct fetch first');
                     try {
                         const resp = await fetch(imgUrl, { cache: 'no-store' });
                         if (resp.ok) {
@@ -5357,29 +5335,23 @@ const APP_VERSION = 6;
                                 if (dataUrl) {
                                     img = await loadImage(dataUrl);
                                     if (img) {
-                                        console.log('[Share] Image loaded via direct fetch:', img.naturalWidth, 'x', img.naturalHeight);
                                     }
                                 }
                             }
                         }
                     }
                     catch (e) {
-                        console.warn('[Share] Direct fetch failed:', e && e.message);
                     }
                 }
-                console.log('[Share] Image candidates:', candidates.length, 'hasThumb:', hasThumb);
                 for (const candidate of candidates) {
                     if (img)
                         break;
-                    console.log('[Share] Trying:', candidate);
                     const loaded = await loadImageWithFallback(candidate);
                     if (loaded) {
                         img = loaded;
-                        console.log('[Share] Image loaded via proxy:', img.naturalWidth, 'x', img.naturalHeight, 'from', candidate);
                     }
                 }
                 if (!img) {
-                    console.warn('[Share] All image candidates failed. Falling back to text-only.');
                 }
             }
             btn && btn.classList.remove('btn-busy');
@@ -5387,7 +5359,10 @@ const APP_VERSION = 6;
             if (window.CanvasEditor) {
                 window.CanvasEditor.open(article, includeImage, img, async (canvas, blob) => {
                     const caption = await buildShareCaption(article);
-                    try { await navigator.clipboard.writeText(caption); } catch {}
+                    try {
+                        await navigator.clipboard.writeText(caption);
+                    }
+                    catch { }
                 });
             }
             else {
@@ -5396,7 +5371,6 @@ const APP_VERSION = 6;
         }
         catch (err) {
             btn && btn.classList.remove('btn-busy');
-            console.warn('Image share failed:', err.message);
             handleShare(article.link, article.title, article.source);
         }
     }
@@ -5523,30 +5497,31 @@ const APP_VERSION = 6;
                 topGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = topGrad;
                 ctx.fillRect(0, imageTopY, W, fadeH);
-                // Bottom fade: transparent → full black (within bounds)
+                // Bottom fade: transparent → full black (within clip bounds)
                 // Extended fade ensures the image is completely hidden before the
                 // source name text area begins — no image pixels leak through.
+                const clipH = ibHeaderH + maxH;
                 const botFadeH = Math.round(maxH * 0.45);
-                const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - botFadeH, 0, imageTopY + maxH);
+                const botGrad = ctx.createLinearGradient(0, imageTopY + clipH - botFadeH, 0, imageTopY + clipH);
                 botGrad.addColorStop(0, 'rgba(0,0,0,0)');
                 botGrad.addColorStop(0.5, 'rgba(0,0,0,0.6)');
                 botGrad.addColorStop(0.8, 'rgba(0,0,0,0.92)');
                 botGrad.addColorStop(1, 'rgba(0,0,0,1)');
                 ctx.fillStyle = botGrad;
-                ctx.fillRect(0, imageTopY + maxH - botFadeH, W, botFadeH);
+                ctx.fillRect(0, imageTopY + clipH - botFadeH, W, botFadeH);
                 // Left fade: black → transparent
                 const fadeW = Math.round(W * 0.18);
                 const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
                 leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
                 leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = leftGrad;
-                ctx.fillRect(0, imageTopY, fadeW, maxH);
+                ctx.fillRect(0, imageTopY, fadeW, clipH);
                 // Right fade: transparent → black
                 const rightGrad = ctx.createLinearGradient(W - fadeW, 0, W, 0);
                 rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
                 rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
                 ctx.fillStyle = rightGrad;
-                ctx.fillRect(W - fadeW, imageTopY, fadeW, maxH);
+                ctx.fillRect(W - fadeW, imageTopY, fadeW, clipH);
                 // IB logo block — inside the image, top-right, equal gap from top and right edges
                 const logoS = Math.round(W * 0.07);
                 const logoR = Math.round(W * 0.014);
@@ -5564,6 +5539,8 @@ const APP_VERSION = 6;
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'alphabetic';
                 ctx.restore(); // remove clip
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, imageTopY + clipH_l, W, gap);
                 cursorY += imgBlockH + gap;
             }
             // Source label (uppercase, red) on the left, published date/time on the right
@@ -5677,7 +5654,6 @@ const APP_VERSION = 6;
         }
         catch (err) {
             btn && btn.classList.remove('btn-busy');
-            console.warn('Image share failed:', err.message);
             handleShare(article.link, article.title, article.source);
         }
     }
@@ -5926,7 +5902,6 @@ const APP_VERSION = 6;
             return compressSentence(sentences[bestIdx], 120);
         }
         catch (err) {
-            console.warn('TF.js centroid failed:', err && err.message);
             return null;
         }
         finally {
@@ -6067,15 +6042,18 @@ const APP_VERSION = 6;
             [/\b(privacy|surveillance|encryption|data-breach|hack\b|cyberattack)\b/, '#privacy'],
         ];
         for (const [re, tag] of EMOTION_MAP) {
-            if (tags.length >= 5) break;
-            if (re.test(combined)) addTag(tag);
+            if (tags.length >= 5)
+                break;
+            if (re.test(combined))
+                addTag(tag);
         }
         const titleClean = (article.title || '').trim();
         if (titleClean) {
             const rawEntities = titleClean.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
             const stopEntities = new Set(['The', 'This', 'That', 'These', 'Those', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'In', 'On', 'At', 'For', 'With', 'By', 'To', 'From', 'As', 'But', 'Not', 'All', 'One', 'Two', 'New', 'After', 'Before', 'Over', 'Under', 'More', 'Most', 'Some', 'Such', 'Than', 'Then', 'Also', 'Very', 'Just', 'About', 'Into', 'Through', 'During', 'Before', 'After', 'Above', 'Below', 'Between', 'Among', 'Without', 'Within', 'Along', 'Across', 'Behind', 'Beyond', 'Upcoming', 'Ongoing', 'Recent', 'Latest', 'Breaking', 'Update', 'Developing', 'Report', 'Exclusive', 'Alert', 'Video', 'Photo', 'Watch', 'Listen', 'Live']);
             for (const ent of rawEntities) {
-                if (tags.length >= 5) break;
+                if (tags.length >= 5)
+                    break;
                 const clean = ent.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                 if (clean.length >= 3 && !stopEntities.has(ent)) {
                     addTag(ent);
@@ -6083,9 +6061,11 @@ const APP_VERSION = 6;
             }
         }
         const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (tags.length < 5) addTag(subcat);
+        if (tags.length < 5)
+            addTag(subcat);
         const source = (article.source || '').toString().toLowerCase().replace(/^the\s+/, '').split(/[\s\-—–|]+/)[0].replace(/[^a-z0-9]/g, '');
-        if (tags.length < 5 && source !== subcat) addTag(source);
+        if (tags.length < 5 && source !== subcat)
+            addTag(source);
         return tags.slice(0, 5);
     }
     // Brief "blinking" feedback after a successful copy. We
@@ -6147,7 +6127,7 @@ const APP_VERSION = 6;
     function toggleFullscreen() {
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             if (document.exitFullscreen)
-                document.exitFullscreen().catch(err => console.warn('Exit fullscreen failed:', err.message));
+                document.exitFullscreen().catch(() => {});
             else if (document.webkitExitFullscreen)
                 document.webkitExitFullscreen();
         }
@@ -6494,16 +6474,13 @@ const APP_VERSION = 6;
                     }
                 });
                 if (error) {
-                    console.warn('Cloud sync failed:', error.message);
                     return;
                 }
                 // Refresh currentUser so subsequent pulls see the new metadata
                 if (data?.user)
                     currentUser = data.user;
-                console.log('[CloudSync] Pushed', subs.length, 'subscriptions + settings to Supabase');
             }
             catch (e) {
-                console.warn('Cloud sync failed:', e?.message || e);
             }
         }, 600);
     }
@@ -6570,7 +6547,6 @@ const APP_VERSION = 6;
             if (error) {
                 showAuthMsg(error.message, 'error');
                 markInputError('auth-password');
-                console.warn('Auth sign-in error:', error);
                 return;
             }
             // Success — show confirmation, then close
@@ -6581,7 +6557,6 @@ const APP_VERSION = 6;
             }, 600);
         }
         catch (err) {
-            console.error('Sign-in failed:', err);
             showAuthMsg(err.message || 'Sign-in failed. Please try again.', 'error');
             markInputError('auth-password');
         }
@@ -6590,7 +6565,6 @@ const APP_VERSION = 6;
         }
     }
     async function signUpWithEmail(name, email, password) {
-        console.log('[Auth] signUpWithEmail started for:', email);
         setAuthBusy(true);
         showAuthMsg('Connecting to server...', null);
         clearInputErrors();
@@ -6600,7 +6574,6 @@ const APP_VERSION = 6;
             if (!client) {
                 throw new Error('Auth service is not available. Please refresh the page and try again.');
             }
-            console.log('[Auth] Supabase client available, calling signUp...');
             const { data, error } = await withTimeout(client.auth.signUp({
                 email, password,
                 options: {
@@ -6608,10 +6581,8 @@ const APP_VERSION = 6;
                     emailRedirectTo: window.location.origin
                 }
             }), 20000, 'Sign-up');
-            console.log('[Auth] signUp response:', { hasSession: !!data?.session, hasUser: !!data?.user, error });
             if (error) {
                 showAuthMsg(error.message, 'error');
-                console.warn('[Auth] sign-up error:', error);
                 return;
             }
             // Check if email confirmation is required (no session means confirmation needed)
@@ -6633,7 +6604,6 @@ const APP_VERSION = 6;
             }
         }
         catch (err) {
-            console.error('[Auth] Sign-up failed:', err);
             showAuthMsg(err.message || 'Sign-up failed. Please try again.', 'error');
         }
         finally {
@@ -6645,7 +6615,6 @@ const APP_VERSION = 6;
             await SupabaseStore.getClient().auth.signOut();
         }
         catch (err) {
-            console.warn('Sign-out failed:', err.message);
         }
     }
     function openAuthModal() {
@@ -6670,7 +6639,6 @@ const APP_VERSION = 6;
             }
         }
         catch (err) {
-            console.error('[Auth] Failed to get Supabase client:', err);
             showAuthMsg('Auth service error. Please refresh the page.', 'error');
         }
     }
@@ -6678,7 +6646,6 @@ const APP_VERSION = 6;
         closeModal('auth');
     }
     function handleAuthSubmit() {
-        console.log('[Auth] handleAuthSubmit called, authMode =', authMode, 'authBusy =', authBusy);
         if (authBusy)
             return;
         clearInputErrors();
@@ -6688,22 +6655,18 @@ const APP_VERSION = 6;
             if (!email) {
                 showAuthMsg('Please enter your email.', 'error');
                 markInputError('auth-email');
-                console.warn('[Auth] Sign-in: missing email');
                 return;
             }
             if (!pwd) {
                 showAuthMsg('Please enter your password.', 'error');
                 markInputError('auth-password');
-                console.warn('[Auth] Sign-in: missing password');
                 return;
             }
             if (!isValidEmail(email)) {
                 showAuthMsg('Please enter a valid email address.', 'error');
                 markInputError('auth-email');
-                console.warn('[Auth] Sign-in: invalid email format:', email);
                 return;
             }
-            console.log('[Auth] Sign-in: calling signInWithEmail');
             signInWithEmail(email, pwd);
         }
         else {
@@ -6711,7 +6674,6 @@ const APP_VERSION = 6;
             const email = $('#auth-email')?.value?.trim() || '';
             const pwd = $('#auth-password')?.value || '';
             const pwd2 = $('#auth-password-repeat')?.value || '';
-            console.log('[Auth] Sign-up attempt:', { name, email, pwdLength: pwd?.length, hasRepeat: !!pwd2 });
             if (!name || name.length < 2) {
                 showAuthMsg('Please enter your name (at least 2 characters).', 'error');
                 markInputError('auth-name');
@@ -6747,7 +6709,6 @@ const APP_VERSION = 6;
                 markInputError('auth-password-repeat');
                 return;
             }
-            console.log('[Auth] Sign-up: calling signUpWithEmail');
             signUpWithEmail(name, email, pwd);
         }
     }
@@ -6807,7 +6768,6 @@ const APP_VERSION = 6;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] update name error:', error);
                 return;
             }
             if (msg) {
@@ -6823,7 +6783,6 @@ const APP_VERSION = 6;
             setTimeout(() => closeChangeNameModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Update name failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Update failed.';
                 msg.classList.add('error');
@@ -6897,7 +6856,6 @@ const APP_VERSION = 6;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] update password error:', error);
                 return;
             }
             if (msg) {
@@ -6908,7 +6866,6 @@ const APP_VERSION = 6;
             setTimeout(() => closeChangePasswordModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Update password failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Update failed.';
                 msg.classList.add('error');
@@ -7018,7 +6975,6 @@ const APP_VERSION = 6;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] avatar upload error:', upErr);
                 return;
             }
             // Get public URL
@@ -7049,7 +7005,6 @@ const APP_VERSION = 6;
             setTimeout(() => closeChangeAvatarModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Avatar upload failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Upload failed.';
                 msg.classList.add('error');
@@ -7299,13 +7254,11 @@ const APP_VERSION = 6;
                         }
                     }
                     catch (e) {
-                        console.warn('OAuth fallback failed:', e);
                     }
                 }
                 else if (hash.includes('error=')) {
                     const p = new URLSearchParams(hash.replace(/^#/, ''));
                     const errDesc = p.get('error_description') || p.get('error') || 'OAuth error';
-                    console.warn('[Auth] OAuth error in URL hash:', errDesc);
                     history.replaceState(history.state, '', location.pathname + location.search);
                 }
             }
@@ -7507,7 +7460,6 @@ const APP_VERSION = 6;
         }
         catch (err) {
             el.main.innerHTML = '<div class="error-state"><div class="error-icon">\u26A0\uFE0F</div><p>Could not load feed configuration.</p></div>';
-            console.error(err);
             return;
         }
         // First-run subscription initialisation. Previously this only
@@ -7530,7 +7482,6 @@ const APP_VERSION = 6;
             }
         }
         catch (e) {
-            console.warn('Subscription auto-init failed:', e);
         }
         currentNation = FeedManager.getSelectedNation();
         await SupabaseStore.load();
@@ -7542,7 +7493,6 @@ const APP_VERSION = 6;
             await FeedManager.loadCustomFeeds();
         }
         catch (e) {
-            console.warn('FeedManager.loadCustomFeeds failed:', e && e.message);
         }
         // Resume any article-archive queue from a previous session.
         // This must happen AFTER SupabaseStore is ready (the archive
@@ -7559,7 +7509,6 @@ const APP_VERSION = 6;
         // slow or failed model load never affects the core UX.
         if (window.Embeddings && Embeddings.loadModel) {
             Embeddings.loadModel().catch(err => {
-                console.warn('Embeddings.loadModel failed:', err && err.message);
             });
         }
         renderTopTabs();
@@ -7631,12 +7580,10 @@ const APP_VERSION = 6;
         // bar, or any DOM that could block clicks.
         if (window.tf) {
             try {
-                console.log('[ML] TensorFlow.js ready:', tf.version_core);
             }
             catch { }
         }
         else {
-            console.warn('[ML] TensorFlow.js not loaded — js/lib/tf.min.js missing or blocked?');
         }
     }
     init();

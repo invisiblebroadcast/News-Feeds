@@ -3,7 +3,6 @@ const APP_VERSION = 31;
 (async () => {
     const $ = (sel, ctx = document) => ctx.querySelector(sel);
     const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
-    console.log('[NewsFeeds] App version: ' + APP_VERSION);
     let currentScope = 'global';
     let currentNation = FeedManager.getSelectedNation();
     let currentSection = 'feeds';
@@ -19,6 +18,7 @@ const APP_VERSION = 31;
     // Monotonically increasing token reserved for future race protection
     // (kept for compatibility — Live is the only mode now).
     let pendingModeSwitch = 0;
+    let _consentOverlayActive = false;
     // Token used by bindViewToggle to guard against rapid double-clicks
     // on the cards/list toggle. The first click increments the token
     // and schedules a setTimeout; if a second click fires before that
@@ -366,6 +366,11 @@ const APP_VERSION = 31;
     // Suppress re-entry while we're already inside a popstate handler
     // (e.g. closeFrame calls history.back() which fires popstate again).
     let popstateBusy = false;
+    // When custom feeds change from any modal, clear scope caches
+    window.addEventListener('feeds-changed', () => {
+        for (const k of Object.keys(scopeCache))
+            scopeCache[k] = null;
+    });
     window.addEventListener('popstate', () => {
         if (popstateBusy)
             return;
@@ -721,11 +726,12 @@ const APP_VERSION = 31;
                 continue;
             for (const cat of Object.keys(cached.groups)) {
                 for (const a of cached.groups[cat]) {
-                    if (!a || !a.link)
-                        continue;
-                    if (seen.has(a.link))
-                        continue;
-                    seen.add(a.link);
+                    if (!a) continue;
+                    // Use unique ID for published articles (may share source_link)
+                    const id = a._isPublished ? ('pub_' + a._pubId) : a.link;
+                    if (!id) continue;
+                    if (seen.has(id)) continue;
+                    seen.add(id);
                     out.push(a);
                 }
             }
@@ -872,18 +878,14 @@ const APP_VERSION = 31;
     }
     async function renderCurrentSection() {
         const msg = 'Loading ' + currentSection + '…';
-        console.log('[renderCurrentSection] section=' + currentSection + ', sourceFilter=' + sourceFilter);
         setTopListStatus(msg);
         showLoadingInline(msg);
         await new Promise(r => setTimeout(r, 0));
         const t0 = performance ? performance.now() : Date.now();
         try {
             if (currentSection === 'topics') {
-                console.log('[renderCurrentSection] showing topics overlay');
                 showLoadingOverlay('Loading topics\u2026');
-                console.log('[renderCurrentSection] overlay shown, calling renderTopicsView');
                 await renderTopicsView();
-                console.log('[renderCurrentSection] renderTopicsView done, hiding overlay');
                 hideLoadingOverlay();
             }
             else if (currentSection === 'conflicts') {
@@ -949,7 +951,6 @@ const APP_VERSION = 31;
     function getFilteredArticles(subcat, cached) {
         if (!cached)
             return [];
-        console.log('[getFilteredArticles] subcat=' + subcat + ', sourceFilter=' + sourceFilter + ', groups keys=' + Object.keys(cached.groups).join(','));
         let articles;
         if (subcat === 'all') {
             articles = [];
@@ -977,7 +978,6 @@ const APP_VERSION = 31;
         articles = applyFilters(articles);
         const sortMode = currentSort || 'date-desc';
         articles = applySort(articles, sortMode);
-        console.log('[getFilteredArticles] returning ' + articles.length + ' articles');
         return articles;
     }
     // Keep the legacy #filterSource select in sync with the
@@ -1055,7 +1055,6 @@ const APP_VERSION = 31;
         // (potentially long) render kicks off.
         requestAnimationFrame(() => {
             displayCurrentSubcat().catch(err => {
-                console.warn('displayCurrentSubcat failed:', err);
             });
         });
     }
@@ -1165,6 +1164,10 @@ const APP_VERSION = 31;
                     // This guarantees a manageable initial load no matter how many sources.
                     display = pickOnePerSource(articles);
                 }
+                // Clear stale _rank / _trendingCount from previous trending pass so
+                // card-view badges (rendered by PostDesigner via cardMeta) don't persist
+                // after the user toggles back to Live.
+                display.forEach(a => { a._rank = null; a._trendingCount = null; });
                 totalShown = display.length;
             }
             else {
@@ -1243,7 +1246,6 @@ const APP_VERSION = 31;
             }
         }
         catch (e) {
-            console.error('renderArticles failed:', e);
             showError('Failed to render list view. Try refreshing.');
         }
     }
@@ -1319,7 +1321,6 @@ const APP_VERSION = 31;
                 loadAllState = 'idle';
             }
             catch (e) {
-                console.warn('Load-all background fetch failed:', e);
                 loadAllState = 'idle';
             }
             if (currentSection !== 'feeds')
@@ -1341,6 +1342,7 @@ const APP_VERSION = 31;
                     '<div class="article-grid">' +
                     display.map((a, i) => renderCard(a, i)).join('') +
                     '</div>';
+            renderListCanvases();
             return;
         }
         // Big list: build the grid scaffold + load banner, then append cards
@@ -1362,9 +1364,85 @@ const APP_VERSION = 31;
             grid.appendChild(frag);
             if (i < display.length) {
                 requestAnimationFrame(appendChunk);
+            } else {
+                renderListCanvases();
             }
         }
         requestAnimationFrame(appendChunk);
+    }
+    /** Render canvas previews for quote and post cards in list view */
+    function renderListCanvases() {
+        const queue = [];
+        document.querySelectorAll('[data-list-quote]').forEach(wrap => {
+            const encoded = wrap.dataset.listQuote;
+            if (!encoded) return;
+            const article = findArticleByLink(decodeURIComponent(encoded));
+            if (!article) return;
+            const dd = article._designData || null;
+            if (!dd || !window.QuoteCardStudio || !QuoteCardStudio.renderCardCanvas) return;
+            queue.push(() => {
+                const articleData = {
+                    summary: article.summary || '',
+                    title: '',
+                    _pubQuoteFrom: article._pubQuoteFrom || '',
+                    _pubQuoteOccupation: article._pubQuoteOccupation || '',
+                    _pubQuoteDate: article._pubQuoteDate || '',
+                };
+                const listDd = JSON.parse(JSON.stringify(dd));
+                if (listDd.watermark) listDd.watermark.show = false;
+                if (listDd.date) listDd.date.show = false;
+                return QuoteCardStudio.renderCardCanvas(listDd, articleData).then(canvas => {
+                    if (!canvas) return;
+                    canvas.className = 'list-canvas';
+                    canvas.style.cssText = 'width:100%;border-radius:12px;display:block;cursor:pointer;';
+                    canvas.setAttribute('data-article', encoded);
+                    wrap.innerHTML = '';
+                    wrap.appendChild(canvas);
+                }).catch(() => {});
+            });
+        });
+        // Post canvases (text-only, no foreground images)
+        document.querySelectorAll('[data-list-post]').forEach(wrap => {
+            const encoded = wrap.dataset.listPost;
+            if (!encoded) return;
+            const article = findArticleByLink(decodeURIComponent(encoded));
+            if (!article) return;
+            const isFeed = !!wrap.dataset.listFeed;
+            let dd = article._postDesignData || article._designData || null;
+            if (!dd && isFeed && window.PostDesigner) {
+                dd = PostDesigner.defaultSettings ? PostDesigner.defaultSettings() : null;
+                if (dd) {
+                    dd.aspectRatio = '4:3';
+                    dd.fgImages = [];
+                    dd.watermark = { ...(dd.watermark || {}), show: true, text: article.source || article._pubSourceName || '' };
+                }
+            }
+            if (!dd) return;
+            if (!window.PostDesigner || !PostDesigner.renderCardCanvas) return;
+            queue.push(() => {
+                const articleData = { title: article.title || '', description: article.summary || article.body || '', pubDate: article.pubDate || article.date_published || '', _sourceName: article.source || article._pubSourceName || '' };
+                const listDd = JSON.parse(JSON.stringify(dd));
+                listDd.fgImages = [];
+                listDd.cardBgType = 'gradient';
+                listDd.cardBackground = listDd.cardBackground || 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+                listDd.bgPosEnabled = false;
+                if (listDd.watermark) listDd.watermark.show = false;
+                if (listDd.date) listDd.date.show = false;
+                return PostDesigner.renderCardCanvas(listDd, articleData).then(canvas => {
+                    if (!canvas) return;
+                    canvas.className = 'list-canvas';
+                    canvas.style.cssText = 'width:100%;border-radius:12px;display:block;cursor:pointer;';
+                    canvas.setAttribute('data-article', encoded);
+                    wrap.innerHTML = '';
+                    wrap.appendChild(canvas);
+                }).catch(() => {});
+            });
+        });
+        // Run queue one at a time
+        (function runNext() {
+            if (!queue.length) return;
+            queue.shift()().finally(runNext);
+        })();
     }
     /** Convert newlines in quote text to <br> tags when setting is ON */
     function formatQuoteText(text) {
@@ -1426,20 +1504,40 @@ const APP_VERSION = 31;
         let conflictBlock = '';
         if (article._conflicts && article._conflicts.isConflicting) {
             const c = article._conflicts;
+            const hasSentiment = c.conflicts.some(g => g.metric === 'sentiment');
+            const hasOmission = c.conflicts.some(g => g.metric === 'omission');
+            const hasStance = c.conflicts.some(g => g.metric === 'editorial_stance');
+            const typeLabel = hasSentiment ? 'Conflicting framing' : hasOmission ? 'Omission detected' : hasStance ? 'Editorial stance conflict' : 'Conflicting reports';
             conflictBlock =
-                '<div class="conflict-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false" title="' + escAttr('Conflicting reports — click for details') + '">' +
-                    '<span class="ck-warn">⚠</span> Conflicting reports · ' + c.clusterSize + ' sources' +
+                '<div class="conflict-kicker ranked-kicker" data-toggle-details role="button" tabindex="0" aria-expanded="false" title="' + escAttr(typeLabel + ' — click for details') + '">' +
+                    '<span class="ck-warn">⚠</span> ' + typeLabel + ' · ' + c.clusterSize + ' sources' +
                     '</div>' +
                     '<div class="conflict-details ranked-details" aria-hidden="true">' +
                     c.conflicts.map(group => {
-                        // Claim conflicts: show "X verb: source1 vs source2" format.
                         if (group.metric === 'claim') {
                             const subjectLabel = group.subject ? 'About <em>' + escHtml(group.subject) + '</em>:' : 'Claim:';
                             const parts = group.detail.map(g => '<span class="cd-value">' + escHtml(g.value) + '</span>' +
                                 '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' vs ');
                             return '<div class="cd-row"><span class="cd-metric">' + subjectLabel + '</span> ' + parts + '</div>';
                         }
-                        // Numeric conflicts: keep the original "metric: value (sources)" format.
+                        if (group.metric === 'sentiment') {
+                            const subjectLabel = group.subject ? 'About <em>' + escHtml(group.subject) + '</em>:' : 'Framing:';
+                            const parts = group.detail.map(g => '<span class="cd-value">' + escHtml(g.value) + '</span>' +
+                                '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' vs ');
+                            return '<div class="cd-row"><span class="cd-metric">' + subjectLabel + '</span> ' + parts + '</div>';
+                        }
+                        if (group.metric === 'omission') {
+                            const subjectLabel = group.subject ? '<em>' + escHtml(group.subject) + '</em>' : 'Key detail';
+                            const parts = group.detail.map(g => '<span class="cd-value">' + escHtml(g.value) + '</span>' +
+                                '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' vs ');
+                            return '<div class="cd-row"><span class="cd-metric">' + subjectLabel + ': </span> ' + parts + '</div>';
+                        }
+                        if (group.metric === 'editorial_stance') {
+                            const subjectLabel = 'Editorial stance:';
+                            const parts = group.detail.map(g => '<span class="cd-value">' + escHtml(g.value) + '</span>' +
+                                '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' vs ');
+                            return '<div class="cd-row"><span class="cd-metric">' + subjectLabel + '</span> ' + parts + '</div>';
+                        }
                         const lines = group.detail.map(g => '<span class="cd-value">' + escHtml(group.metric) + ': ' + escHtml(g.value) + '</span>' +
                             '<span class="cd-src">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' ');
                         return '<div class="cd-row">' + lines + '</div>';
@@ -1450,21 +1548,12 @@ const APP_VERSION = 31;
         if (article._pubType === 'quote') {
             const quoteFrom = article._pubQuoteFrom || '';
             const quoteOccupation = article._pubQuoteOccupation || '';
-            const bgUrl = article.imageUrl || '';
-            const bgStyle = bgUrl ? 'background-image:url(' + escAttr(bgUrl) + ');background-size:cover;background-position:center;' : '';
-            return '<article class="article-card quote-card' + (bgUrl ? ' quote-card-bg' : '') + '" style="animation-delay:' + ((index % 10) * 0.04) + 's;' + bgStyle + '">' +
-                (bgUrl ? '<div class="quote-card-bg-overlay"></div>' : '') +
+            const dd = article._designData || null;
+            return '<article class="article-card quote-card list-quote-card" style="animation-delay:' + ((index % 10) * 0.04) + 's" data-article="' + encoded + '">' +
                 '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" data-quote-from="' + escAttr(quoteFrom) + '" title="Share as Image">&#x21AA;</button>' +
-                '<div class="article-body">' +
-                '<div class="quote-block">' +
-                '<span class="quote-open">&ldquo;</span>' +
-                '<p class="article-summary quote-text">' + formatQuoteText(article.summary) + '</p>' +
-                '</div>' +
-                (quoteFrom ? '<div class="quote-from"><span class="quote-from-label">&mdash;</span> ' + escHtml(quoteFrom) + '</div>' : '') +
-                (quoteOccupation ? '<div class="quote-occupation">' + escHtml(quoteOccupation).replace(/\n/g, '<br>') + '</div>' : '') +
-                '<div class="quote-watermark">Invisible Broadcast</div>' +
-                '<div class="article-meta">' +
-                '<span class="date">' + formatDateActual(article._pubQuoteDate || article.pubDate) + '</span>' +
+                '<div class="list-canvas-header"><span class="list-canvas-source">' + escHtml(article.source || article._pubSourceName || '') + '</span><span class="list-canvas-date">' + formatDateShort(article.pubDate || article.date_published) + '</span></div>' +
+                '<div class="list-canvas-wrap" data-list-quote="' + encoded + '">' +
+                '<div class="list-canvas-placeholder"><div class="loading-spinner"></div></div>' +
                 '</div>' +
                 '<div class="card-actions">' +
                 '<button class="card-action-btn card-cards-btn" data-cards-article="' + encoded + '" title="Cards View">' +
@@ -1476,12 +1565,20 @@ const APP_VERSION = 31;
                 (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-delete-btn" data-publish-article="' + encoded + '" title="Delete quote">' +
                     '<span>&#x1F5D1;</span>' +
                     '</button>' : '') +
-                '</div>' +
+                (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-duplicate-btn" data-duplicate-article="' + encoded + '" title="Duplicate as new quote">' +
+                    '<span>&#x2398;</span>' +
+                    '</button>' : '') +
                 '</div>' +
                 '</article>';
         }
-        return '<article class="article-card" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
+        const hasDesignData = article._postDesignData || article._designData;
+        const isPublished = !!article._isPublished;
+        const isFeed = !isPublished && !article._pubType;
+        const postCanvasWrap = (hasDesignData || isFeed ? '<div class="list-canvas-header"><span class="list-canvas-source">' + escHtml(article.source || article._pubSourceName || '') + '</span><span class="list-canvas-date">' + formatDateShort(article.pubDate || article.date_published) + '</span></div>' : '') +
+            '<div class="list-canvas-wrap" data-list-post="' + encoded + '"' + (isFeed ? ' data-list-feed="1"' : '') + '><div class="list-canvas-placeholder"><div class="loading-spinner"></div></div></div>';
+        return '<article class="article-card' + (hasDesignData || isFeed ? ' list-post-card' : '') + (isFeed ? ' list-feed-card' : '') + '" style="animation-delay:' + ((index % 10) * 0.04) + 's">' +
             '<button class="card-share-btn" data-url="' + encodeURIComponent(article.link) + '" data-title="' + escAttr(article.title) + '" data-source="' + escAttr(article.source) + '" title="Share as Image">&#x21AA;</button>' +
+            postCanvasWrap +
             thumbHtml +
             '<div class="article-body">' +
             rankedBlock +
@@ -1518,6 +1615,9 @@ const APP_VERSION = 31;
                 '</button>' : '') +
             (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-delete-btn" data-publish-article="' + encoded + '" title="Delete IB post">' +
                 '<span>&#x1F5D1;</span>' +
+                '</button>' : '') +
+            (currentUser && article._isPublished && article._pubUserEmail === currentUser.email ? '<button class="card-action-btn card-duplicate-btn" data-duplicate-article="' + encoded + '" title="Duplicate as new post">' +
+                '<span>&#x2398;</span>' +
                 '</button>' : '') +
             (!article._isPublished && currentUser ? '<button class="card-action-btn card-publish-btn" data-publish-article="' + encoded + '" title="Publish to blog">' +
                 '<span>&#x1F4E4;</span>' +
@@ -1565,12 +1665,14 @@ const APP_VERSION = 31;
                 showEmpty();
                 return;
             }
+            // Only reset reel index if the article list actually changed
+            const listChanged = !currentArticles || currentArticles.length !== articles.length ||
+                currentArticles[0] !== articles[0];
             currentArticles = articles;
-            currentReelIndex = 0;
+            if (listChanged) currentReelIndex = 0;
             showReel();
         }
         catch (e) {
-            console.error('renderReels failed:', e);
             showError('Failed to render cards view. Try refreshing.');
         }
     }
@@ -1640,22 +1742,8 @@ const APP_VERSION = 31;
                     : '<path d="M2 4h12M2 8h8M2 12h10"/><line x1="2" y1="14" x2="14" y2="2" stroke="var(--accent)"/>') +
                 '</svg>' +
                 '</button>' +
-                '<button class="reels-tool-btn reels-toggle-textbox' + (Settings.get('quoteTextBox') ? ' active' : '') + '" title="Toggle text box">' +
-                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
-                '<rect x="2" y="1" width="12" height="14" rx="2"/>' +
-                '<line x1="5" y1="5" x2="11" y2="5"/>' +
-                '<line x1="5" y1="8" x2="11" y2="8"/>' +
-                '<line x1="5" y1="11" x2="9" y2="11"/>' +
-                '</svg>' +
-                '</button>' +
                 '<button class="reels-tool-btn reels-share-text-img" title="Copy as text image">&#x1F4DD;</button>' +
                 '<button class="reels-tool-btn reels-share-image" title="Copy with source image">&#x1F5BC;</button>' +
-                '<button class="reels-tool-btn reels-screenshot" title="Screenshot Card">' +
-                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
-                '<path d="M2 4h2l1-2h6l1 2h2a1 1 0 011 1v8a1 1 0 01-1 1H1a1 1 0 01-1-1V5a1 1 0 011-1z"/>' +
-                '<circle cx="8" cy="8" r="2.5"/>' +
-                '</svg>' +
-                '</button>' +
                 '</div>' +
                 '</div>';
             // Vertical action bar — right side, center (like YT Shorts / Reels)
@@ -1683,6 +1771,10 @@ const APP_VERSION = 31;
                 '<button class="reels-action-btn reels-reel-del-btn" style="display:none" title="Delete IB post">' +
                 '<span class="reels-action-icon">&#x1F5D1;</span>' +
                 '<span class="reels-action-label">Delete</span>' +
+                '</button>' +
+                '<button class="reels-action-btn reels-reel-dup-btn" style="display:none" title="Duplicate">' +
+                '<span class="reels-action-icon">&#x2398;</span>' +
+                '<span class="reels-action-label">Duplicate</span>' +
                 '</button>' +
                 '</div>';
         }
@@ -1782,12 +1874,14 @@ const APP_VERSION = 31;
                     const pngUrl = article._imageUrlPng || '';
                     if (pngUrl && pngUrl !== imgUrl) {
                         fetch(pngUrl, { cache: 'no-store' }).then(r2 => {
-                            if (!r2.ok) throw new Error('png fallback 404');
+                            if (!r2.ok)
+                                throw new Error('png fallback 404');
                             return r2.blob();
                         }).then(blob2 => {
                             imgEl.src = URL.createObjectURL(blob2);
                         }).catch(() => { imgEl.src = imgUrl; });
-                    } else {
+                    }
+                    else {
                         imgEl.src = imgUrl;
                     }
                 });
@@ -1846,9 +1940,18 @@ const APP_VERSION = 31;
             const c = article._conflicts;
             if (c && c.isConflicting) {
                 conflictBody.innerHTML = c.conflicts.map(group => {
-                    const label = group.metric === 'claim'
-                        ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
-                        : escHtml(group.metric);
+                    let label;
+                    if (group.metric === 'claim') {
+                        label = group.subject ? 'About ' + escHtml(group.subject) : 'Claim';
+                    } else if (group.metric === 'sentiment') {
+                        label = group.subject ? 'Framing: ' + escHtml(group.subject) : 'Framing conflict';
+                    } else if (group.metric === 'omission') {
+                        label = group.subject ? 'Omission: ' + escHtml(group.subject) : 'Omission detected';
+                    } else if (group.metric === 'editorial_stance') {
+                        label = 'Editorial stance';
+                    } else {
+                        label = escHtml(group.metric);
+                    }
                     return '<div class="rcp-row">' +
                         '<span class="rcp-metric">' + label + ':</span> ' +
                         group.detail.map(g => '<span class="rcp-value">' + escHtml(g.value) + '</span>' +
@@ -1870,96 +1973,39 @@ const APP_VERSION = 31;
         // Quote type: show quote text with opening quote mark, hide title
         if (article._pubType === 'quote') {
             cardEl.classList.add('quote-type-card');
-            if (title) {
-                title.innerHTML = '<span style="color:var(--accent);font-size:2em;font-weight:700;font-family:Georgia,serif;line-height:1;vertical-align:-0.15em;text-shadow:0 2px 6px rgba(0,0,0,0.85),0 1px 2px rgba(0,0,0,0.7);">\u201C</span>';
-            }
-            const quoteFrom = article._pubQuoteFrom || '';
-            const quoteOccupation = article._pubQuoteOccupation || '';
-            const quoteDate = article._pubQuoteDate || '';
-            if (summary) {
-                summary.classList.add('quote-text');
-                summary.innerHTML = showDesc ? formatQuoteText(article.summary) : '';
-            }
-            if (summaryWrap)
-                summaryWrap.style.display = showDesc ? '' : 'none';
-            // Hide the source line — we show quote_from + watermark instead
-            if (source)
-                source.textContent = '';
-            // Move quote date below the watermark (create overlay, hide top date)
+            const dd = article._designData || null;
+            // Remove old overlays
+            cardEl.querySelectorAll('.quote-from-overlay,.quote-occupation-overlay,.quote-separator,.quote-watermark-overlay,.quote-date-overlay,.quote-text-box,.qcs-canvas-card').forEach(e => e.remove());
+            if (summary) summary.innerHTML = '';
+            if (summaryWrap) summaryWrap.style.display = 'none';
+            if (title) title.innerHTML = '';
+            if (source) source.textContent = '';
+            const imgWrap2 = cardEl.querySelector('.reels-img-wrap');
+            if (imgWrap2) imgWrap2.style.display = 'none';
             const dateEl = cardEl.querySelector('.reels-date');
-            if (dateEl)
-                dateEl.style.display = 'none';
-            // Add quote_from (red, bold) + occupation + separator + watermark + date after the summary
-            const existingFrom = cardEl.querySelector('.quote-from-overlay');
-            if (existingFrom)
-                existingFrom.remove();
-            const existingOcc = cardEl.querySelector('.quote-occupation-overlay');
-            if (existingOcc)
-                existingOcc.remove();
-            const existingSep = cardEl.querySelector('.quote-separator');
-            if (existingSep)
-                existingSep.remove();
-            const existingWm = cardEl.querySelector('.quote-watermark-overlay');
-            if (existingWm)
-                existingWm.remove();
-            const existingDateOv = cardEl.querySelector('.quote-date-overlay');
-            if (existingDateOv)
-                existingDateOv.remove();
-            if (quoteFrom) {
-                const fromEl = document.createElement('div');
-                fromEl.className = 'quote-from-overlay';
-                fromEl.textContent = '\u2014 ' + quoteFrom;
-                summaryWrap.parentNode.insertBefore(fromEl, summaryWrap.nextSibling);
-            }
-            if (quoteOccupation) {
-                const occEl = document.createElement('div');
-                occEl.className = 'quote-occupation-overlay';
-                occEl.innerHTML = escHtml(quoteOccupation).replace(/\n/g, '<br>');
-                const fromRef2 = cardEl.querySelector('.quote-from-overlay') || summaryWrap;
-                fromRef2.parentNode.insertBefore(occEl, fromRef2.nextSibling);
-            }
-            const sepEl = document.createElement('div');
-            sepEl.className = 'quote-separator';
-            const lastRef = cardEl.querySelector('.quote-occupation-overlay') || cardEl.querySelector('.quote-from-overlay') || summaryWrap;
-            lastRef.parentNode.insertBefore(sepEl, lastRef.nextSibling);
-            const wmEl = document.createElement('div');
-            wmEl.className = 'quote-watermark-overlay';
-            wmEl.textContent = 'Invisible Broadcast';
-            sepEl.parentNode.insertBefore(wmEl, sepEl.nextSibling);
-            if (quoteDate) {
-                const dateOvEl = document.createElement('div');
-                dateOvEl.className = 'quote-date-overlay';
-                dateOvEl.textContent = formatDateActual(quoteDate);
-                wmEl.parentNode.insertBefore(dateOvEl, wmEl.nextSibling);
-            }
-            // Text box mode: wrap quote text + from + occupation in a semi-transparent box
-            const existingTextBox = cardEl.querySelector('.quote-text-box');
-            if (existingTextBox) {
-                while (existingTextBox.firstChild) {
-                    existingTextBox.parentNode.insertBefore(existingTextBox.firstChild, existingTextBox);
-                }
-                existingTextBox.remove();
-            }
-            if (Settings.get('quoteTextBox')) {
-                const textBoxWrap = document.createElement('div');
-                textBoxWrap.className = 'quote-text-box';
-                const sWrap = cardEl.querySelector('.reels-summary-wrap');
-                const fEl = cardEl.querySelector('.quote-from-overlay');
-                const oEl = cardEl.querySelector('.quote-occupation-overlay');
-                const insertRef = cardEl.querySelector('.reels-conflict-panel') || cardEl.querySelector('.reels-quote-head');
-                if (sWrap) textBoxWrap.appendChild(sWrap);
-                if (fEl) textBoxWrap.appendChild(fEl);
-                if (oEl) textBoxWrap.appendChild(oEl);
-                if (insertRef && insertRef.nextSibling) {
-                    insertRef.parentNode.insertBefore(textBoxWrap, insertRef.nextSibling);
-                } else if (insertRef) {
-                    insertRef.parentNode.appendChild(textBoxWrap);
-                }
+            if (dateEl) dateEl.style.display = 'none';
+            // Render canvas — uses default settings if no designData
+            if (window.QuoteCardStudio && QuoteCardStudio.renderCardCanvas) {
+                const articleData = {
+                    summary: article.summary || '',
+                    title: '',
+                    _pubQuoteFrom: article._pubQuoteFrom || '',
+                    _pubQuoteOccupation: article._pubQuoteOccupation || '',
+                    _pubQuoteDate: article._pubQuoteDate || '',
+                };
+                QuoteCardStudio.renderCardCanvas(dd, articleData).then(canvas => {
+                    if (!canvas) return;
+                    canvas.className = 'qcs-canvas-card';
+                    canvas.style.cssText = 'border-radius:12px;display:block;';
+                    const target = cardEl.querySelector('.reels-actions');
+                    if (target && target.parentNode) target.parentNode.insertBefore(canvas, target);
+                    else cardEl.appendChild(canvas);
+                });
             }
         }
         else {
             cardEl.classList.remove('quote-type-card');
-            // Clean up any leftover quote elements from a previous render
+            cardEl.querySelectorAll('.qcs-canvas-card').forEach(e => e.remove());
             const oldFrom = cardEl.querySelector('.quote-from-overlay');
             if (oldFrom)
                 oldFrom.remove();
@@ -1975,19 +2021,45 @@ const APP_VERSION = 31;
             const oldDateOv = cardEl.querySelector('.quote-date-overlay');
             if (oldDateOv)
                 oldDateOv.remove();
-            const topDateEl = cardEl.querySelector('.reels-date');
-            if (topDateEl)
-                topDateEl.style.display = '';
-            if (title)
-                title.textContent = article.title;
-            if (source)
-                source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
-            if (summary) {
-                summary.classList.remove('quote-text');
-                summary.textContent = showDesc ? cleanSummary(stripHtml(article.summary)) : '';
-            }
-            if (summaryWrap) {
-                summaryWrap.style.display = showDesc ? '' : 'none';
+            // Post designer canvas for non-quote articles (always rendered)
+            if (window.PostDesigner && PostDesigner.renderCardCanvas) {
+                const topDateEl2 = cardEl.querySelector('.reels-date');
+                if (topDateEl2) topDateEl2.style.display = 'none';
+                const imgWrap3 = cardEl.querySelector('.reels-img-wrap');
+                if (imgWrap3) imgWrap3.style.display = 'none';
+                if (title) title.textContent = '';
+                if (summary) summary.textContent = '';
+                if (summaryWrap) summaryWrap.style.display = 'none';
+                if (source) source.textContent = '';
+                const liveTrendOv = cardEl.querySelector('.reels-live-trending');
+                if (liveTrendOv) liveTrendOv.style.display = 'none';
+                const articleData = { title: article.title || '', description: article.summary || article.body || '', pubDate: article.pubDate || article.date_published || '', _sourceName: article._pubSourceName || article.source || '' };
+                const cardMeta = { _rank: article._rank, _trendingCount: article._trendingCount };
+                PostDesigner.renderCardCanvas(article._postDesignData || article._designData || null, articleData, cardMeta).then(canvas => {
+                    if (!canvas) return;
+                    canvas.className = 'qcs-canvas-card';
+                    canvas.style.cssText = 'border-radius:12px;display:block;';
+                    const target = cardEl.querySelector('.reels-actions');
+                    if (target && target.parentNode) target.parentNode.insertBefore(canvas, target);
+                    else cardEl.appendChild(canvas);
+                });
+            } else {
+                const topDateEl = cardEl.querySelector('.reels-date');
+                if (topDateEl)
+                    topDateEl.style.display = '';
+                const imgWrap2 = cardEl.querySelector('.reels-img-wrap');
+                if (imgWrap2) imgWrap2.style.display = '';
+                if (title)
+                    title.textContent = article.title;
+                if (source)
+                    source.textContent = article._isPublished ? (article._pubSourceName || article.source) : article.source;
+                if (summary) {
+                    summary.classList.remove('quote-text');
+                    summary.textContent = showDesc ? cleanSummary(stripHtml(article.summary)) : '';
+                }
+                if (summaryWrap) {
+                    summaryWrap.style.display = showDesc ? '' : 'none';
+                }
             }
         }
         const ad = getArticleData(article.link);
@@ -2026,6 +2098,7 @@ const APP_VERSION = 31;
         // Show/hide edit/delete for IB posts
         const editBtn = cardEl.querySelector('.reels-reel-edit-btn');
         const delBtn = cardEl.querySelector('.reels-reel-del-btn');
+        const dupBtn = cardEl.querySelector('.reels-reel-dup-btn');
         const publishBtnReel = cardEl.querySelector('.reels-reel-publish-btn');
         const isIbPost = article._isPublished && article._pubId;
         const isOwner = currentUser && article._pubUserEmail === currentUser.email;
@@ -2033,6 +2106,8 @@ const APP_VERSION = 31;
             editBtn.style.display = (isIbPost && isOwner) ? '' : 'none';
         if (delBtn)
             delBtn.style.display = (isIbPost && isOwner) ? '' : 'none';
+        if (dupBtn)
+            dupBtn.style.display = (isIbPost && isOwner) ? '' : 'none';
         if (publishBtnReel)
             publishBtnReel.style.display = isIbPost ? 'none' : '';
     }
@@ -2090,21 +2165,22 @@ const APP_VERSION = 31;
                 const sti = e.target.closest('.reels-share-text-img');
                 if (sti) {
                     e.stopPropagation();
-                    handleShareImage(currentArticle, sti, false);
+                    if (currentArticle && currentArticle._pubType === 'quote') {
+                        handleQuoteShare(currentArticle, 'text');
+                    } else {
+                        handlePostShare(currentArticle, 'text');
+                    }
                     return;
                 }
                 // Share with source image (only button exists if has image)
                 const si = e.target.closest('.reels-share-image');
                 if (si) {
                     e.stopPropagation();
-                    handleShareImage(currentArticle, si, true);
-                    return;
-                }
-                // Screenshot card — actual DOM capture via dom-to-image-more
-                const ssBtn = e.target.closest('.reels-screenshot');
-                if (ssBtn) {
-                    e.stopPropagation();
-                    handleScreenshot(currentArticle, ssBtn);
+                    if (currentArticle && currentArticle._pubType === 'quote') {
+                        handleQuoteShare(currentArticle, 'image');
+                    } else {
+                        handlePostShare(currentArticle, 'image');
+                    }
                     return;
                 }
                 const home = e.target.closest('.reels-home-btn');
@@ -2126,16 +2202,6 @@ const APP_VERSION = 31;
                     Settings.set('showDescription', !current);
                     syncSettingsToCloud();
                     toggleDesc.classList.toggle('active', !current);
-                    showReel();
-                    return;
-                }
-                const toggleTextBox = e.target.closest('.reels-toggle-textbox');
-                if (toggleTextBox) {
-                    e.stopPropagation();
-                    const cur = Settings.get('quoteTextBox');
-                    Settings.set('quoteTextBox', !cur);
-                    syncSettingsToCloud();
-                    toggleTextBox.classList.toggle('active', !cur);
                     showReel();
                     return;
                 }
@@ -2250,6 +2316,13 @@ const APP_VERSION = 31;
                         return;
                     if (currentArticle && currentArticle._isPublished && currentArticle._pubId)
                         deletePublishedArticle(currentArticle._pubId);
+                    return;
+                }
+                const reelDupBtn = e.target.closest('.reels-reel-dup-btn');
+                if (reelDupBtn) {
+                    e.stopPropagation();
+                    if (!requireAuth()) return;
+                    if (currentArticle) duplicateArticle(currentArticle);
                     return;
                 }
                 const commentBtn = e.target.closest('.reels-comment-btn');
@@ -2482,7 +2555,6 @@ const APP_VERSION = 31;
                 return doc.body.innerHTML;
             }
             catch (err) {
-                console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
             }
         }
         return null;
@@ -2558,7 +2630,7 @@ const APP_VERSION = 31;
         if (!c)
             return;
         if (c.requestFullscreen) {
-            c.requestFullscreen().catch(err => console.warn('Fullscreen request failed:', err.message));
+            c.requestFullscreen().catch(() => {});
         }
         else if (c.webkitRequestFullscreen) {
             c.webkitRequestFullscreen();
@@ -2577,7 +2649,7 @@ const APP_VERSION = 31;
         }
         else {
             if (container.requestFullscreen)
-                container.requestFullscreen().catch(err => console.warn('Fullscreen failed:', err.message));
+                container.requestFullscreen().catch(() => {});
             else if (container.webkitRequestFullscreen)
                 container.webkitRequestFullscreen();
         }
@@ -2621,7 +2693,6 @@ const APP_VERSION = 31;
                 restore();
             }
             catch (e) {
-                console.warn('reels exit restore failed', e);
             }
         }
         else {
@@ -2698,7 +2769,7 @@ const APP_VERSION = 31;
                 if (!Array.isArray(cached.groups[cat]))
                     continue;
                 for (const a of cached.groups[cat]) {
-                    const id = a.link || a.guid || a.title;
+                    const id = a._isPublished ? ('pub_' + a._pubId) : (a.link || a.guid || a.title);
                     if (!id || seen.has(id))
                         continue;
                     seen.add(id);
@@ -2737,7 +2808,7 @@ const APP_VERSION = 31;
         if (!list.length) {
             root.innerHTML = '<div class="conflicts-empty"><div class="ce-icon">✓</div>' +
                 '<h3>No conflicts detected</h3>' +
-                '<p>Across ' + all.length + ' articles we didn\'t find any cross-source disagreements on numbers or claims.</p></div>';
+                '<p>Across ' + all.length + ' articles we didn\'t find any cross-source disagreements on numbers, claims, framing, omissions, or editorial stance.</p></div>';
             return;
         }
         // 4) Render the cluster cards.
@@ -2745,18 +2816,29 @@ const APP_VERSION = 31;
             const sev = cluster.severity || 0;
             const bucket = AI.severityBucket ? AI.severityBucket(sev) : (sev >= 70 ? 'high' : sev >= 40 ? 'medium' : 'low');
             const claimRows = (cluster.conflicts || []).map(group => {
-                const label = group.metric === 'claim'
-                    ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
-                    : escHtml(group.metric);
+                let label;
+                if (group.metric === 'claim') {
+                    label = group.subject ? 'About ' + escHtml(group.subject) : 'Claim';
+                } else if (group.metric === 'sentiment') {
+                    label = group.subject ? 'Framing: ' + escHtml(group.subject) : 'Framing conflict';
+                } else if (group.metric === 'omission') {
+                    label = group.subject ? 'Omission: ' + escHtml(group.subject) : 'Omission detected';
+                } else if (group.metric === 'editorial_stance') {
+                    label = 'Editorial stance';
+                } else {
+                    label = escHtml(group.metric);
+                }
                 return '<div class="cc-claim-row">' +
-                    '<span class="cc-claim-value">' + escHtml(label) + ':</span> ' +
+                    '<span class="cc-claim-value">' + label + ':</span> ' +
                     group.detail.map(g => '<span class="cc-claim-value">' + escHtml(g.value) + '</span>' +
                         '<span class="cc-claim-sources">(' + g.articles.map(a => escHtml(a.source || 'Unknown')).join(', ') + ')</span>').join(' vs ') +
                     '</div>';
             }).join('');
             const articleLinks = (cluster.articles || []).map(a => '<a class="cc-article-link" data-link="' + encodeURIComponent(a.link) + '">' + escHtml(a.title || a.link) + '</a>').join('');
+            const firstConflict = cluster.conflicts[0] || {};
+            const conflictLabel = firstConflict.subject || (firstConflict.metric === 'sentiment' ? 'Framing disagreement' : firstConflict.metric === 'omission' ? 'Omission pattern' : firstConflict.metric === 'editorial_stance' ? 'Editorial stance conflict' : firstConflict.metric + ' disagreement');
             return '<div class="conflict-cluster">' +
-                '<h4><span class="cc-warn">⚠</span> ' + escHtml(cluster.conflicts[0].subject || (cluster.conflicts[0].metric + ' disagreement')) +
+                '<h4><span class="cc-warn">⚠</span> ' + escHtml(conflictLabel) +
                 '<span class="conflict-severity ' + bucket + '">Severity ' + sev + '</span></h4>' +
                 '<div class="cc-meta">' + cluster.articles.length + ' of ' + cluster.clusterSize + ' sources disagree · ' +
                 cluster.conflicts.length + ' metric' + (cluster.conflicts.length > 1 ? 's' : '') + '</div>' +
@@ -2857,7 +2939,6 @@ const APP_VERSION = 31;
             });
         }
         catch (err) {
-            console.warn('Topics clustering failed:', err && err.message);
             root.innerHTML = '<div class="topics-empty"><div class="ce-icon">⚠️</div>' +
                 '<h3>Couldn\'t cluster articles</h3>' +
                 '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
@@ -2981,7 +3062,6 @@ const APP_VERSION = 31;
         }
         catch (err) {
             hideLoadingOverlay();
-            console.warn('Build article failed:', err && err.message);
             body.innerHTML = '<div class="build-loading"><div class="ce-icon">⚠️</div>' +
                 '<h3>Couldn\'t build article</h3>' +
                 '<p>' + escHtml(err && err.message || 'Unknown error') + '</p></div>';
@@ -3145,7 +3225,6 @@ const APP_VERSION = 31;
             }
         }
         catch (e) {
-            console.warn('Copy failed:', e && e.message);
         }
     }
     function closeBuildModal() {
@@ -3194,7 +3273,6 @@ const APP_VERSION = 31;
                     .order('date_published', { ascending: false });
                 if (error)
                     throw error;
-                console.log('[fetchPublishedArticlesFromSupabase] fetched ' + (data || []).length + ' articles from Supabase');
                 _publishedCache = (data || []).map(r => {
                     // Build image URL from last_modified timestamp.
                     // Filename: ibpost<last_modified>.jpg — unique per edit so
@@ -3238,10 +3316,46 @@ const APP_VERSION = 31;
                         _tags: Array.isArray(r.tags) ? r.tags : []
                     };
                 });
+                // Fetch design settings for these articles
+                try {
+                    const pubIds = _publishedCache.filter(a => a._pubId).map(a => a._pubId);
+                    if (pubIds.length > 0) {
+                        const { data: designRows } = await client
+                            .from('card_design_settings')
+                            .select('article_id, design_data')
+                            .in('article_id', pubIds);
+                        if (designRows && designRows.length) {
+                            const designMap = {};
+                            designRows.forEach(dr => { designMap[dr.article_id] = dr.design_data; });
+                            _publishedCache.forEach(a => {
+                                if (a._pubId && designMap[a._pubId]) {
+                                    a._designData = designMap[a._pubId];
+                                }
+                            });
+                        }
+                        // Fetch post design settings for non-quote articles
+                        try {
+                            const { data: postDesignRows } = await client
+                                .from('post_design_settings')
+                                .select('article_id, design_data')
+                                .in('article_id', pubIds);
+                            if (postDesignRows && postDesignRows.length) {
+                                postDesignRows.forEach(dr => {
+                                    const art = _publishedCache.find(a => a._pubId === dr.article_id);
+                                    if (art && art._pubType !== 'quote') {
+                                        art._designData = dr.design_data;
+                                        art._postDesignData = dr.design_data;
+                                    }
+                                });
+                            }
+                        } catch (_) {}
+                    }
+                }
+                catch (e) {
+                }
                 return _publishedCache;
             }
             catch (err) {
-                console.warn('[Publish] Failed to fetch from Supabase:', err.message);
                 return [];
             }
             finally {
@@ -3264,11 +3378,9 @@ const APP_VERSION = 31;
     }
     function addPublishedToFeed(articles) {
         const published = getCachedPublished();
-        console.log('[addPublishedToFeed] sourceFilter=' + sourceFilter + ', published=' + published.length + ', articles=' + articles.length);
         if (!published.length || sourceFilter === 'feeds')
             return articles;
         if (sourceFilter === 'ib') {
-            console.log('[addPublishedToFeed] returning published only:', published.length);
             return published;
         }
         return [...published, ...articles];
@@ -3404,7 +3516,6 @@ const APP_VERSION = 31;
                     renderPublishedFeed();
                 }
                 catch (err) {
-                    console.warn('[Publish] Failed:', err);
                     if (status)
                         status.textContent = '\u274c ' + (err.message || 'Publish failed');
                     if (submitBtn) {
@@ -3424,6 +3535,44 @@ const APP_VERSION = 31;
                     '<div class="published-meta">' + escHtml(p.author || '') + ' · ' + (p.pubDate ? formatDateShort(p.pubDate) : '') + '</div>' +
                     '</div>').join('');
             }
+        }
+    }
+    function duplicateArticle(article) {
+        if (!article) return;
+        const isQuote = article._pubType === 'quote';
+        window._duplicateDesignData = isQuote ? (article._designData || null) : (article._postDesignData || null);
+        window._duplicateFgPaths = null;
+        if (window._duplicateDesignData && window._duplicateDesignData.fgImages) {
+            window._duplicateFgPaths = window._duplicateDesignData.fgImages.map(fg => ({
+                dataUrl: fg.dataUrl, bgRemovedDataUrl: fg.bgRemovedDataUrl
+            }));
+        }
+        if (isQuote) {
+            PublishModal.openModal();
+            setTimeout(() => {
+                const tab = document.querySelector('[data-publish-tab="quotes"]');
+                if (tab) tab.click();
+                const qDesc = $('#quote-desc');
+                const qFrom = $('#quote-from');
+                const qOcc = $('#quote-occupation');
+                const qDate = $('#quote-date');
+                if (qDesc) qDesc.value = article.summary || article.body || '';
+                if (qFrom) qFrom.value = article._pubQuoteFrom || '';
+                if (qOcc) qOcc.value = article._pubQuoteOccupation || '';
+                if (qDate) qDate.value = article._pubQuoteDate || '';
+            }, 300);
+        } else {
+            PublishModal.openModal();
+            setTimeout(() => {
+                const tab = document.querySelector('[data-publish-tab="post"]');
+                if (tab) tab.click();
+                const pTitle = $('#post-title');
+                const pDesc = $('#post-desc');
+                const pSource = $('#post-source-name');
+                if (pTitle) pTitle.value = article.title || '';
+                if (pDesc) pDesc.value = article.summary || article.body || '';
+                if (pSource) pSource.value = article._pubSourceName || article.source || '';
+            }, 300);
         }
     }
     async function editPublishedArticle(pubId) {
@@ -3470,6 +3619,10 @@ const APP_VERSION = 31;
             // Switch to the correct tab
             $$('.publish-tab').forEach(t => t.classList.toggle('active', t.dataset.publishTab === editTab));
             $$('.publish-pane').forEach(p => p.classList.toggle('active', p.dataset.publishPane === editTab));
+            // Hide irrelevant tabs — only show the one being edited
+            $$('.publish-tab').forEach(t => {
+                t.style.display = t.dataset.publishTab === editTab ? '' : 'none';
+            });
             // Helper to close modal and refresh the view the user came from
             function finishEdit() {
                 modal.classList.remove('open');
@@ -3507,11 +3660,13 @@ const APP_VERSION = 31;
                     quoteMsg.className = 'publish-msg';
                 }
                 // Load existing tags
-                console.log('[editPublishedArticle] quote data.tags:', data.tags, typeof data.tags);
-                console.log('[editPublishedArticle] PublishModal.quoteTags:', !!PublishModal.quoteTags);
                 if (window.PublishModal && PublishModal.quoteTags) {
-                    const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try { return JSON.parse(data.tags); } catch(e) { return []; } })() : []);
-                    console.log('[editPublishedArticle] setting quote tags:', parsed);
+                    const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try {
+                        return JSON.parse(data.tags);
+                    }
+                    catch (e) {
+                        return [];
+                    } })() : []);
                     PublishModal.quoteTags.setTags(parsed);
                 }
                 // Show existing quote image reference if one exists
@@ -3613,8 +3768,6 @@ const APP_VERSION = 31;
                                 // Remove old image by old last_modified
                                 if (oldModified && (quoteImageRemoved || quoteImageFile)) {
                                     const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + ibPostKey(oldModified) + '.jpg', 'ibpost' + ibPostKey(oldModified) + '.png']);
-                                    if (rmErr)
-                                        console.warn('[editPublishedArticle] Quote image remove failed:', rmErr.message);
                                 }
                                 // Upload new image by new last_modified
                                 if (quoteImageFile && newModified) {
@@ -3627,7 +3780,6 @@ const APP_VERSION = 31;
                                         cacheControl: '0'
                                     });
                                     if (uploadErr) {
-                                        console.warn('[editPublishedArticle] Quote image upload failed:', uploadErr.message);
                                     }
                                 }
                             }
@@ -3649,6 +3801,38 @@ const APP_VERSION = 31;
                             quoteBtn.textContent = '\uD83D\uDCE4 Update Quote';
                         }
                     };
+                }
+                // Show Design Quote button for quote edit
+                const quoteStudioBtn = $('#quote-studio-btn');
+                if (quoteStudioBtn) {
+                    if (data.type === 'quote') {
+                        quoteStudioBtn.style.display = '';
+                        quoteStudioBtn.textContent = 'Design Quote';
+                        quoteStudioBtn.onclick = () => {
+                            if (window.QuoteCardStudio) {
+                                const article = {
+                                    _pubType: 'quote',
+                                    summary: data.body || '',
+                                    title: '',
+                                    _pubQuoteFrom: data.quote_from || data.source_name || '',
+                                    _pubQuoteOccupation: data.quote_occupation || '',
+                                    _pubQuoteDate: data.quote_date || '',
+                                    id: data.id || null,
+                                };
+                                window.QuoteCardStudio.open(article, {
+                                    articleId: data.id || null,
+                                    userId: currentUser ? currentUser.id : null,
+                                    storageKey: data.post_id ? ('ibpost' + new Date(data.last_modified).getTime()) : null,
+                                    onComplete: () => {
+                                        _publishedFetchPromise = null;
+                                        fetchPublishedArticlesFromSupabase().then(() => renderCurrentSection()).catch(() => {});
+                                    },
+                                });
+                            }
+                        };
+                    } else {
+                        quoteStudioBtn.style.display = 'none';
+                    }
                 }
             }
             else if (isYouTube) {
@@ -3737,11 +3921,13 @@ const APP_VERSION = 31;
                     postMsg.className = 'publish-msg';
                 }
                 // Load existing tags
-                console.log('[editPublishedArticle] post data.tags:', data.tags, typeof data.tags);
-                console.log('[editPublishedArticle] PublishModal.postTags:', !!PublishModal.postTags);
                 if (window.PublishModal && PublishModal.postTags) {
-                    const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try { return JSON.parse(data.tags); } catch(e) { return []; } })() : []);
-                    console.log('[editPublishedArticle] setting post tags:', parsed);
+                    const parsed = Array.isArray(data.tags) ? data.tags : (typeof data.tags === 'string' ? (() => { try {
+                        return JSON.parse(data.tags);
+                    }
+                    catch (e) {
+                        return [];
+                    } })() : []);
                     PublishModal.postTags.setTags(parsed);
                 }
                 // Show existing post image reference if one exists
@@ -3845,8 +4031,6 @@ const APP_VERSION = 31;
                                 // Remove old image by old last_modified
                                 if (oldModified && (postImageRemoved || postImageFile)) {
                                     const { error: rmErr } = await c2.storage.from('ib-post-images').remove(['ibpost' + ibPostKey(oldModified) + '.jpg', 'ibpost' + ibPostKey(oldModified) + '.png']);
-                                    if (rmErr)
-                                        console.warn('[editPublishedArticle] Post image remove failed:', rmErr.message);
                                 }
                                 // Upload new image by new last_modified
                                 if (postImageFile && newModified) {
@@ -3859,7 +4043,6 @@ const APP_VERSION = 31;
                                         cacheControl: '0'
                                     });
                                     if (uploadErr) {
-                                        console.warn('[editPublishedArticle] Post image upload failed:', uploadErr.message);
                                     }
                                 }
                             }
@@ -3882,6 +4065,33 @@ const APP_VERSION = 31;
                         }
                     };
                 }
+                // Post design studio
+                const postStudioBtn = $('#post-studio-btn');
+                if (postStudioBtn && data.type !== 'quote') {
+                    postStudioBtn.style.display = '';
+                    postStudioBtn.disabled = false;
+                    postStudioBtn.onclick = () => {
+                        if (window.PostDesigner) {
+                            PostDesigner.open({
+                                summary: data.body || '',
+                                description: data.body || '',
+                                title: data.title || '',
+                                pubDate: data.date_published || '',
+                                _pubType: data.type || 'feeds',
+                            }, {
+                                articleId: data.id || null,
+                                userId: currentUser ? currentUser.id : null,
+                                storageKey: data.post_id ? ('ibpost' + new Date(data.last_modified).getTime()) : null,
+                                onComplete: () => {
+                                    _publishedFetchPromise = null;
+                                    fetchPublishedArticlesFromSupabase().then(() => renderCurrentSection()).catch(() => {});
+                                },
+                            });
+                        }
+                    };
+                } else if (postStudioBtn) {
+                    postStudioBtn.style.display = 'none';
+                }
             }
             // Close button
             const closeBtn = $('#yt-publish-modal-close');
@@ -3889,7 +4099,6 @@ const APP_VERSION = 31;
                 closeBtn.onclick = () => modal.classList.remove('open');
         }
         catch (err) {
-            console.warn('[Publish] Edit failed:', err.message);
             alert('Failed to load article for editing');
         }
     }
@@ -3931,7 +4140,6 @@ const APP_VERSION = 31;
             displayCurrentSubcat();
         }
         catch (err) {
-            console.warn('[Publish] Delete failed:', err.message);
             alert('Delete failed: ' + (err.message || 'Unknown error'));
         }
     }
@@ -4250,9 +4458,7 @@ const APP_VERSION = 31;
                 wrap.title = isIb ? 'Showing IB posts — click to show Feeds' : 'Showing Feeds — click to show IB';
         };
         toggle.addEventListener('click', async () => {
-            console.log('[bindSourceFilter] clicked, current sourceFilter=' + sourceFilter);
             sourceFilter = sourceFilter === 'ib' ? 'feeds' : 'ib';
-            console.log('[bindSourceFilter] new sourceFilter=' + sourceFilter);
             update();
             _persist();
             // Abort any in-flight background fetch for the current scope
@@ -4267,14 +4473,12 @@ const APP_VERSION = 31;
             // complete in the same frame the overlay appears, so the user
             // never sees it.
             await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-            console.log('[bindSourceFilter] overlay painted, calling displayCurrentSubcat');
             const t0 = performance ? performance.now() : Date.now();
             await displayCurrentSubcat();
             const elapsed = (performance ? performance.now() : Date.now()) - t0;
             const remaining = Math.max(0, 300 - elapsed);
             if (remaining > 0)
                 await new Promise(r => setTimeout(r, remaining));
-            console.log('[bindSourceFilter] displayCurrentSubcat done, hiding overlay');
             hideLoadingOverlay();
         });
         update();
@@ -4336,7 +4540,6 @@ const APP_VERSION = 31;
                         ? renderCurrentSection()
                         : displayCurrentSubcat();
                     renderPromise.catch(err => {
-                        console.warn('render failed:', err);
                     }).finally(() => {
                         const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
                         const remaining = Math.max(0, MIN_VIEW_LOADING_MS - elapsed);
@@ -4404,7 +4607,6 @@ const APP_VERSION = 31;
                 restore();
             }
             catch (e) {
-                console.warn('reels exit restore failed', e);
             }
             return;
         }
@@ -4416,7 +4618,6 @@ const APP_VERSION = 31;
             if (token !== pendingViewSwitch)
                 return;
             displayCurrentSubcat().catch(err => {
-                console.warn('displayCurrentSubcat failed:', err);
             }).finally(() => {
                 const elapsed = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
                 const remaining = Math.max(0, MIN_VIEW_LOADING_MS - elapsed);
@@ -4653,7 +4854,6 @@ const APP_VERSION = 31;
             }
         }
         catch (err) {
-            console.error(err);
             clearTopListStatus();
             showError('Failed to fetch news. Please check your connection.');
             isFetching = false;
@@ -4759,12 +4959,10 @@ const APP_VERSION = 31;
     async function displayCurrentSubcat() {
         const key = scopeKey();
         const cached = scopeCache[key];
-        console.log('[displayCurrentSubcat] key=' + key + ', sourceFilter=' + sourceFilter + ', cached=' + !!cached);
         if (cached) {
             const totalArticles = cached.articles ? cached.articles.length : 0;
             const ibArticles = cached.articles ? cached.articles.filter(a => a._isPublished).length : 0;
             const feedArticles = cached.articles ? cached.articles.filter(a => !a._isPublished).length : 0;
-            console.log('[displayCurrentSubcat] total=' + totalArticles + ', ib=' + ibArticles + ', feeds=' + feedArticles);
         }
         if (!cached) {
             await renderContent();
@@ -4776,7 +4974,6 @@ const APP_VERSION = 31;
             articles = getFilteredArticles(currentSubcat, cached);
         }
         catch (e) {
-            console.error('Error filtering articles:', e);
             showError('Failed to filter articles. Try refreshing.');
             return;
         }
@@ -4819,7 +5016,6 @@ const APP_VERSION = 31;
                 }
             }
             catch (e) {
-                console.warn('Trending ranking failed:', e);
             }
         }
         // Tag every article with its subject. tagArticleWithSubject
@@ -4869,7 +5065,6 @@ const APP_VERSION = 31;
                 }
             }
             catch (e) {
-                console.warn('Conflict detection failed:', e);
             }
         }
         else {
@@ -4885,7 +5080,6 @@ const APP_VERSION = 31;
             await renderTranslated(articles);
         }
         catch (e) {
-            console.error('Error rendering articles:', e);
             showError('Failed to render articles. Try refreshing.');
         }
         finally {
@@ -4922,6 +5116,7 @@ const APP_VERSION = 31;
         }
     }
     async function renderTranslated(articles) {
+        const savedScrollY = window.scrollY;
         const targetLang = Settings.get('language');
         const translated = targetLang !== 'en'
             ? await Translator.translateArticles(articles, targetLang)
@@ -4932,6 +5127,7 @@ const APP_VERSION = 31;
         else {
             renderArticles(translated);
         }
+        requestAnimationFrame(() => window.scrollTo(0, savedScrollY));
     }
     let currentSearch = '';
     let currentExploreQuery = '';
@@ -4947,12 +5143,17 @@ const APP_VERSION = 31;
                 clearTimeout(searchTimer);
             searchTimer = setTimeout(() => {
                 searchTimer = null;
-                const key = scopeKey();
-                const cached = scopeCache[key];
-                if (!cached)
-                    return;
-                const articles = getFilteredArticles(currentSubcat, cached);
-                renderTranslated(articles);
+                if (currentSearch) {
+                    const all = collectScopeArticles();
+                    const articles = applySearch(all);
+                    renderTranslated(articles);
+                } else {
+                    const key = scopeKey();
+                    const cached = scopeCache[key];
+                    if (!cached) return;
+                    const articles = getFilteredArticles(currentSubcat, cached);
+                    renderTranslated(articles);
+                }
             }, 250);
         });
         el.searchInput.addEventListener('keydown', (e) => {
@@ -4963,11 +5164,16 @@ const APP_VERSION = 31;
                 }
                 currentSearch = el.searchInput.value.trim().toLowerCase();
                 _persist();
-                const key = scopeKey();
-                const cached = scopeCache[key];
-                if (!cached)
-                    return;
-                const articles = getFilteredArticles(currentSubcat, cached);
+                let articles;
+                if (currentSearch) {
+                    const all = collectScopeArticles();
+                    articles = applySearch(all);
+                } else {
+                    const key = scopeKey();
+                    const cached = scopeCache[key];
+                    if (!cached) return;
+                    articles = getFilteredArticles(currentSubcat, cached);
+                }
                 renderTranslated(articles);
                 if (currentSearch)
                     applySemanticRank(articles);
@@ -5033,28 +5239,33 @@ const APP_VERSION = 31;
             }
         }
         catch (e) {
-            console.warn('Semantic rank failed:', e && e.message);
         }
     }
     function applySearch(articles) {
         if (!currentSearch)
             return articles;
+        // Field-level prefix search: POSTID:xxx, SOURCE:xxx, DATE:xxx, TAG:xxx
         const prefixMatch = currentSearch.match(/^(postid|source|date|tag|category)\s*:\s*(.+)/i);
         if (prefixMatch) {
             const field = prefixMatch[1].toLowerCase();
             const val = prefixMatch[2].trim();
             return articles.filter(a => {
-                if (field === 'postid') return (a._pubPostId || '').toLowerCase().includes(val);
-                if (field === 'source') return (a.source || '').toLowerCase().includes(val) || (a._pubSourceName || '').toLowerCase().includes(val);
-                if (field === 'date') return (a.pubDate || '').toLowerCase().includes(val);
+                if (field === 'postid')
+                    return (a._pubPostId || '').toLowerCase().includes(val);
+                if (field === 'source')
+                    return (a.source || '').toLowerCase().includes(val) || (a._pubSourceName || '').toLowerCase().includes(val);
+                if (field === 'date')
+                    return (a.pubDate || '').toLowerCase().includes(val);
                 if (field === 'tag') {
                     const tags = a._tags || [];
                     return tags.some(t => t.toLowerCase().includes(val));
                 }
-                if (field === 'category') return (a.feedHint || '').toLowerCase().includes(val) || (a._pubCategory || '').toLowerCase().includes(val);
+                if (field === 'category')
+                    return (a.feedHint || '').toLowerCase().includes(val) || (a._pubCategory || '').toLowerCase().includes(val);
                 return true;
             });
         }
+        // Normal search: across all fields including tags
         return articles.filter(a => {
             const tags = a._tags || [];
             const tagMatch = tags.some(t => t.toLowerCase().includes(currentSearch));
@@ -5219,7 +5430,6 @@ const APP_VERSION = 31;
                 }
             }
             catch (e) {
-                console.warn('Cache cleanup failed (continuing anyway):', e);
             }
             // Reload with a cache-bust query string so the HTTP layer
             // doesn't serve the old HTML.
@@ -5317,7 +5527,6 @@ const APP_VERSION = 31;
         // sourceFilter — getFilteredArticles handles the source
         // filtering at display time.
         const allPublished = getCachedPublished();
-        console.log('[_fetchAndCache] getCachedPublished returned ' + allPublished.length + ' articles');
         const matchingPub = allPublished.filter(p => {
             const scopeMatch = p._pubScope === currentScope;
             const nationMatch = currentScope !== 'nation' || p._pubNation === currentNation;
@@ -5334,10 +5543,8 @@ const APP_VERSION = 31;
         for (const cat of Object.keys(groups))
             allArticles.push(...groups[cat]);
         const key = scopeKey();
-        console.log('[_fetchAndCache] key=' + key + ', sourceFilter=' + sourceFilter + ', totalArticles=' + allArticles.length);
         const ibCount = allArticles.filter(a => a._isPublished).length;
         const feedCount = allArticles.filter(a => !a._isPublished).length;
-        console.log('[_fetchAndCache] after filter: ib=' + ibCount + ', feeds=' + feedCount);
         scopeCache[key] = { articles: allArticles, groups };
         liveAllLoaded = false;
         loadAllState = 'idle';
@@ -5357,7 +5564,6 @@ const APP_VERSION = 31;
             showRecentButton();
         }
         catch (err) {
-            console.error('Background refresh failed:', err);
             isBackgroundRefreshing = false;
             hideRefreshStatus();
         }
@@ -5378,7 +5584,6 @@ const APP_VERSION = 31;
             applyRecentAndShowLive();
         }
         catch (err) {
-            console.error('Fetch and apply failed:', err);
         }
         finally {
             isBackgroundRefreshing = false;
@@ -5528,14 +5733,16 @@ const APP_VERSION = 31;
     }
     function closeSettings() {
         closeModal('settings');
+        for (const k of Object.keys(scopeCache))
+            scopeCache[k] = null;
+        if (currentSection === 'feeds')
+            renderContent();
     }
     function saveSettings() {
         const lang = $('#settings-language')?.value || 'en';
         Settings.save({ language: lang });
         syncSettingsToCloud();
         closeSettings();
-        if (currentSection === 'feeds')
-            displayCurrentSubcat();
     }
     function bindSettings() {
         el.settingsBtn.addEventListener('click', e => { e.stopPropagation(); openSettings(); });
@@ -5633,6 +5840,8 @@ const APP_VERSION = 31;
         if (el.hardRefreshModal)
             el.hardRefreshModal.addEventListener('click', e => { if (e.target === el.hardRefreshModal)
                 closeHardRefreshModal(); });
+        // ── AI Model (Semantic Search) controls in settings modal ──
+        bindModalAIModel();
         // Options button toggles the extras row (sort, filter, translate,
         // hard refresh, activity). The panel stays open until the user
         // clicks the button again or clicks outside — it used to auto-
@@ -5972,7 +6181,6 @@ const APP_VERSION = 31;
             await FeedManager.addCustomFeed(name, url, scope, nation, subcat, 'en');
         }
         catch (e) {
-            console.warn('addCustomFeed failed:', e && e.message);
         }
         validatedFeed = null;
         if (el.feedUrlInput)
@@ -5981,6 +6189,9 @@ const APP_VERSION = 31;
             el.feedNameInput.value = '';
         if (el.feedValidateMsg)
             el.feedValidateMsg.textContent = '';
+        // Clear scope caches so the next fetch picks up the new custom feed
+        for (const k of Object.keys(scopeCache))
+            scopeCache[k] = null;
         await renderCustomFeedList();
     }
     async function renderCustomFeedList() {
@@ -5991,12 +6202,17 @@ const APP_VERSION = 31;
             el.feedCustomList.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.82rem;">No custom feeds added.</p>';
             return;
         }
+        const nations = FeedManager.getNations();
+        const nationOpts = Object.entries(nations).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+        const cats = FeedManager.subcategories();
+        const subOpts = cats.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+        const scopeOpts = '<option value="global">Global</option><option value="nation">Nation</option>';
         el.feedCustomList.innerHTML = '<ul class="feed-list">' + feeds.map(f => {
             const isG = f.isGoogleNews || (f.url && f.url.includes('news.google.com'));
-            return '<li' + (isG ? ' class="feed-google"' : '') + '><div><span class="feed-source">' + f.name +
+            return '<li' + (isG ? ' class="feed-google"' : '') + '><div><span class="feed-source feed-source-editable" data-url="' + (f.url || '').replace(/"/g, '&quot;') + '" data-name="' + (f.name || '').replace(/"/g, '&quot;') + '" data-scope="' + (f.scope || 'global') + '" data-nation="' + (f.nation || '') + '" data-subcat="' + (f.subcat || 'politics') + '">' + f.name +
                 (isG ? ' <span class="sub-google-badge">Google</span>' : '') +
                 '</span><span class="feed-cat">' +
-                (f.scope === 'nation' ? (FeedManager.getNations()[f.nation] || f.nation) + ' / ' : 'Global / ') +
+                (f.scope === 'nation' ? (nations[f.nation] || f.nation) + ' / ' : 'Global / ') +
                 FeedManager.subcatLabel(f.subcat, 'global') + '</span></div>' +
                 '<span class="feed-remove" data-url="' + f.url + '">Remove</span></li>';
         }).join('') + '</ul>';
@@ -6006,9 +6222,50 @@ const APP_VERSION = 31;
                     await FeedManager.removeCustomFeed(btn.dataset.url);
                 }
                 catch (e) {
-                    console.warn('removeCustomFeed failed:', e && e.message);
                 }
+                // Clear scope caches so the next fetch drops the removed feed
+                for (const k of Object.keys(scopeCache))
+                    scopeCache[k] = null;
                 await renderCustomFeedList();
+            });
+        });
+        el.feedCustomList.querySelectorAll('.feed-source-editable').forEach(em => {
+            em.addEventListener('click', e => {
+                e.stopPropagation();
+                const existing = el.feedCustomList.querySelector('.feed-edit-popup');
+                if (existing) existing.remove();
+                const popup = document.createElement('div');
+                popup.className = 'feed-edit-popup';
+                popup.innerHTML =
+                    '<div class="feed-edit-row"><label>Name</label><input type="text" class="feed-edit-name" value="' + (em.dataset.name || '').replace(/"/g, '&quot;') + '"></div>' +
+                    '<div class="feed-edit-row"><label>Scope</label><select class="feed-edit-scope">' + scopeOpts + '</select></div>' +
+                    '<div class="feed-edit-row feed-edit-nation-row"><label>Nation</label><select class="feed-edit-nation">' + nationOpts + '</select></div>' +
+                    '<div class="feed-edit-row"><label>Subcategory</label><select class="feed-edit-subcat">' + subOpts + '</select></div>' +
+                    '<div class="feed-edit-actions"><button class="feed-edit-save">Save</button><button class="feed-edit-cancel">Cancel</button></div>';
+                em.parentNode.insertBefore(popup, em.nextSibling);
+                const scopeSel = popup.querySelector('.feed-edit-scope');
+                const nationRow = popup.querySelector('.feed-edit-nation-row');
+                scopeSel.value = em.dataset.scope || 'global';
+                popup.querySelector('.feed-edit-nation').value = em.dataset.nation || '';
+                popup.querySelector('.feed-edit-subcat').value = em.dataset.subcat || 'politics';
+                nationRow.style.display = scopeSel.value === 'nation' ? '' : 'none';
+                scopeSel.addEventListener('change', () => { nationRow.style.display = scopeSel.value === 'nation' ? '' : 'none'; });
+                popup.querySelector('.feed-edit-cancel').addEventListener('click', () => popup.remove());
+                popup.querySelector('.feed-edit-save').addEventListener('click', async () => {
+                    const newName = popup.querySelector('.feed-edit-name').value.trim() || em.dataset.name;
+                    const newScope = scopeSel.value;
+                    const newNation = popup.querySelector('.feed-edit-nation').value;
+                    const newSubcat = popup.querySelector('.feed-edit-subcat').value;
+                    await FeedManager.addCustomFeed(newName, em.dataset.url, newScope, newNation, newSubcat);
+                    popup.remove();
+                    await renderCustomFeedList();
+                });
+                document.addEventListener('click', function closePopup(ev) {
+                    if (!popup.contains(ev.target) && ev.target !== em) {
+                        popup.remove();
+                        document.removeEventListener('click', closePopup);
+                    }
+                });
             });
         });
     }
@@ -6079,6 +6336,10 @@ const APP_VERSION = 31;
     }
     function closeSourcesConfigModal() {
         closeModal('sourcesConfig');
+        for (const k of Object.keys(scopeCache))
+            scopeCache[k] = null;
+        if (currentSection === 'feeds')
+            renderContent();
     }
     // Pick a stable "few" region chips to show when the user isn't
     // searching. We always show "All" + 4 of the most common regions
@@ -6289,6 +6550,9 @@ const APP_VERSION = 31;
                 if (changed) {
                     localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
                     syncSubscriptionsToCloud();
+                    // Clear scope caches so the next fetch respects the new subscription list
+                    for (const k of Object.keys(scopeCache))
+                        scopeCache[k] = null;
                     renderSourcesConfigTable();
                 }
             });
@@ -6313,6 +6577,9 @@ const APP_VERSION = 31;
                 FeedManager.toggleSubscription(url);
                 localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
                 syncSubscriptionsToCloud();
+                // Clear scope caches so the next fetch respects the new subscription list
+                for (const k of Object.keys(scopeCache))
+                    scopeCache[k] = null;
                 // Optimistic UI update — toggle the visual state immediately
                 // and let the next render (or the settings-page count refresh)
                 // reconcile the persisted state.
@@ -6342,6 +6609,9 @@ const APP_VERSION = 31;
                 FeedManager.toggleSubscription(cb.dataset.url);
                 localStorage.setItem('newsfeeds_subscriptions_initialized', '1');
                 syncSubscriptionsToCloud();
+                // Clear scope caches so the next fetch respects the new subscription list
+                for (const k of Object.keys(scopeCache))
+                    scopeCache[k] = null;
                 const row = cb.closest('.scm-row');
                 if (row)
                     row.classList.toggle('scm-active', cb.checked);
@@ -6405,7 +6675,6 @@ const APP_VERSION = 31;
         if (modalImgUrl && modalImgUrl.startsWith('http')) {
             const isIB = modalImgUrl.includes('ib-post-images');
             if (isIB) {
-                console.log('[openArticleDetail] Fetching IB modal image with cache:no-store:', modalImgUrl);
                 fetch(modalImgUrl, { cache: 'no-store' })
                     .then(r => r.blob())
                     .then(blob => { el.articleModalImg.src = URL.createObjectURL(blob); })
@@ -6429,17 +6698,32 @@ const APP_VERSION = 31;
         if (conflictSection) {
             const c = article._conflicts;
             if (c && c.isConflicting) {
+                const hasSentiment = c.conflicts.some(g => g.metric === 'sentiment');
+                const hasOmission = c.conflicts.some(g => g.metric === 'omission');
+                const hasStance = c.conflicts.some(g => g.metric === 'editorial_stance');
                 const hasClaims = c.conflicts.some(g => g.metric === 'claim');
-                const headerText = hasClaims && c.conflicts.every(g => g.metric === 'claim')
-                    ? 'Other sources report conflicting claims'
-                    : 'Other sources report different figures or claims';
+                let headerText;
+                if (hasSentiment) headerText = 'Other sources use different framing';
+                else if (hasOmission) headerText = 'Other sources omit key details';
+                else if (hasStance) headerText = 'Other sources take opposing editorial stances';
+                else if (hasClaims) headerText = 'Other sources report conflicting claims';
+                else headerText = 'Other sources report different figures or claims';
                 conflictSection.innerHTML =
                     '<div class="amc-header"><span class="amc-warn">⚠</span> ' + headerText + '</div>' +
                         '<div class="amc-body">' +
                         c.conflicts.map(group => {
-                            const metricLabel = group.metric === 'claim'
-                                ? (group.subject ? 'About ' + escHtml(group.subject) : 'Claim')
-                                : escHtml(group.metric);
+                            let metricLabel;
+                            if (group.metric === 'claim') {
+                                metricLabel = group.subject ? 'About ' + escHtml(group.subject) : 'Claim';
+                            } else if (group.metric === 'sentiment') {
+                                metricLabel = group.subject ? 'Framing: ' + escHtml(group.subject) : 'Framing conflict';
+                            } else if (group.metric === 'omission') {
+                                metricLabel = group.subject ? 'Omission: ' + escHtml(group.subject) : 'Omission detected';
+                            } else if (group.metric === 'editorial_stance') {
+                                metricLabel = 'Editorial stance';
+                            } else {
+                                metricLabel = escHtml(group.metric);
+                            }
                             return '<div class="amc-row">' +
                                 '<div class="amc-metric">' + metricLabel + '</div>' +
                                 group.detail.map(g => '<div class="amc-value-group">' +
@@ -6631,7 +6915,6 @@ const APP_VERSION = 31;
                 return;
             }
             catch (err) {
-                console.warn('Reader proxy ' + proxy.url + ' failed:', err.message);
             }
         }
         // Iframe fallback — proxies don't support CORS, load via iframe
@@ -6865,13 +7148,11 @@ const APP_VERSION = 31;
                 const img = await loadImage(dataUrl);
                 if (img) {
                     const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
-                    console.log('[Share] Image loaded via proxy:', proxyHost);
                     return img;
                 }
             }
             catch (e) {
                 const proxyHost = (target.split('?')[0] || '').replace(/^https?:\/\//, '');
-                console.warn('[Share] Proxy failed:', proxyHost, e && e.message);
             }
         }
         return null;
@@ -6940,7 +7221,6 @@ const APP_VERSION = 31;
             return blob;
         }
         catch (err) {
-            console.warn('[Share] dom-to-image-more failed:', err.message);
             return null;
         }
         finally {
@@ -6999,9 +7279,241 @@ const APP_VERSION = 31;
         }
         catch (err) {
             btn && btn.classList.remove('btn-busy');
-            console.warn('Screenshot failed:', err.message);
             flashCopyButton(btn, 'Screenshot failed');
         }
+    }
+    // Quote share: renders QCS design in fullscreen modal with Copy Image / Copy as Text.
+    function _copyTextMobile(text, btn, label) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:50%;left:50%;opacity:0;width:0;height:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        try { document.execCommand('copy'); } catch (_) { }
+        document.body.removeChild(ta);
+        if (btn) {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = label; }, 1500);
+        }
+    }
+    function _buildQuoteText(article) {
+        const parts = ['Quote:', article.summary || ''];
+        if (article._pubQuoteFrom) parts.push('', article._pubQuoteFrom);
+        if (article._pubQuoteOccupation) parts.push(article._pubQuoteOccupation);
+        parts.push('');
+        if (article._pubPostId) parts.push(article._pubPostId);
+        const sourceLink = article._pubSourceLink || article.link || '';
+        if (sourceLink) parts.push(sourceLink);
+        const userTags = article._tags || [];
+        const hashtags = userTags.length > 0
+            ? userTags.map(t => '#' + t).join(' ')
+            : buildHashtags(article).join(' ');
+        if (hashtags) { parts.push('', hashtags); }
+        return parts.join('\n');
+    }
+    function _buildPostText(article) {
+        const parts = [article.title || ''];
+        const desc = article.summary || article.body || '';
+        if (desc) parts.push(desc);
+        parts.push('');
+        if (article._pubPostId) parts.push(article._pubPostId);
+        const sourceLink = article._pubSourceLink || article.link || '';
+        if (sourceLink) parts.push(sourceLink);
+        const userTags = article._tags || [];
+        const hashtags = userTags.length > 0
+            ? userTags.map(t => '#' + t).join(' ')
+            : buildHashtags(article).join(' ');
+        if (hashtags) { parts.push('', hashtags); }
+        return parts.join('\n');
+    }
+    function handleQuoteShare(article, mode) {
+        if (!window.QuoteCardStudio || !QuoteCardStudio.renderCardCanvas) return;
+        const dd = article._designData || null;
+        const articleData = {
+            summary: article.summary || '',
+            title: '',
+            _pubQuoteFrom: article._pubQuoteFrom || '',
+            _pubQuoteOccupation: article._pubQuoteOccupation || '',
+            _pubQuoteDate: article._pubQuoteDate || '',
+        };
+        let designData = dd ? JSON.parse(JSON.stringify(dd)) : (window.QuoteCardStudio ? QuoteCardStudio.getSettings() : null);
+        // For "text" mode: strip bg and fg images from design data
+        if (mode === 'text' && designData) {
+            designData.cardBgType = 'gradient';
+            designData.cardBackground = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+            designData.fgImages = [];
+            if (designData.borderStyle !== 'none') {
+                designData.borderStyle = 'none';
+                designData.borderWidth = 0;
+            }
+        }
+        // Build and show modal
+        let overlay = document.getElementById('quote-share-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'quote-share-overlay';
+            overlay.className = 'modal-overlay open';
+            overlay.innerHTML = `
+                <div class="modal" style="max-width:480px;width:95vw;border-radius:var(--radius-lg);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;">
+                    <div class="modal-header">
+                        <button class="modal-close" id="qs-close">&times;</button>
+                        <h2 id="qs-title">Copy Image</h2>
+                    </div>
+                    <div class="modal-body" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#111;padding:12px;">
+                        <canvas id="qs-canvas" style="max-width:100%;max-height:calc(100dvh - 140px);border-radius:8px;display:block;"></canvas>
+                    </div>
+                    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <button class="btn" id="qs-btn-text">Copy as Text</button>
+                        <button class="btn btn-primary" id="qs-btn-image">Copy Image</button>
+                        <button class="btn" id="qs-btn-download">Download</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#qs-close').addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+            const renderMode = (m) => {
+                const base = dd ? JSON.parse(JSON.stringify(dd)) : (window.QuoteCardStudio ? QuoteCardStudio.getSettings() : null);
+                const dd2 = base;
+                if (m === 'text' && dd2) {
+                    dd2.cardBgType = 'gradient';
+                    dd2.cardBackground = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+                    dd2.fgImages = [];
+                    if (dd2.borderStyle !== 'none') { dd2.borderStyle = 'none'; dd2.borderWidth = 0; }
+                }
+                const qsCanvas = document.getElementById('qs-canvas');
+                if (!qsCanvas) return;
+                QuoteCardStudio.renderCardCanvas(m === 'text' ? dd2 : (dd || base), articleData).then(c => {
+                    if (!c) return;
+                    qsCanvas.width = c.width;
+                    qsCanvas.height = c.height;
+                    qsCanvas.getContext('2d').drawImage(c, 0, 0);
+                });
+            };
+            overlay.querySelector('#qs-btn-image').addEventListener('click', () => {
+                const text = _buildQuoteText(article);
+                _copyTextMobile(text, overlay.querySelector('#qs-btn-image'), 'Copy Image');
+            });
+            overlay.querySelector('#qs-btn-text').addEventListener('click', () => {
+                const text = _buildQuoteText(article);
+                _copyTextMobile(text, overlay.querySelector('#qs-btn-text'), 'Copy as Text');
+            });
+            overlay.querySelector('#qs-btn-download').addEventListener('click', () => {
+                const qsCanvas = document.getElementById('qs-canvas');
+                if (!qsCanvas) return;
+                const a = document.createElement('a');
+                a.download = 'quote-card-' + Date.now() + '.png';
+                a.href = qsCanvas.toDataURL('image/png');
+                a.click();
+            });
+        }
+        // Render and highlight active mode button
+        const qsTitle = document.getElementById('qs-title');
+        if (qsTitle) qsTitle.textContent = mode === 'text' ? 'Copy as Text' : 'Copy Image';
+        const qsBtnText = document.getElementById('qs-btn-text');
+        const qsBtnImage = document.getElementById('qs-btn-image');
+        if (qsBtnText) qsBtnText.className = mode === 'text' ? 'btn btn-primary' : 'btn';
+        if (qsBtnImage) qsBtnImage.className = mode === 'text' ? 'btn' : 'btn btn-primary';
+        const qsCanvas = document.getElementById('qs-canvas');
+        if (!qsCanvas) return;
+        QuoteCardStudio.renderCardCanvas(designData, articleData).then(c => {
+            if (!c) return;
+            qsCanvas.width = c.width;
+            qsCanvas.height = c.height;
+            qsCanvas.getContext('2d').drawImage(c, 0, 0);
+        });
+    }
+    // Post share: renders PostDesigner canvas in fullscreen modal with Copy Image / Copy as Text / Download.
+    function handlePostShare(article, mode) {
+        if (!window.PostDesigner || !PostDesigner.renderCardCanvas) return;
+        const dd = article._postDesignData || article._designData || null;
+        const articleData = { title: article.title || '', description: article.summary || article.body || '', pubDate: article.pubDate || article.date_published || '' };
+        let designData = dd ? JSON.parse(JSON.stringify(dd)) : (window.PostDesigner ? PostDesigner.getSettings() : null);
+        // For "text" mode: strip bg and fg images from design data
+        if (mode === 'text' && designData) {
+            designData.cardBgType = 'gradient';
+            designData.cardBackground = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+            designData.fgImages = [];
+            if (designData.borderStyle !== 'none') {
+                designData.borderStyle = 'none';
+                designData.borderWidth = 0;
+            }
+        }
+        // Build and show modal
+        let overlay = document.getElementById('post-share-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'post-share-overlay';
+            overlay.className = 'modal-overlay open';
+            overlay.innerHTML = `
+                <div class="modal" style="max-width:480px;width:95vw;border-radius:var(--radius-lg);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;">
+                    <div class="modal-header">
+                        <button class="modal-close" id="ps-close">&times;</button>
+                        <h2 id="ps-title">Copy Image</h2>
+                    </div>
+                    <div class="modal-body" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#111;padding:12px;">
+                        <canvas id="ps-canvas" style="max-width:100%;max-height:calc(100dvh - 140px);border-radius:8px;display:block;"></canvas>
+                    </div>
+                    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <button class="btn" id="ps-btn-text">Copy as Text</button>
+                        <button class="btn btn-primary" id="ps-btn-image">Copy Image</button>
+                        <button class="btn" id="ps-btn-download">Download</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#ps-close').addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+            const renderPostMode = (m) => {
+                const base = dd ? JSON.parse(JSON.stringify(dd)) : (window.PostDesigner ? PostDesigner.getSettings() : null);
+                const dd2 = base;
+                if (m === 'text' && dd2) {
+                    dd2.cardBgType = 'gradient';
+                    dd2.cardBackground = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+                    dd2.fgImages = [];
+                    if (dd2.borderStyle !== 'none') { dd2.borderStyle = 'none'; dd2.borderWidth = 0; }
+                }
+                const psCanvas = document.getElementById('ps-canvas');
+                if (!psCanvas) return;
+                PostDesigner.renderCardCanvas(m === 'text' ? dd2 : (dd || base), articleData).then(c => {
+                    if (!c) return;
+                    psCanvas.width = c.width;
+                    psCanvas.height = c.height;
+                    psCanvas.getContext('2d').drawImage(c, 0, 0);
+                });
+            };
+            overlay.querySelector('#ps-btn-image').addEventListener('click', () => {
+                const text = _buildPostText(article);
+                _copyTextMobile(text, overlay.querySelector('#ps-btn-image'), 'Copy Image');
+            });
+            overlay.querySelector('#ps-btn-text').addEventListener('click', () => {
+                const text = _buildPostText(article);
+                _copyTextMobile(text, overlay.querySelector('#ps-btn-text'), 'Copy as Text');
+            });
+            overlay.querySelector('#ps-btn-download').addEventListener('click', () => {
+                const psCanvas = document.getElementById('ps-canvas');
+                if (!psCanvas) return;
+                const a = document.createElement('a');
+                a.download = 'post-card-' + Date.now() + '.png';
+                a.href = psCanvas.toDataURL('image/png');
+                a.click();
+            });
+        }
+        // Render and highlight active mode button
+        const psTitle = document.getElementById('ps-title');
+        if (psTitle) psTitle.textContent = mode === 'text' ? 'Copy as Text' : 'Copy Image';
+        const psBtnText = document.getElementById('ps-btn-text');
+        const psBtnImage = document.getElementById('ps-btn-image');
+        if (psBtnText) psBtnText.className = mode === 'text' ? 'btn btn-primary' : 'btn';
+        if (psBtnImage) psBtnImage.className = mode === 'text' ? 'btn' : 'btn btn-primary';
+        const psCanvas = document.getElementById('ps-canvas');
+        if (!psCanvas) return;
+        PostDesigner.renderCardCanvas(designData, articleData).then(c => {
+            if (!c) return;
+            psCanvas.width = c.width;
+            psCanvas.height = c.height;
+            psCanvas.getContext('2d').drawImage(c, 0, 0);
+        });
     }
     // Generate a share image. Opens the CanvasEditor modal for live
     // preview and adjustment before copying/downloading.
@@ -7026,7 +7538,6 @@ const APP_VERSION = 31;
                 // For Supabase storage URLs, try direct fetch first (same as card rendering)
                 const isSupabaseStorage = imgUrl.includes('ib-post-images');
                 if (isSupabaseStorage) {
-                    console.log('[Share] Supabase storage URL, trying direct fetch first');
                     try {
                         const resp = await fetch(imgUrl, { cache: 'no-store' });
                         if (resp.ok) {
@@ -7041,46 +7552,44 @@ const APP_VERSION = 31;
                                 if (dataUrl) {
                                     img = await loadImage(dataUrl);
                                     if (img) {
-                                        console.log('[Share] Image loaded via direct fetch:', img.naturalWidth, 'x', img.naturalHeight);
                                     }
                                 }
                             }
                         }
                     }
                     catch (e) {
-                        console.warn('[Share] Direct fetch failed:', e && e.message);
                     }
                 }
-                console.log('[Share] Image candidates:', candidates.length, 'hasThumb:', hasThumb);
                 for (const candidate of candidates) {
                     if (img)
                         break;
-                    console.log('[Share] Trying:', candidate);
                     const loaded = await loadImageWithFallback(candidate);
                     if (loaded) {
                         img = loaded;
-                        console.log('[Share] Image loaded via proxy:', img.naturalWidth, 'x', img.naturalHeight, 'from', candidate);
                     }
                 }
                 if (!img) {
-                    console.warn('[Share] All image candidates failed. Falling back to text-only.');
                 }
             }
             btn && btn.classList.remove('btn-busy');
             // Open the canvas editor modal with live preview
             if (window.CanvasEditor) {
                 window.CanvasEditor.open(article, includeImage, img, async (canvas, blob) => {
+                    // After user copies/downloads from the editor, also copy caption
                     const caption = await buildShareCaption(article);
-                    try { await navigator.clipboard.writeText(caption); } catch {}
+                    try {
+                        await navigator.clipboard.writeText(caption);
+                    }
+                    catch { }
                 });
             }
             else {
+                // Fallback: direct render if CanvasEditor not loaded
                 await handleShareImageDirect(article, btn, includeImage, img);
             }
         }
         catch (err) {
             btn && btn.classList.remove('btn-busy');
-            console.warn('Image share failed:', err.message);
             handleShare(article.link, article.title, article.source);
         }
     }
@@ -7270,16 +7779,24 @@ const APP_VERSION = 31;
                 const textBoxY = textStartY + quoteRowH + medGap * 0.7;
                 // Text box mode: draw semi-transparent background behind quote text + from + occupation
                 if (Settings.get('quoteTextBox')) {
-                    const boxTop = textBoxY - medGap;
-                    const boxBottom = textBoxY + qH + medGap * 6 + fromH + occH + medGap * 3;
+                    const tbPadX = 14;
+                    const tbPadY = 12;
+                    const boxTop = textBoxY - tbPadY;
+                    const contentEndY = textBoxY + qH + medGap * 6
+                        + (quoteFrom ? fromH + medGap : 0)
+                        + (quoteOccupation ? occH + medGap : 0)
+                        + medGap;
+                    const boxBottom = contentEndY + tbPadY;
                     const boxH = boxBottom - boxTop;
-                    const boxX = PAD - 8;
-                    const boxW = textWR + 16;
+                    const boxX = PAD - tbPadX;
+                    const boxW = textWR + tbPadX * 2;
+                    const boxRadius = Math.round(W * 0.012);
                     ctx.save();
                     ctx.beginPath();
                     if (ctx.roundRect) {
-                        ctx.roundRect(boxX, boxTop, boxW, boxH, Math.round(W * 0.012));
-                    } else {
+                        ctx.roundRect(boxX, boxTop, boxW, boxH, boxRadius);
+                    }
+                    else {
                         ctx.rect(boxX, boxTop, boxW, boxH);
                     }
                     ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -7514,31 +8031,34 @@ const APP_VERSION = 31;
                 topGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = topGrad;
                 ctx.fillRect(0, imageTopY, W, fadeH);
-                // Bottom fade: transparent → full black (within bounds)
+                // Bottom fade: transparent → full black (within clip bounds)
                 // Extended fade ensures the image is completely hidden before the
                 // source name text area begins — no image pixels leak through.
+                const clipH = ibHeaderH + maxH;
                 const botFadeH = Math.round(maxH * 0.45);
-                const botGrad = ctx.createLinearGradient(0, imageTopY + maxH - botFadeH, 0, imageTopY + maxH);
+                const botGrad = ctx.createLinearGradient(0, imageTopY + clipH - botFadeH, 0, imageTopY + clipH);
                 botGrad.addColorStop(0, 'rgba(0,0,0,0)');
                 botGrad.addColorStop(0.5, 'rgba(0,0,0,0.6)');
                 botGrad.addColorStop(0.8, 'rgba(0,0,0,0.92)');
                 botGrad.addColorStop(1, 'rgba(0,0,0,1)');
                 ctx.fillStyle = botGrad;
-                ctx.fillRect(0, imageTopY + maxH - botFadeH, W, botFadeH);
+                ctx.fillRect(0, imageTopY + clipH - botFadeH, W, botFadeH);
                 // Left fade: black → transparent
                 const fadeW = Math.round(W * 0.18);
                 const leftGrad = ctx.createLinearGradient(0, 0, fadeW, 0);
                 leftGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
                 leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = leftGrad;
-                ctx.fillRect(0, imageTopY, fadeW, maxH);
+                ctx.fillRect(0, imageTopY, fadeW, clipH);
                 // Right fade: transparent → black
                 const rightGrad = ctx.createLinearGradient(W - fadeW, 0, W, 0);
                 rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
                 rightGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
                 ctx.fillStyle = rightGrad;
-                ctx.fillRect(W - fadeW, imageTopY, fadeW, maxH);
+                ctx.fillRect(W - fadeW, imageTopY, fadeW, clipH);
                 ctx.restore(); // remove clip
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, imageTopY + clipH, W, gap);
                 cursorY += imgBlockH + gap;
             }
             // Source label (uppercase, red) on the left, published date on the right
@@ -7658,7 +8178,6 @@ const APP_VERSION = 31;
         }
         catch (err) {
             btn && btn.classList.remove('btn-busy');
-            console.warn('Image share failed:', err.message);
             handleShare(article.link, article.title, article.source);
         }
     }
@@ -7699,6 +8218,7 @@ const APP_VERSION = 31;
         const isQuote = article._pubType === 'quote';
         const lines = [];
         if (isQuote) {
+            // Quote format
             const quoteText = (article.summary || '').trim();
             const quoteFrom = article._pubQuoteFrom || '';
             const occupation = article._pubQuoteOccupation || '';
@@ -7712,6 +8232,7 @@ const APP_VERSION = 31;
                 lines.push('');
         }
         else {
+            // Post format
             const title = (article.title || '').trim();
             const desc = cleanSummary(stripHtml(article.summary || '')).trim();
             if (title)
@@ -7721,6 +8242,7 @@ const APP_VERSION = 31;
             if (title || desc)
                 lines.push('');
         }
+        // Source line: show name only if not "Invisible Broadcast", always show link
         const sourceName = article._pubSourceName || '';
         const sourceLink = article._pubSourceLink || article.link || '';
         if (sourceName && sourceName.toLowerCase() !== 'invisible broadcast') {
@@ -7729,9 +8251,11 @@ const APP_VERSION = 31;
         if (sourceLink)
             lines.push(sourceLink);
         lines.push('');
+        // Post ID
         const postId = article._pubPostId || '';
         if (postId)
             lines.push(postId);
+        // Hashtags: prefer user tags, fallback to auto-generated
         const userTags = article._tags || [];
         if (userTags.length > 0) {
             lines.push(userTags.map(t => '#' + t).join(' '));
@@ -8017,8 +8541,10 @@ const APP_VERSION = 31;
             [/\b(privacy|surveillance|encryption|data-breach|hack\b|cyberattack)\b/, '#privacy'],
         ];
         for (const [re, tag] of EMOTION_MAP) {
-            if (tags.length >= 5) break;
-            if (re.test(combined)) addTag(tag);
+            if (tags.length >= 5)
+                break;
+            if (re.test(combined))
+                addTag(tag);
         }
         // Extract named entities: capitalized multi-word phrases in the title
         const titleClean = (article.title || '').trim();
@@ -8026,7 +8552,8 @@ const APP_VERSION = 31;
             const rawEntities = titleClean.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
             const stopEntities = new Set(['The', 'This', 'That', 'These', 'Those', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'In', 'On', 'At', 'For', 'With', 'By', 'To', 'From', 'As', 'But', 'Not', 'All', 'One', 'Two', 'New', 'After', 'Before', 'Over', 'Under', 'More', 'Most', 'Some', 'Such', 'Than', 'Then', 'Also', 'Very', 'Just', 'About', 'Into', 'Through', 'During', 'Before', 'After', 'Above', 'Below', 'Between', 'Among', 'Without', 'Within', 'Along', 'Across', 'Behind', 'Beyond', 'Upcoming', 'Ongoing', 'Recent', 'Latest', 'Breaking', 'Update', 'Developing', 'Report', 'Exclusive', 'Alert', 'Video', 'Photo', 'Watch', 'Listen', 'Live']);
             for (const ent of rawEntities) {
-                if (tags.length >= 5) break;
+                if (tags.length >= 5)
+                    break;
                 const clean = ent.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                 if (clean.length >= 3 && !stopEntities.has(ent)) {
                     addTag(ent);
@@ -8035,9 +8562,11 @@ const APP_VERSION = 31;
         }
         // Pad with subcat and source
         const subcat = (article.feedHint || article.subcat || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (tags.length < 5) addTag(subcat);
+        if (tags.length < 5)
+            addTag(subcat);
         const source = (article.source || '').toString().toLowerCase().replace(/^the\s+/, '').split(/[\s\-—–|]+/)[0].replace(/[^a-z0-9]/g, '');
-        if (tags.length < 5 && source !== subcat) addTag(source);
+        if (tags.length < 5 && source !== subcat)
+            addTag(source);
         return tags.slice(0, 5);
     }
     // Brief "blinking" feedback after a successful copy. We
@@ -8099,7 +8628,7 @@ const APP_VERSION = 31;
     function toggleFullscreen() {
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             if (document.exitFullscreen)
-                document.exitFullscreen().catch(err => console.warn('Exit fullscreen failed:', err.message));
+                document.exitFullscreen().catch(() => {});
             else if (document.webkitExitFullscreen)
                 document.webkitExitFullscreen();
         }
@@ -8146,12 +8675,16 @@ const APP_VERSION = 31;
                 e.stopPropagation();
                 const url = decodeURIComponent(se.dataset.url);
                 const article = findArticleByLink(url);
-                const shareCheckImg = article && article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
-                if (shareCheckImg && shareCheckImg.startsWith('http')) {
-                    handleShareImage(article, se, true);
-                }
-                else {
-                    handleShare(url, se.dataset.title, se.dataset.source);
+                if (article && article._pubType === 'quote') {
+                    handleQuoteShare(article, 'image');
+                } else {
+                    const shareCheckImg = article && article.imageUrl ? article.imageUrl.replace(/^\/\//, 'https://') : '';
+                    if (shareCheckImg && shareCheckImg.startsWith('http')) {
+                        handleShareImage(article, se, true);
+                    }
+                    else {
+                        handleShare(url, se.dataset.title, se.dataset.source);
+                    }
                 }
                 return;
             }
@@ -8289,6 +8822,15 @@ const APP_VERSION = 31;
                 const article = findArticleByLink(url);
                 if (article && article._isPublished && article._pubId)
                     deletePublishedArticle(article._pubId);
+                return;
+            }
+            const dupBtn = e.target.closest('.card-duplicate-btn');
+            if (dupBtn) {
+                e.stopPropagation();
+                if (!currentUser) { alert('Please sign in'); return; }
+                const url = decodeURIComponent(dupBtn.dataset.duplicateArticle);
+                const article = findArticleByLink(url);
+                if (article) duplicateArticle(article);
                 return;
             }
             const ae = e.target.closest('[data-article]');
@@ -8504,16 +9046,13 @@ const APP_VERSION = 31;
                     }
                 });
                 if (error) {
-                    console.warn('Cloud sync failed:', error.message);
                     return;
                 }
                 // Refresh currentUser so subsequent pulls see the new metadata
                 if (data?.user)
                     currentUser = data.user;
-                console.log('[CloudSync] Pushed', subs.length, 'subscriptions + settings to Supabase');
             }
             catch (e) {
-                console.warn('Cloud sync failed:', e?.message || e);
             }
         }, 600);
     }
@@ -8580,7 +9119,6 @@ const APP_VERSION = 31;
             if (error) {
                 showAuthMsg(error.message, 'error');
                 markInputError('auth-password');
-                console.warn('Auth sign-in error:', error);
                 return;
             }
             // Success — show confirmation, then close
@@ -8591,7 +9129,6 @@ const APP_VERSION = 31;
             }, 600);
         }
         catch (err) {
-            console.error('Sign-in failed:', err);
             showAuthMsg(err.message || 'Sign-in failed. Please try again.', 'error');
             markInputError('auth-password');
         }
@@ -8600,7 +9137,6 @@ const APP_VERSION = 31;
         }
     }
     async function signUpWithEmail(name, email, password) {
-        console.log('[Auth] signUpWithEmail started for:', email);
         setAuthBusy(true);
         showAuthMsg('Connecting to server...', null);
         clearInputErrors();
@@ -8610,7 +9146,6 @@ const APP_VERSION = 31;
             if (!client) {
                 throw new Error('Auth service is not available. Please refresh the page and try again.');
             }
-            console.log('[Auth] Supabase client available, calling signUp...');
             const { data, error } = await withTimeout(client.auth.signUp({
                 email, password,
                 options: {
@@ -8618,10 +9153,8 @@ const APP_VERSION = 31;
                     emailRedirectTo: window.location.origin
                 }
             }), 20000, 'Sign-up');
-            console.log('[Auth] signUp response:', { hasSession: !!data?.session, hasUser: !!data?.user, error });
             if (error) {
                 showAuthMsg(error.message, 'error');
-                console.warn('[Auth] sign-up error:', error);
                 return;
             }
             // Check if email confirmation is required (no session means confirmation needed)
@@ -8643,7 +9176,6 @@ const APP_VERSION = 31;
             }
         }
         catch (err) {
-            console.error('[Auth] Sign-up failed:', err);
             showAuthMsg(err.message || 'Sign-up failed. Please try again.', 'error');
         }
         finally {
@@ -8655,7 +9187,6 @@ const APP_VERSION = 31;
             await SupabaseStore.getClient().auth.signOut();
         }
         catch (err) {
-            console.warn('Sign-out failed:', err.message);
         }
     }
     function openAuthModal() {
@@ -8680,7 +9211,6 @@ const APP_VERSION = 31;
             }
         }
         catch (err) {
-            console.error('[Auth] Failed to get Supabase client:', err);
             showAuthMsg('Auth service error. Please refresh the page.', 'error');
         }
     }
@@ -8688,7 +9218,6 @@ const APP_VERSION = 31;
         closeModal('auth');
     }
     function handleAuthSubmit() {
-        console.log('[Auth] handleAuthSubmit called, authMode =', authMode, 'authBusy =', authBusy);
         if (authBusy)
             return;
         clearInputErrors();
@@ -8698,22 +9227,18 @@ const APP_VERSION = 31;
             if (!email) {
                 showAuthMsg('Please enter your email.', 'error');
                 markInputError('auth-email');
-                console.warn('[Auth] Sign-in: missing email');
                 return;
             }
             if (!pwd) {
                 showAuthMsg('Please enter your password.', 'error');
                 markInputError('auth-password');
-                console.warn('[Auth] Sign-in: missing password');
                 return;
             }
             if (!isValidEmail(email)) {
                 showAuthMsg('Please enter a valid email address.', 'error');
                 markInputError('auth-email');
-                console.warn('[Auth] Sign-in: invalid email format:', email);
                 return;
             }
-            console.log('[Auth] Sign-in: calling signInWithEmail');
             signInWithEmail(email, pwd);
         }
         else {
@@ -8721,7 +9246,6 @@ const APP_VERSION = 31;
             const email = $('#auth-email')?.value?.trim() || '';
             const pwd = $('#auth-password')?.value || '';
             const pwd2 = $('#auth-password-repeat')?.value || '';
-            console.log('[Auth] Sign-up attempt:', { name, email, pwdLength: pwd?.length, hasRepeat: !!pwd2 });
             if (!name || name.length < 2) {
                 showAuthMsg('Please enter your name (at least 2 characters).', 'error');
                 markInputError('auth-name');
@@ -8757,7 +9281,6 @@ const APP_VERSION = 31;
                 markInputError('auth-password-repeat');
                 return;
             }
-            console.log('[Auth] Sign-up: calling signUpWithEmail');
             signUpWithEmail(name, email, pwd);
         }
     }
@@ -8817,7 +9340,6 @@ const APP_VERSION = 31;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] update name error:', error);
                 return;
             }
             if (msg) {
@@ -8833,7 +9355,6 @@ const APP_VERSION = 31;
             setTimeout(() => closeChangeNameModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Update name failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Update failed.';
                 msg.classList.add('error');
@@ -8907,7 +9428,6 @@ const APP_VERSION = 31;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] update password error:', error);
                 return;
             }
             if (msg) {
@@ -8918,7 +9438,6 @@ const APP_VERSION = 31;
             setTimeout(() => closeChangePasswordModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Update password failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Update failed.';
                 msg.classList.add('error');
@@ -9028,7 +9547,6 @@ const APP_VERSION = 31;
                     msg.classList.add('error');
                     msg.classList.remove('success');
                 }
-                console.warn('[Auth] avatar upload error:', upErr);
                 return;
             }
             // Get public URL
@@ -9059,7 +9577,6 @@ const APP_VERSION = 31;
             setTimeout(() => closeChangeAvatarModal(), 800);
         }
         catch (err) {
-            console.error('[Auth] Avatar upload failed:', err);
             if (msg) {
                 msg.textContent = err.message || 'Upload failed.';
                 msg.classList.add('error');
@@ -9315,13 +9832,11 @@ const APP_VERSION = 31;
                         }
                     }
                     catch (e) {
-                        console.warn('OAuth fallback failed:', e);
                     }
                 }
                 else if (hash.includes('error=')) {
                     const p = new URLSearchParams(hash.replace(/^#/, ''));
                     const errDesc = p.get('error_description') || p.get('error') || 'OAuth error';
-                    console.warn('[Auth] OAuth error in URL hash:', errDesc);
                     // Clean the hash
                     history.replaceState(history.state, '', location.pathname + location.search);
                 }
@@ -9544,18 +10059,15 @@ const APP_VERSION = 31;
     }
     /* ── Loading Overlay ── */
     function showLoadingOverlay(status) {
-        console.log('[showLoadingOverlay] status=' + status);
         const overlay = $('#app-loading-overlay');
         const sp = $('#app-loading-spinner');
         const statusEl = $('#app-loading-status');
         const progressWrap = $('#app-loading-progress-wrap');
         const confirm = $('#app-loading-confirm');
         if (overlay) {
-            console.log('[showLoadingOverlay] overlay element found, adding open class');
             overlay.classList.add('open');
         }
         else {
-            console.warn('[showLoadingOverlay] #app-loading-overlay not found in DOM!');
         }
         if (sp)
             sp.style.display = 'block';
@@ -9588,10 +10100,102 @@ const APP_VERSION = 31;
             confirm.style.display = 'flex';
     }
     function hideLoadingOverlay() {
-        console.log('[hideLoadingOverlay] removing open class');
+        if (_consentOverlayActive)
+            return;
         const overlay = $('#app-loading-overlay');
         if (overlay)
             overlay.classList.remove('open');
+    }
+    function bindModalAIModel() {
+        const statusEl = $('#modal-ai-model-status');
+        const statusText = $('#modal-ai-model-status-text');
+        const dlBtn = $('#modal-ai-model-download-btn');
+        const rmBtn = $('#modal-ai-model-remove-btn');
+        const progressWrap = $('#modal-ai-model-progress-wrap');
+        const progressBar = $('#modal-ai-model-progress-bar');
+        const detailEl = $('#modal-ai-model-detail');
+        if (!statusEl)
+            return;
+        function refreshUI() {
+            if (!window.Embeddings) {
+                statusText.textContent = 'Not loaded';
+                statusEl.className = 'ai-model-status ai-declined';
+                if (dlBtn) dlBtn.style.display = 'none';
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'AI module not loaded.';
+                return;
+            }
+            const ready = Embeddings.isReady && Embeddings.isReady();
+            const consented = Embeddings.hasConsent && Embeddings.hasConsent();
+            const declined = localStorage.getItem('embeddings_consent') === '0';
+            statusEl.className = 'ai-model-status';
+            if (ready) {
+                statusEl.classList.add('ai-ready');
+                statusText.textContent = 'Downloaded';
+                if (dlBtn) dlBtn.style.display = 'none';
+                if (rmBtn) rmBtn.style.display = '';
+                if (detailEl) detailEl.textContent = 'AI semantic search is active.';
+            }
+            else if (consented) {
+                statusEl.classList.add('ai-downloading');
+                statusText.textContent = 'Consented';
+                if (dlBtn) { dlBtn.style.display = ''; dlBtn.textContent = 'Download Now'; }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'Model will download on next search, or click Download Now.';
+            }
+            else if (declined) {
+                statusEl.classList.add('ai-declined');
+                statusText.textContent = 'Disabled';
+                if (dlBtn) { dlBtn.style.display = ''; dlBtn.textContent = 'Enable & Download'; }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'AI search is off.';
+            }
+            else {
+                statusText.textContent = 'Not configured';
+                if (dlBtn) { dlBtn.style.display = ''; dlBtn.textContent = 'Download Model'; }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'Download a ~25 MB model for smarter search.';
+            }
+        }
+        if (dlBtn) {
+            dlBtn.addEventListener('click', () => {
+                if (!window.Embeddings) return;
+                Embeddings.setConsent(true);
+                if (progressWrap) progressWrap.style.display = 'block';
+                if (dlBtn) { dlBtn.disabled = true; dlBtn.textContent = 'Downloading\u2026'; }
+                if (statusText) statusText.textContent = 'Downloading\u2026';
+                statusEl.className = 'ai-model-status ai-downloading';
+                Embeddings.loadModelWithProgress(p => {
+                    if (p.status === 'download') {
+                        if (typeof p.progress === 'number' && progressBar)
+                            progressBar.style.width = Math.round(p.progress * 100) + '%';
+                        if (statusText)
+                            statusText.textContent = 'Downloading ' + (p.phase === 'library' ? 'library' : 'model') + '\u2026';
+                    }
+                    else if (p.status === 'ready') {
+                        if (progressBar) progressBar.style.width = '100%';
+                        if (dlBtn) dlBtn.disabled = false;
+                        setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; refreshUI(); }, 600);
+                    }
+                    else if (p.status === 'error') {
+                        if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = 'Retry Download'; }
+                        if (statusText) statusText.textContent = 'Failed';
+                        if (detailEl) detailEl.textContent = 'Error: ' + (p.error || 'unknown');
+                    }
+                }).catch(() => {
+                    if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = 'Retry Download'; }
+                    if (progressWrap) progressWrap.style.display = 'none';
+                });
+            });
+        }
+        if (rmBtn) {
+            rmBtn.addEventListener('click', () => {
+                if (!window.Embeddings) return;
+                Embeddings.setConsent(false);
+                refreshUI();
+            });
+        }
+        refreshUI();
     }
     /* ── Init ── */
     async function init() {
@@ -9600,7 +10204,6 @@ const APP_VERSION = 31;
         }
         catch (err) {
             el.main.innerHTML = '<div class="error-state"><div class="error-icon">\u26A0\uFE0F</div><p>Could not load feed configuration.</p></div>';
-            console.error(err);
             return;
         }
         // First-run subscription initialisation. Previously this only
@@ -9623,7 +10226,6 @@ const APP_VERSION = 31;
             }
         }
         catch (e) {
-            console.warn('Subscription auto-init failed:', e);
         }
         // Restore persisted cross-page state from AppState so the user
         // lands on the same scope / nation / subcat / mode / view / sort
@@ -9705,7 +10307,6 @@ const APP_VERSION = 31;
             await FeedManager.loadCustomFeeds();
         }
         catch (e) {
-            console.warn('FeedManager.loadCustomFeeds failed:', e && e.message);
         }
         // Resume any article-archive queue from a previous session.
         // This must happen AFTER SupabaseStore is ready (the archive
@@ -9723,11 +10324,13 @@ const APP_VERSION = 31;
         // already locally cached by the browser). Declined → silent no-op.
         if (window.Embeddings && Embeddings.needsConsent) {
             if (Embeddings.needsConsent()) {
+                _consentOverlayActive = true;
                 showLoadingOverlay('Loading feeds\u2026');
                 const skipBtn = $('#app-loading-skip-btn');
                 const dlBtn = $('#app-loading-download-btn');
                 if (skipBtn)
                     skipBtn.onclick = () => {
+                        _consentOverlayActive = false;
                         Embeddings.setConsent(false);
                         hideLoadingOverlay();
                     };
@@ -9746,14 +10349,16 @@ const APP_VERSION = 31;
                                     showLoadingProgress(p.progress);
                             }
                             else if (p.status === 'ready') {
+                                _consentOverlayActive = false;
                                 updateLoadingStatus('AI model ready');
                                 setTimeout(hideLoadingOverlay, 400);
                             }
                             else if (p.status === 'error') {
+                                _consentOverlayActive = false;
                                 updateLoadingStatus('AI model failed: ' + (p.error || 'unknown error'));
                                 setTimeout(hideLoadingOverlay, 2000);
                             }
-                        }).catch(() => { });
+                        }).catch(() => { _consentOverlayActive = false; });
                     };
                 setTimeout(showLoadingConfirm, 600);
             }

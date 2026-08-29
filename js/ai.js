@@ -138,7 +138,7 @@ const AI = (() => {
             for (const b of fullCorpus) {
                 if (b === a)
                     continue;
-                if (seen.has(b.link))
+                if (seen.has(b._isPublished ? ('pub_' + b._pubId) : b.link))
                     continue;
                 const btoks = tokenize((b.title || '') + ' ' + (b.summary || ''));
                 let shared = false;
@@ -150,7 +150,7 @@ const AI = (() => {
                 }
                 if (shared) {
                     c++;
-                    seen.add(b.link);
+                    seen.add(b._isPublished ? ('pub_' + b._pubId) : b.link);
                 }
             }
             a._trendingCount = c;

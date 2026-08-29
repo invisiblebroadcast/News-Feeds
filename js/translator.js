@@ -34,7 +34,6 @@ const Translator = (() => {
                 return result;
             }
             catch (err) {
-                console.warn('Translation failed:', err.message);
                 return text;
             }
             finally {

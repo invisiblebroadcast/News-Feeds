@@ -1,8 +1,9 @@
 // @ts-nocheck
 (async () => {
     const $ = (sel, ctx) => (ctx || document).querySelector(sel);
-    console.log('[NewsFeeds] App version: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'));
+    function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
     function init() {
+        bindAIModel();
         populateLanguage();
         renderSubscriptions();
         bindFeedHealth();
@@ -62,21 +63,71 @@
             });
         });
     }
+    function renderFailedPanel(panel) {
+        if (!window.SourceHealth || !panel) return;
+        const entries = SourceHealth.getVisibleSources()
+            .sort((a, b) => (b.failures || 0) - (a.failures || 0));
+        if (entries.length === 0) {
+            panel.innerHTML = '<p style="opacity:.6;margin:0">No failed sources tracked yet.</p>';
+            return;
+        }
+        const allFeeds = (window.FeedManager && typeof FeedManager.getSubscribableFeeds === 'function')
+            ? FeedManager.getSubscribableFeeds() : [];
+        let html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px">';
+        for (const e of entries) {
+            const match = allFeeds.find(f => f.url === e.url);
+            const title = (match && match.title) ? match.title : e.url;
+            const region = (match && match.region) ? match.region : '';
+            const pill = e.disabled
+                ? '<span style="background:#ef4444;color:#fff;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600">DISABLED</span>'
+                : '<span style="background:#f59e0b;color:#000;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600">' + (e.failures || 0) + ' / 5 FAILS</span>';
+            const err = e.lastError ? '<div style="font-size:11px;color:var(--text-secondary,#999);margin-top:3px;word-break:break-all">Error: ' + escHtml(e.lastError) + '</div>' : '';
+            const time = e.lastFailureAt ? '<div style="font-size:11px;color:var(--text-secondary,#999);margin-top:2px">' + new Date(e.lastFailureAt).toLocaleString() + '</div>' : '';
+            html += '<li style="background:var(--surface-secondary,#1a1a2e);border-radius:8px;padding:10px 12px;border:1px solid var(--border-primary,#333)">';
+            html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+            html += pill;
+            html += '<strong style="font-size:13px">' + escHtml(title) + '</strong>';
+            if (region) html += '<span style="font-size:11px;opacity:.5">' + escHtml(region) + '</span>';
+            html += '</div>';
+            html += '<div style="font-size:11px;color:var(--text-secondary,#888);margin-top:4px;word-break:break-all;opacity:.7">' + escHtml(e.url) + '</div>';
+            html += err;
+            html += time;
+            html += '</li>';
+        }
+        html += '</ul>';
+        panel.innerHTML = html;
+    }
     function bindFeedHealth() {
         const toggle = $('#auto-disable-failing-sources');
         const count = $('#feed-health-count');
         const reenable = $('#reenable-all-btn');
+        const viewBtn = $('#view-failed-btn');
+        const panel = $('#failed-sources-panel');
+        let panelOpen = false;
         if (toggle) {
             toggle.checked = Settings.get('autoDisableFailingSources') === true;
             toggle.addEventListener('change', () => {
                 Settings.set('autoDisableFailingSources', toggle.checked);
             });
         }
+        if (viewBtn) {
+            viewBtn.addEventListener('click', () => {
+                panelOpen = !panelOpen;
+                if (panelOpen) {
+                    renderFailedPanel(panel);
+                    panel.style.display = 'block';
+                    viewBtn.textContent = 'Hide Failed & Disabled Sources';
+                } else {
+                    panel.style.display = 'none';
+                    viewBtn.textContent = 'View Failed & Disabled Sources';
+                }
+            });
+        }
         if (window.SourceHealth) {
             const updateHealth = () => {
-                const data = SourceHealth.getAll();
-                const disabled = SourceHealth.getDisabled();
-                const total = Object.keys(data).length;
+                const tracked = SourceHealth.getTrackedSources();
+                const disabled = tracked.filter(s => s.disabled);
+                const total = tracked.length;
                 if (count) {
                     if (total === 0) {
                         count.innerHTML = '<span class="feed-health-count-empty">No failing sources tracked yet.</span>';
@@ -88,10 +139,14 @@
                 if (reenable) {
                     reenable.disabled = disabled.length === 0;
                     reenable.onclick = () => {
-                        SourceHealth.resetAll();
+                        SourceHealth.reEnableAll();
                         updateHealth();
                     };
                 }
+                if (viewBtn) {
+                    viewBtn.style.display = total === 0 ? 'none' : '';
+                }
+                if (panelOpen) renderFailedPanel(panel);
             };
             updateHealth();
         }
@@ -161,11 +216,57 @@
                 list.innerHTML = '<p style="font-size:0.82rem;color:var(--text-tertiary);font-style:italic;margin-top:8px;">No custom feeds added yet.</p>';
                 return;
             }
-            list.innerHTML = '<ul class="feed-list">' + feeds.map(f => '<li><span class="feed-source">' + f.name + '</span> <span class="feed-cat">' + (f.scope || 'global') + '</span> <span class="feed-remove" data-url="' + f.url.replace(/"/g, '&quot;') + '">Remove</span></li>').join('') + '</ul>';
+            const nations = FeedManager.getNations();
+            const nationOpts = Object.entries(nations).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+            const cats = FeedManager.subcategories();
+            const subOpts = cats.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+            const scopeOpts = '<option value="global">Global</option><option value="nation">Nation</option>';
+            list.innerHTML = '<ul class="feed-list">' + feeds.map(f =>
+                '<li><span class="feed-source feed-source-editable" data-url="' + f.url.replace(/"/g, '&quot;') + '" data-name="' + (f.name || '').replace(/"/g, '&quot;') + '" data-scope="' + (f.scope || 'global') + '" data-nation="' + (f.nation || '') + '" data-subcat="' + (f.subcat || 'politics') + '">' + f.name + '</span> <span class="feed-cat">' + (f.scope === 'nation' ? (nations[f.nation] || f.nation) + ' / ' : 'Global / ') + (f.subcat || 'politics') + '</span> <span class="feed-remove" data-url="' + f.url.replace(/"/g, '&quot;') + '">Remove</span></li>'
+            ).join('') + '</ul>';
             list.querySelectorAll('.feed-remove').forEach(el => {
                 el.addEventListener('click', () => {
                     FeedManager.removeCustomFeed(el.dataset.url);
                     renderCustomList();
+                });
+            });
+            list.querySelectorAll('.feed-source-editable').forEach(el => {
+                el.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const existing = list.querySelector('.feed-edit-popup');
+                    if (existing) existing.remove();
+                    const popup = document.createElement('div');
+                    popup.className = 'feed-edit-popup';
+                    popup.innerHTML =
+                        '<div class="feed-edit-row"><label>Name</label><input type="text" class="feed-edit-name" value="' + (el.dataset.name || '').replace(/"/g, '&quot;') + '"></div>' +
+                        '<div class="feed-edit-row"><label>Scope</label><select class="feed-edit-scope">' + scopeOpts + '</select></div>' +
+                        '<div class="feed-edit-row feed-edit-nation-row"><label>Nation</label><select class="feed-edit-nation">' + nationOpts + '</select></div>' +
+                        '<div class="feed-edit-row"><label>Subcategory</label><select class="feed-edit-subcat">' + subOpts + '</select></div>' +
+                        '<div class="feed-edit-actions"><button class="feed-edit-save">Save</button><button class="feed-edit-cancel">Cancel</button></div>';
+                    el.parentNode.insertBefore(popup, el.nextSibling);
+                    const scopeSel = popup.querySelector('.feed-edit-scope');
+                    const nationRow = popup.querySelector('.feed-edit-nation-row');
+                    scopeSel.value = el.dataset.scope || 'global';
+                    popup.querySelector('.feed-edit-nation').value = el.dataset.nation || '';
+                    popup.querySelector('.feed-edit-subcat').value = el.dataset.subcat || 'politics';
+                    nationRow.style.display = scopeSel.value === 'nation' ? '' : 'none';
+                    scopeSel.addEventListener('change', () => { nationRow.style.display = scopeSel.value === 'nation' ? '' : 'none'; });
+                    popup.querySelector('.feed-edit-cancel').addEventListener('click', () => popup.remove());
+                    popup.querySelector('.feed-edit-save').addEventListener('click', async () => {
+                        const newName = popup.querySelector('.feed-edit-name').value.trim() || el.dataset.name;
+                        const newScope = scopeSel.value;
+                        const newNation = popup.querySelector('.feed-edit-nation').value;
+                        const newSubcat = popup.querySelector('.feed-edit-subcat').value;
+                        await FeedManager.addCustomFeed(newName, el.dataset.url, newScope, newNation, newSubcat);
+                        popup.remove();
+                        renderCustomList();
+                    });
+                    document.addEventListener('click', function closePopup(ev) {
+                        if (!popup.contains(ev.target) && ev.target !== el) {
+                            popup.remove();
+                            document.removeEventListener('click', closePopup);
+                        }
+                    });
                 });
             });
         }
@@ -317,11 +418,119 @@
                     }
                 }
                 catch (e) {
-                    console.warn('Cache cleanup failed:', e);
                 }
                 window.location.href = 'index.html?_t=' + Date.now();
             })();
         });
+    }
+    function bindAIModel() {
+        const statusEl = $('#ai-model-status');
+        const statusText = $('#ai-model-status-text');
+        const dlBtn = $('#ai-model-download-btn');
+        const rmBtn = $('#ai-model-remove-btn');
+        const progressWrap = $('#ai-model-progress-wrap');
+        const progressBar = $('#ai-model-progress-bar');
+        const detailEl = $('#ai-model-detail');
+        if (!statusEl)
+            return;
+        if (!window.Embeddings) {
+            statusText.textContent = 'Not available';
+            if (detailEl) detailEl.textContent = 'AI module did not load. Try refreshing the page.';
+            return;
+        }
+        function refreshUI() {
+            const ready = Embeddings.isReady && Embeddings.isReady();
+            const consented = Embeddings.hasConsent && Embeddings.hasConsent();
+            const declined = localStorage.getItem('embeddings_consent') === '0';
+            statusEl.className = 'ai-model-status';
+            if (ready) {
+                statusEl.classList.add('ai-ready');
+                statusText.textContent = 'Downloaded';
+                if (dlBtn) dlBtn.style.display = 'none';
+                if (rmBtn) rmBtn.style.display = '';
+                if (detailEl) detailEl.textContent = 'AI semantic search is active. Articles will be grouped by meaning.';
+            }
+            else if (consented) {
+                statusEl.classList.add('ai-downloading');
+                statusText.textContent = 'Consented (load on next search)';
+                if (dlBtn) {
+                    dlBtn.style.display = '';
+                    dlBtn.textContent = 'Download Now';
+                }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'Model will download automatically when you use search, or click Download Now.';
+            }
+            else if (declined) {
+                statusEl.classList.add('ai-declined');
+                statusText.textContent = 'Disabled';
+                if (dlBtn) {
+                    dlBtn.style.display = '';
+                    dlBtn.textContent = 'Enable & Download';
+                }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'AI search is off. Enable it to download the model.';
+            }
+            else {
+                statusText.textContent = 'Not configured';
+                if (dlBtn) {
+                    dlBtn.style.display = '';
+                    dlBtn.textContent = 'Download Model';
+                }
+                if (rmBtn) rmBtn.style.display = 'none';
+                if (detailEl) detailEl.textContent = 'Download a ~25 MB model for smarter, meaning-based article search.';
+            }
+        }
+        if (dlBtn) {
+            dlBtn.addEventListener('click', () => {
+                Embeddings.setConsent(true);
+                if (progressWrap) progressWrap.style.display = 'block';
+                if (dlBtn) {
+                    dlBtn.disabled = true;
+                    dlBtn.textContent = 'Downloading…';
+                }
+                if (statusText) statusText.textContent = 'Downloading…';
+                statusEl.className = 'ai-model-status ai-downloading';
+                Embeddings.loadModelWithProgress(p => {
+                    if (p.status === 'download') {
+                        if (typeof p.progress === 'number' && progressBar)
+                            progressBar.style.width = Math.round(p.progress * 100) + '%';
+                        if (statusText)
+                            statusText.textContent = 'Downloading ' + (p.phase === 'library' ? 'library' : 'model') + '…';
+                    }
+                    else if (p.status === 'ready') {
+                        if (progressBar) progressBar.style.width = '100%';
+                        if (statusText) statusText.textContent = 'Downloaded';
+                        if (dlBtn) dlBtn.disabled = false;
+                        setTimeout(() => {
+                            if (progressWrap) progressWrap.style.display = 'none';
+                            refreshUI();
+                        }, 600);
+                    }
+                    else if (p.status === 'error') {
+                        if (statusText) statusText.textContent = 'Failed';
+                        if (dlBtn) {
+                            dlBtn.disabled = false;
+                            dlBtn.textContent = 'Retry Download';
+                        }
+                        if (detailEl) detailEl.textContent = 'Error: ' + (p.error || 'unknown');
+                    }
+                }).catch(() => {
+                    if (dlBtn) {
+                        dlBtn.disabled = false;
+                        dlBtn.textContent = 'Retry Download';
+                    }
+                    if (statusText) statusText.textContent = 'Failed';
+                    if (progressWrap) progressWrap.style.display = 'none';
+                });
+            });
+        }
+        if (rmBtn) {
+            rmBtn.addEventListener('click', () => {
+                Embeddings.setConsent(false);
+                refreshUI();
+            });
+        }
+        refreshUI();
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

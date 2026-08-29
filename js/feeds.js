@@ -97,7 +97,7 @@ const FeedManager = (() => {
     function getFeeds(scope, nation) {
         const feeds = [];
         const subscribedUrls = getSubscribedFeeds();
-        // Custom feeds are always included (user explicitly added them)
+        // Custom feeds: global feeds only in global tab, nation feeds only in nation tab
         const custom = getCustomFeeds();
         for (const f of custom) {
             if (f.scope === 'global' && scope === 'global')
@@ -105,7 +105,7 @@ const FeedManager = (() => {
             if (f.scope === 'nation' && scope === 'nation' && f.nation === nation)
                 feeds.push({ name: f.name, url: f.url, hint: f.subcat || 'politics', lang: f.lang || 'en' });
         }
-        // Direct RSS feeds from subscribable list — only include subscribed ones
+        // Built-in RSS feeds from subscribable list — only include subscribed ones
         const allSubs = getSubscribableFeeds();
         for (const f of allSubs) {
             if (!subscribedUrls.includes(f.url))
@@ -153,9 +153,7 @@ const FeedManager = (() => {
     // cache if loaded, else the localStorage value. Always synchronous
     // so the fetcher / article-archive hot paths don't have to await.
     function getCustomFeeds() {
-        if (customFeedsCache)
-            return customFeedsCache;
-        return _readLocalCustomFeeds();
+        return customFeedsCache || _readLocalCustomFeeds();
     }
     // Async loader. Called at app start (after SupabaseStore is
     // ready) and again on every SIGNED_IN event. When signed in,
@@ -189,7 +187,6 @@ const FeedManager = (() => {
                     .eq('user_id', session.user.id)
                     .order('created_at', { ascending: true });
                 if (error) {
-                    console.warn('FeedManager: custom_feeds load error', error.message);
                     customFeedsCache = local.slice();
                     return customFeedsCache;
                 }
@@ -205,7 +202,6 @@ const FeedManager = (() => {
                 return customFeedsCache;
             }
             catch (e) {
-                console.warn('FeedManager: loadCustomFeeds failed', e && e.message);
                 if (!customFeedsCache)
                     customFeedsCache = _readLocalCustomFeeds();
                 return customFeedsCache;
@@ -254,11 +250,8 @@ const FeedManager = (() => {
                 scope: feed.scope, nation: feed.nation,
                 subcat: feed.subcat, lang: feed.lang
             }, { onConflict: 'user_id,url' });
-            if (error)
-                console.warn('FeedManager: addCustomFeed Supabase upsert error', error.message);
         }
         catch (e) {
-            console.warn('FeedManager: addCustomFeed Supabase write failed', e && e.message);
         }
     }
     // Remove a custom feed. Updates the in-memory cache + localStorage
@@ -284,11 +277,8 @@ const FeedManager = (() => {
                 .delete()
                 .eq('user_id', session.user.id)
                 .eq('url', url);
-            if (error)
-                console.warn('FeedManager: removeCustomFeed Supabase delete error', error.message);
         }
         catch (e) {
-            console.warn('FeedManager: removeCustomFeed Supabase delete failed', e && e.message);
         }
     }
     // Sync any localStorage-only custom feeds up to Supabase when the
@@ -320,7 +310,6 @@ const FeedManager = (() => {
                     .select('url')
                     .eq('user_id', session.user.id);
                 if (readErr) {
-                    console.warn('FeedManager: syncCustomFeedsOnSignIn read error', readErr.message);
                     return;
                 }
                 const remoteUrls = new Set((remote || []).map(r => r.url));
@@ -337,15 +326,15 @@ const FeedManager = (() => {
                     const { error: upErr } = await client
                         .from(CUSTOM_FEEDS_TABLE)
                         .upsert(rows, { onConflict: 'user_id,url' });
-                    if (upErr)
-                        console.warn('FeedManager: syncCustomFeedsOnSignIn upload error', upErr.message);
+                    if (upErr) {
+                        void 0;
+                    }
                 }
                 // Reload from Supabase so the in-memory cache is the merged
                 // authoritative set.
                 await loadCustomFeeds();
             }
             catch (e) {
-                console.warn('FeedManager: syncCustomFeedsOnSignIn failed', e && e.message);
             }
             finally {
                 signedInSyncPromise = null;
@@ -495,7 +484,6 @@ try {
                     FeedManager.syncCustomFeedsOnSignIn();
                 }
                 catch (e) {
-                    console.warn('FeedManager: SIGNED_IN sync threw', e && e.message);
                 }
             }
             else if (event === 'SIGNED_OUT') {

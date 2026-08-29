@@ -134,6 +134,7 @@ const FeedFetcher = (() => {
                 guid
             });
         }
+        articles.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
         return articles;
     }
     function isGoogleNewsUrl(url) {
@@ -153,14 +154,14 @@ const FeedFetcher = (() => {
         if (!xmlText || !xmlText.includes('<')) {
             throw new Error('Proxy returned empty or non-XML content');
         }
-        // Quick parse to count items before we build full article objects.
-        try {
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(xmlText, 'text/xml');
-            const itemCount = xml.querySelectorAll('item').length;
+        // Detect HTML error pages
+        if (xmlText.includes('<html') || xmlText.includes('<!DOCTYPE')) {
+            throw new Error('Proxy returned HTML instead of RSS');
         }
-        catch { }
-        return parseRssXml(xmlText, feed);
+        const result = parseRssXml(xmlText, feed);
+        if (!result.length)
+            throw new Error('Proxy returned 0 items');
+        return result;
     }
     function cleanGoogleNewsUrl(url) {
         // Google blocks automated requests with regional params (hl, gl, ceid).
@@ -182,6 +183,30 @@ const FeedFetcher = (() => {
         catch { }
         return url;
     }
+    const GOOGLE_NEWS_TIMELINES = ['1h', '1d', '7d', '1y'];
+    function buildGoogleNewsTimelineUrls(originalUrl) {
+        try {
+            const u = new URL(originalUrl);
+            const baseQ = u.searchParams.get('q') || '';
+            // Strip any existing when: filter from the query
+            const cleanQ = baseQ.replace(/\s+when:\S+/g, '').trim();
+            const urls = [];
+            for (const t of GOOGLE_NEWS_TIMELINES) {
+                const timelineQ = cleanQ + ' when:' + t;
+                const timelineUrl = new URL('https://news.google.com/rss/search');
+                timelineUrl.searchParams.set('q', timelineQ);
+                // Preserve regional params from the original URL
+                for (const p of ['hl', 'gl', 'ceid']) {
+                    if (u.searchParams.has(p))
+                        timelineUrl.searchParams.set(p, u.searchParams.get(p));
+                }
+                urls.push(timelineUrl.toString());
+            }
+            return urls;
+        }
+        catch { }
+        return [originalUrl];
+    }
     async function proxyFetchViaWorker(feed) {
         const cleanUrl = cleanGoogleNewsUrl(feed.url);
         const proxyUrl = CORS_PROXY_CF + encodeURIComponent(cleanUrl);
@@ -192,7 +217,14 @@ const FeedFetcher = (() => {
         if (!xmlText || !xmlText.includes('<')) {
             throw new Error('CF Worker returned empty or non-XML content');
         }
-        return parseRssXml(xmlText, feed);
+        // Detect HTML error pages (Google bot-block, Cloudflare challenge, etc.)
+        if (xmlText.includes('<html') || xmlText.includes('<!DOCTYPE')) {
+            throw new Error('CF Worker returned HTML instead of RSS');
+        }
+        const result = parseRssXml(xmlText, feed);
+        if (!result.length)
+            throw new Error('CF Worker returned 0 items');
+        return result;
     }
     // Some RSS feeds (WordPress-style, BlogEngine, etc.) support pagination via
     // `?p=N` or `?page=N`. When a feed has exactly the typical cap (50-100 items),
@@ -232,97 +264,105 @@ const FeedFetcher = (() => {
         }
         return collected;
     }
+    // Fetch a single Google News RSS URL through the proxy chain.
+    // Used by fetchFeed to fetch multiple timelines in parallel.
+    async function fetchSingleGoogleNewsFeed(feed, perSourceCap) {
+        const fullUrl = feed.url;
+        const cleanUrl = cleanGoogleNewsUrl(feed.url);
+        // Try CF Worker with the clean URL (no regional params)
+        try {
+            const proxyUrl = CORS_PROXY_CF + encodeURIComponent(cleanUrl);
+            const res = await fetchWithTimeout(proxyUrl);
+            if (res.ok) {
+                const xmlText = await res.text();
+                if (xmlText && xmlText.includes('<') && !xmlText.includes('<html')) {
+                    const items = parseRssXml(xmlText, feed);
+                    if (items.length) return items;
+                }
+            }
+        }
+        catch (_cf) { }
+        // Try CORS proxy (corsproxy.io) with the full URL (with regional params)
+        try {
+            const proxyUrl = CORS_PROXY + encodeURIComponent(fullUrl);
+            const res = await fetchWithTimeout(proxyUrl);
+            if (res.ok) {
+                const xmlText = await res.text();
+                if (xmlText && xmlText.includes('<') && !xmlText.includes('<html')) {
+                    const items = parseRssXml(xmlText, feed);
+                    if (items.length) return items;
+                }
+            }
+        }
+        catch (_cp) { }
+        // Try secondary CORS proxy (allorigins) with the full URL
+        try {
+            const proxyUrl = CORS_PROXY_2 + encodeURIComponent(fullUrl);
+            const res = await fetchWithTimeout(proxyUrl);
+            if (res.ok) {
+                const xmlText = await res.text();
+                if (xmlText && xmlText.includes('<') && !xmlText.includes('<html')) {
+                    const items = parseRssXml(xmlText, feed);
+                    if (items.length) return items;
+                }
+            }
+        }
+        catch (_co) { }
+        // Fall back to rss2json
+        try {
+            const encodedUrl = encodeURIComponent(fullUrl);
+            const res = await fetchWithTimeout(RSS2JSON_API + encodedUrl + '&count=100');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.status !== 'ok') throw new Error(data.message || 'RSS2JSON error');
+            return (data.items || []).map(item => {
+                let imageUrl = item.thumbnail || '';
+                if (!imageUrl && item.description) imageUrl = extractImageFromHtml(item.description);
+                return {
+                    title: (item.title || '').trim(),
+                    link: (item.link || '').trim(),
+                    summary: smartTruncate((item.description || '').replace(/<[^>]*>/g, '').trim(), 300),
+                    pubDate: correctPubDateTimezone(item.pubDate || '', feed),
+                    author: item.author || '',
+                    imageUrl,
+                    source: feed.name,
+                    feedUrl: feed.url,
+                    feedHint: feed.hint || 'politics',
+                    guid: item.guid || item.link || ''
+                };
+            });
+        }
+        catch (_rss) { }
+        return [];
+    }
     async function fetchFeed(feed, perSourceCap) {
         // perSourceCap: optionally limit the number of items returned per source
         // (live mode uses a small cap like 25; top mode lets everything through).
         // Skip sources the user has disabled via the failed-sources flow —
         // they get tracked but never hit the network until re-enabled.
-        if (window.SourceHealth && SourceHealth.isDisabled(feed.url)) {
+        // Custom feeds (user explicitly added) are never disabled.
+        const isCustom = window.FeedManager && FeedManager.getCustomFeeds &&
+            FeedManager.getCustomFeeds().some(f => f.url === feed.url);
+        if (!isCustom && window.SourceHealth && SourceHealth.isDisabled(feed.url)) {
             return [];
         }
         if (isGoogleNewsUrl(feed.url)) {
-            let items = null;
-            // Try Cloudflare Worker first (fastest, most reliable)
-            try {
-                items = await proxyFetchViaWorker(feed);
-                afterFetch(feed, items);
-                return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
+            // Fetch across multiple time ranges (1h, 1d, 7d, 1y) in parallel,
+            // merge, deduplicate, and sort by date.
+            const timelineUrls = buildGoogleNewsTimelineUrls(feed.url);
+            const timelineFeeds = timelineUrls.map(u => ({ ...feed, url: u }));
+            const results = await Promise.allSettled(
+                timelineFeeds.map(tf => fetchSingleGoogleNewsFeed(tf, perSourceCap))
+            );
+            let allItems = [];
+            for (const r of results) {
+                if (r.status === 'fulfilled' && Array.isArray(r.value))
+                    allItems.push(...r.value);
             }
-            catch (_cf) { }
-            // Try direct browser fetch — the user may be logged
-            // into Google and their session cookies could allow access
-            // to the RSS endpoint. This only works if Google News sets
-            // CORS headers for /rss/ (which it sometimes does).
-            try {
-                const direct = await fetchWithTimeout(feed.url);
-                if (direct.ok) {
-                    const xmlText = await direct.text();
-                    if (xmlText && xmlText.includes('<')) {
-                        items = parseRssXml(xmlText, feed);
-                        afterFetch(feed, items);
-                        return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
-                    }
-                }
-            }
-            catch (_d) { }
-            // Try primary CORS proxy
-            try {
-                items = await proxyFetch(feed);
-                afterFetch(feed, items);
-                return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
-            }
-            catch (e1) {
-                // Try secondary CORS proxy
-                try {
-                    const proxyUrl = CORS_PROXY_2 + encodeURIComponent(feed.url);
-                    const res = await fetchWithTimeout(proxyUrl);
-                    if (res.ok) {
-                        const xmlText = await res.text();
-                        if (xmlText && xmlText.includes('<')) {
-                            items = parseRssXml(xmlText, feed);
-                            afterFetch(feed, items);
-                            return perSourceCap && perSourceCap > 0 ? items.slice(0, perSourceCap) : items;
-                        }
-                    }
-                }
-                catch (e2) {
-                    // Both proxies failed — fall back to rss2json
-                }
-                // Fall back to rss2json
-                const encodedUrl = encodeURIComponent(feed.url);
-                try {
-                    const res = await fetchWithTimeout(RSS2JSON_API + encodedUrl + '&count=100');
-                    if (!res.ok)
-                        throw new Error('HTTP ' + res.status);
-                    const data = await res.json();
-                    if (data.status !== 'ok')
-                        throw new Error(data.message || 'Unknown RSS2JSON error');
-                    const allItems = (data.items || []).map(item => {
-                        let imageUrl = item.thumbnail || '';
-                        if (!imageUrl && item.description) {
-                            imageUrl = extractImageFromHtml(item.description);
-                        }
-                        return {
-                            title: (item.title || '').trim(),
-                            link: (item.link || '').trim(),
-                            summary: smartTruncate((item.description || '').replace(/<[^>]*>/g, '').trim(), 300),
-                            pubDate: correctPubDateTimezone(item.pubDate || '', feed),
-                            author: item.author || '',
-                            imageUrl,
-                            source: feed.name,
-                            feedUrl: feed.url,
-                            feedHint: feed.hint || 'politics',
-                            guid: item.guid || item.link || ''
-                        };
-                    });
-                    afterFetch(feed, allItems);
-                    return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
-                }
-                catch (rssErr) {
-                    afterFetch(feed, [], rssErr || new Error('All fetchers failed for Google News feed'));
-                    return [];
-                }
-            }
+            allItems = deduplicate(allItems);
+            allItems.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+            afterFetch(feed, allItems);
+            return perSourceCap && perSourceCap > 0 ? allItems.slice(0, perSourceCap) : allItems;
         }
         // For non-Google feeds, try the Cloudflare Worker first,
         // then fall back to the CORS proxy with pagination.
@@ -433,6 +473,9 @@ const FeedFetcher = (() => {
     function deduplicate(articles) {
         const seen = new Set();
         return articles.filter(a => {
+            // Never deduplicate published articles — they are separate posts
+            // that may share the same source_link URL
+            if (a._isPublished) return true;
             const linkKey = a.link || a.title;
             if (seen.has(linkKey))
                 return false;

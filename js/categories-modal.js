@@ -310,11 +310,9 @@ window.CategoriesModal = (() => {
                 onSelect(subcat);
             }
             catch (err) {
-                console.error('[CategoriesModal] onSelect threw:', err);
             }
         }
         else {
-            console.warn('[CategoriesModal] pick() called but onSelect is not set; subcat=' + subcat);
         }
         closeModal();
     }

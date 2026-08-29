@@ -82,13 +82,14 @@ window.CustomSourcesModal = (() => {
         }).join('') + '</ul>';
         container.querySelectorAll('.cs-feed-remove').forEach(btn => {
             btn.addEventListener('click', async () => {
-                try {
-                    await FeedManager.removeCustomFeed(btn.dataset.url);
-                }
-                catch (e) {
-                    console.warn('removeCustomFeed failed:', e && e.message);
-                }
-                await renderList();
+        try {
+            await FeedManager.removeCustomFeed(btn.dataset.url);
+        }
+        catch (e) {
+        }
+        // Notify app-home to clear scope caches
+        window.dispatchEvent(new CustomEvent('feeds-changed'));
+        await renderList();
             });
         });
     }
@@ -153,8 +154,9 @@ window.CustomSourcesModal = (() => {
             await FeedManager.addCustomFeed(name, url, scope, nation, subcat, 'en');
         }
         catch (e) {
-            console.warn('addCustomFeed failed:', e && e.message);
         }
+        // Notify app-home to clear scope caches
+        window.dispatchEvent(new CustomEvent('feeds-changed'));
         validatedFeed = null;
         const urlInput = $('#cs-url-input');
         if (urlInput)

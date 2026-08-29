@@ -329,7 +329,50 @@ const Analyzer = (() => {
                 out.set(link, c);
             }
         }
-        // 3) Severity score per cluster — used by the Conflicts view to
+        // 3) Sentiment flip per entity — catches framing conflicts
+        //    where sources describe the same entity with opposite polarity.
+        const sentimentMap = detectSentimentConflicts(articles, threshold);
+        for (const [link, c] of sentimentMap) {
+            if (out.has(link)) {
+                out.get(link).conflicts = out.get(link).conflicts.concat(c.conflicts);
+            } else {
+                out.set(link, c);
+            }
+        }
+        // 4) Omission detection — flags when some sources omit key
+        //    entities that others consider significant.
+        const omissionMap = detectOmissionConflicts(articles, threshold);
+        for (const [link, c] of omissionMap) {
+            if (out.has(link)) {
+                out.get(link).conflicts = out.get(link).conflicts.concat(c.conflicts);
+            } else {
+                out.set(link, c);
+            }
+        }
+        // 5) Source editorial stance — flags when sources with
+        //    opposing historical stances cover the same story.
+        const stanceMap = detectStanceConflicts(articles, threshold);
+        for (const [link, c] of stanceMap) {
+            if (out.has(link)) {
+                out.get(link).conflicts = out.get(link).conflicts.concat(c.conflicts);
+            } else {
+                out.set(link, c);
+            }
+        }
+        // 6) Deduplicate conflicts per cluster — same entity/subject
+        //    shouldn't appear twice in the same article's conflict list.
+        for (const [, c] of out) {
+            if (c.conflicts && c.conflicts.length > 1) {
+                const seen = new Set();
+                c.conflicts = c.conflicts.filter(g => {
+                    const key = (g.metric || '') + '|' + (g.subject || '');
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+            }
+        }
+        // 7) Severity score per cluster — used by the Conflicts view to
         //    sort by importance. Score = w1*(# conflicting metrics) +
         //    w2*(sum of source authority of involved sources) +
         //    w3*(recency boost for the cluster). Capped at 100.
@@ -505,6 +548,542 @@ const Analyzer = (() => {
     const NEGATION_WORDS = ['not', "n't", 'no', 'never', 'denies', 'denied', 'deny',
         'rejects', 'rejected', 'refuses', 'refused', 'fails', 'failed',
         'refuted', 'debunks', 'debunked', 'dismissed'];
+    /* ── Sentiment lexicon (Approach 1: Sentiment flip per entity) ── */
+    const POSITIVE_WORDS = new Set([
+        'good', 'great', 'excellent', 'positive', 'successful', 'winning', 'won', 'wins',
+        'victory', 'victorious', 'triumph', 'triumphant', 'progress', 'progressed',
+        'improve', 'improved', 'improves', 'improving', 'improvement',
+        'peace', 'peaceful', 'peacemaker', 'stability', 'stable', 'secure', 'secured',
+        'safe', 'safety', 'protect', 'protected', 'protects', 'protective', 'guardian',
+        'rescue', 'rescued', 'rescues', 'rescuing', 'survive', 'survived', 'survives',
+        'survival', 'survivor', 'hope', 'hopeful', 'optimistic', 'optimism',
+        'support', 'supported', 'supports', 'supporter', 'back', 'backed', 'backs',
+        'endorse', 'endorsed', 'endorses', 'endorsement', 'approve', 'approved',
+        'approves', 'approval', 'celebrate', 'celebrated', 'celebrates', 'celebration',
+        'honor', 'honored', 'honors', 'honour', 'honoured', 'hero', 'heroic', 'heroes',
+        'brave', 'bravery', 'courage', 'courageous', 'bold', 'strength', 'strong',
+        'powerful', 'empower', 'empowered', 'empowering', 'unity', 'unite', 'united',
+        'unifying', 'together', 'cooperation', 'cooperate', 'collaborate', 'collaboration',
+        'agreement', 'agree', 'agreed', 'accord', 'deal', 'settlement', 'resolve',
+        'resolved', 'resolves', 'resolving', 'solution', 'solved', 'solve',
+        'benefit', 'benefited', 'benefits', 'beneficial', 'gain', 'gained', 'gains',
+        'growth', 'grow', 'grew', 'grows', 'growing', 'flourish', 'flourishing',
+        'prosperity', 'prosperous', 'prosper', 'thrive', 'thriving', 'success',
+        'successful', 'achieve', 'achieved', 'achieves', 'achievement', 'accomplish',
+        'accomplished', 'milestone', 'breakthrough', 'innovation', 'innovative',
+        'advance', 'advanced', 'advances', 'advancing', 'opportunity', 'opportunities',
+        'promising', 'promise', 'promised', 'deliver', 'delivered', 'delivers',
+        'commitment', 'committed', 'dedicate', 'dedicated', 'devotion',
+        'gratitude', 'grateful', 'thank', 'thanks', 'appreciate', 'appreciated',
+        'welcome', 'welcomed', 'praise', 'praised', 'commend', 'commended',
+        'excellence', 'exceptional', 'outstanding', 'remarkable', 'impressive',
+        'inspire', 'inspired', 'inspires', 'inspiring', 'inspiration',
+        'recover', 'recovered', 'recovers', 'recovery', 'recovered', 'heal', 'healed',
+        'healing', 'rebuild', 'rebuilt', 'restoration', 'restore', 'restored',
+        'justice', 'fair', 'fairness', 'equity', 'equal', 'equality',
+        'freedom', 'free', 'liberty', 'democracy', 'democratic', 'reform', 'reformed',
+        'transparent', 'transparency', 'accountability', 'accountable',
+        'aid', 'assistance', 'help', 'helped', 'helping', 'relief', 'support',
+        'donate', 'donated', 'generous', 'generosity', 'charity', 'compassion',
+        'compassionate', 'empathy', 'kindness', 'kind', 'care', 'caring',
+        'love', 'loving', 'affection', 'friend', 'friendly', 'friendship',
+        'ally', 'allied', 'partner', 'partnered', 'partnership',
+        'clean', 'cleaned', 'cleaning', 'pure', 'purify', 'renewable', 'sustainable',
+        'green', 'eco', 'environmental', 'conservation', 'preserve', 'preserved',
+        'vote', 'voted', 'voting', 'election', 'elected', 'democratic',
+        'launch', 'launched', 'launches', 'initiate', 'initiated', 'begin', 'began',
+        'discover', 'discovered', 'discovers', 'discovery', 'invention', 'invent',
+        'create', 'created', 'creates', 'creation', 'creative', 'build', 'built',
+        'develop', 'developed', 'develops', 'development', 'expand', 'expanded',
+        'expand', 'expansion', 'open', 'opened', 'opening', 'access', 'accessible'
+    ]);
+    const NEGATIVE_WORDS = new Set([
+        'bad', 'terrible', 'horrible', 'awful', 'negative', 'fail', 'failed', 'fails',
+        'failure', 'failing', 'falter', 'faltered', 'collapse', 'collapsed', 'collapses',
+        'crash', 'crashed', 'crashes', 'destroy', 'destroyed', 'destroys', 'destruction',
+        'damage', 'damaged', 'damages', 'harm', 'harmed', 'harms', 'harmful', 'hurt',
+        'hurts', 'hurting', 'injure', 'injured', 'injures', 'injury', 'injuries',
+        'wound', 'wounded', 'wounds', 'wounding',
+        'kill', 'killed', 'kills', 'killing', 'death', 'dead', 'died', 'dies', 'dying',
+        'murder', 'murdered', 'murders', 'assassinate', 'assassinated', 'slaughter',
+        'slaughtered', 'massacre', 'massacred', 'casualties', 'casualty', 'toll',
+        'attack', 'attacked', 'attacks', 'attacking', 'assault', 'assaulted', 'assaults',
+        'bomb', 'bombed', 'bombing', 'bombs', 'blast', 'blasted', 'blasts',
+        'shoot', 'shot', 'shooting', 'shootings', 'gunfire', 'armed',
+        'war', 'warring', 'warfare', 'conflict', 'invade', 'invasion', 'invaded',
+        'strike', 'strikes', 'striking', 'airstrike', 'airstrikes',
+        'threat', 'threaten', 'threatened', 'threatens', 'threatening', 'menace',
+        'risk', 'risky', 'danger', 'dangerous', 'endanger', 'endangered', 'peril',
+        'crisis', 'catastrophe', 'catastrophic', 'disaster', 'disastrous', 'devastating',
+        'tragedy', 'tragic', 'horrific', 'horrible', 'gruesome', 'brutal', 'brutality',
+        'violent', 'violence', 'violate', 'violated', 'violates', 'violation',
+        'protest', 'protests', 'protesting', 'riot', 'riots', 'rioting', 'riotous',
+        'unrest', 'turmoil', 'chaos', 'chaotic', 'anarchy', 'anarchic',
+        'corrupt', 'corruption', 'bribery', 'bribe', 'bribed', 'embezzle', 'embezzled',
+        'scandal', 'scandalous', 'fraud', 'fraudulent', 'deceive', 'deceived', 'deceit',
+        'lie', 'lied', 'lies', 'lying', 'dishonest', 'dishonesty', 'false', 'fake',
+        'mislead', 'misleading', 'propaganda', 'manipulate', 'manipulated',
+        'abuse', 'abused', 'abuses', 'abusive', 'exploit', 'exploited', 'exploitation',
+        'oppress', 'oppressed', 'oppression', 'oppressive', 'tyranny', 'tyrant',
+        'dictator', 'dictatorship', 'authoritarian', 'autocracy', 'autocratic',
+        'ban', 'banned', 'bans', 'banning', 'prohibit', 'prohibited', 'prohibition',
+        'restrict', 'restricted', 'restricts', 'restriction', 'limit', 'limited',
+        'block', 'blocked', 'blocking', 'obstruct', 'obstructed', 'hinder', 'hindered',
+        'arrest', 'arrested', 'arrests', 'detain', 'detained', 'detains', 'detention',
+        'jail', 'jailed', 'jails', 'imprison', 'imprisoned', 'prison', 'incarcerate',
+        'convict', 'convicted', 'convicts', 'conviction', 'guilty', 'guilt',
+        'charge', 'charged', 'charges', 'indict', 'indicted', 'indictment',
+        'accuse', 'accused', 'accuses', 'accusation', 'blame', 'blamed', 'blames',
+        'deny', 'denied', 'denies', 'denial', 'reject', 'rejected', 'rejects', 'rejection',
+        'refuse', 'refused', 'refuses', 'refusal', 'veto', 'vetoed', 'vetoes',
+        'dispute', 'disputes', 'disputing', 'disagreement', 'disagree', 'disagrees',
+        'controversy', 'controversial', 'debate', 'debated', 'clash', 'clashed', 'clashes',
+        'tension', 'tensions', 'tense', 'hostile', 'hostility', 'aggression', 'aggressive',
+        'retaliate', 'retaliated', 'retaliation', 'revenge', 'vengeance',
+        'suffer', 'suffered', 'suffers', 'suffering', 'sufferer', 'victim', 'victims',
+        'trauma', 'traumatic', 'devastate', 'devastated', 'devastating',
+        'displace', 'displaced', 'displacement', 'refugee', 'refugees', 'flee', 'fled',
+        'evacuate', 'evacuated', 'evacuation', 'homeless', 'hunger', 'starvation',
+        'famine', 'drought', 'flood', 'flooding', 'earthquake', 'tsunami',
+        'pollute', 'polluted', 'pollution', 'contaminate', 'contaminated',
+        'decline', 'declined', 'declines', 'declining', 'deteriorate', 'deteriorated',
+        'recession', 'recession', 'inflation', 'unemployment', 'poverty', 'poor',
+        'debt', 'bankrupt', 'bankruptcy', 'default', 'defaults',
+        'suspend', 'suspended', 'suspends', 'expel', 'expelled', 'fire', 'fired',
+        'resign', 'resigned', 'resigns', 'resignation', 'quit', 'quits',
+        'protest', 'protesters', 'dissent', 'dissenting', 'rebel', 'rebelled', 'rebellion',
+        'censor', 'censored', 'censorship', 'suppress', 'suppressed', 'suppression',
+        'surveillance', 'spy', 'spying', 'wiretap', 'tracking',
+        'illegal', 'illicit', 'unlawful', 'criminal', 'crime', 'crimes',
+        'terror', 'terrorism', 'terrorist', 'terrorists', 'extremist', 'extremism',
+        'radical', 'radicalize', 'radicalization', 'hate', 'hatred', 'bigotry',
+        'racist', 'racism', 'sexist', 'sexism', 'discrimination', 'discriminatory',
+        'neglect', 'neglected', 'negligence', 'negligent', 'incompetent', 'incompetence',
+        'corrupt', 'corrupted', 'corrupts', 'degrade', 'degraded', 'degrading',
+        'humble', 'humiliated', 'humiliation', 'shame', 'shamed', 'shameful',
+        'embarrass', 'embarrassed', 'embarrassing', 'embarrassment',
+        'fear', 'feared', 'fears', 'fearful', 'afraid', 'scared', 'terrified',
+        'panic', 'panicked', 'panicking', 'anxiety', 'anxious', 'worried', 'worry',
+        'anger', 'angered', 'angry', 'outrage', 'outraged', 'furious', 'rage',
+        'frustrate', 'frustrated', 'frustration', 'disappoint', 'disappointed',
+        'disappointment', 'regret', 'regretted', 'sorrow', 'grief', 'grieve',
+        'lose', 'lost', 'loss', 'loses', 'losing', 'defeat', 'defeated',
+        'fall', 'fell', 'falls', 'fallen', 'dropping', 'plunge', 'plunged',
+        'penalty', 'punish', 'punished', 'punishment', 'sentence', 'sentenced',
+        'fine', 'fined', 'sanction', 'sanctioned', 'sanctions', 'penalize',
+        'condemn', 'condemned', 'condemns', 'condemnation', 'denounce', 'denounced',
+        'prosecute', 'prosecuted', 'prosecution', 'investigate', 'investigated',
+        'expose', 'exposed', 'exposes', 'exposé', 'revelation', 'leak', 'leaked'
+    ]);
+    /* ── Expanded opposing verb pairs (Approach 2) ──
+     * The original 22 pairs plus news-domain antonyms that cover
+     * framing conflicts (e.g. "dispersed" vs "charged"). */
+    const EXPANDED_OPPOSING_VERBS = [
+        ...OPPOSING_VERBS,
+        ['dispersed', 'charged'], ['dispersed', 'attacked'],
+        ['cleared', 'attacked'], ['managed', 'failed'],
+        ['contained', 'escalated'], ['contained', 'spread'],
+        ['de-escalated', 'escalated'], ['negotiated', 'attacked'],
+        ['protected', 'endangered'], ['protected', 'harmed'],
+        ['rescued', 'abandoned'], ['rescued', 'trapped'],
+        ['helped', 'harmed'], ['helped', 'ignored'],
+        ['responded', 'ignored'], ['responded', 'delayed'],
+        ['prevented', 'caused'], ['prevented', 'allowed'],
+        ['reduced', 'increased'], ['reduced', 'worsened'],
+        ['improved', 'worsened'], ['improved', 'deteriorated'],
+        ['expanded', 'shrank'], ['expanded', 'reduced'],
+        ['gained', 'lost'], ['rose', 'fell'], ['increased', 'decreased'],
+        ['surged', 'dropped'], ['soared', 'plummeted'],
+        ['supported', 'condemned'], ['praised', 'criticized'],
+        ['hailed', 'slammed'], ['applauded', 'denounced'],
+        ['welcomed', 'rejected'], ['embraced', 'resisted'],
+        ['embraced', 'rejected'], ['upheld', 'overturned'],
+        ['upheld', 'struck down'], ['legalized', 'banned'],
+        ['legalized', 'criminalized'], ['freed', 'detained'],
+        ['freed', 'imprisoned'], ['acquitted', 'jailed'],
+        ['cleared', 'indicted'], ['exonerated', 'convicted'],
+        ['legitimate', 'illegitimate'], ['lawful', 'unlawful'],
+        ['authorised', 'unauthorised'], ['authorised', 'unauthorized'],
+        ['justified', 'unjustified'], ['legitimate', 'baseless'],
+        ['credible', 'uncredible'], ['credible', 'dubious'],
+        ['accurate', 'inaccurate'], ['accurate', 'misleading'],
+        ['fair', 'unfair'], ['biased', 'unbiased'],
+        ['partial', 'impartial'], ['neutral', 'biased'],
+        ['objective', 'subjective'], ['factual', 'false'],
+        ['truthful', 'deceitful'], ['honest', 'dishonest'],
+        ['transparent', 'opaque'], ['transparent', 'secretive'],
+        ['open', 'secret'], ['public', 'secret'],
+        ['moderate', 'extreme'], ['moderate', 'radical'],
+        ['peaceful', 'violent'], ['calm', 'chaotic'],
+        ['stable', 'volatile'], ['stable', 'unstable'],
+        ['secure', 'insecure'], ['safe', 'unsafe'],
+        ['unarmed', 'armed'], ['civilian', 'military'],
+        ['voluntary', 'forced'], ['voluntary', 'mandatory'],
+        ['consent', 'refused'], ['willing', 'reluctant'],
+        ['eager', 'reluctant'], ['enthusiastic', 'reluctant'],
+        ['proactive', 'reactive'], ['swift', 'delayed'],
+        ['immediate', 'delayed'], ['prompt', 'delayed'],
+        ['adequate', 'inadequate'], ['sufficient', 'insufficient'],
+        ['effective', 'ineffective'], ['successful', 'unsuccessful'],
+        ['constructive', 'destructive'], ['productive', 'counterproductive'],
+        ['cooperative', 'obstructionist'], ['collaborative', 'adversarial'],
+        ['humane', 'inhumane'], ['compassionate', 'cruel'],
+        ['merciful', 'merciless'], ['lenient', 'harsh'],
+        ['restrained', 'excessive'], ['proportional', 'disproportionate'],
+        ['just', 'unjust'], ['equitable', 'inequitable'],
+        ['equal', 'unequal'], ['inclusive', 'exclusive'],
+        ['tolerant', 'intolerant'], ['diverse', 'homogeneous'],
+        ['unity', 'division'], ['unified', 'divided'],
+        ['harmony', 'discord'], ['cohesion', 'fragmentation']
+    ];
+    /* ── Sentiment analysis helpers (Approach 1) ── */
+    function extractEntities(text) {
+        if (!text) return [];
+        const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        const ENT_RE = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
+        const SKIP = new Set(['The', 'This', 'That', 'These', 'Those', 'It', 'He', 'She',
+            'They', 'We', 'I', 'You', 'A', 'An', 'And', 'But', 'Or',
+            'In', 'On', 'At', 'To', 'For', 'Of', 'With', 'By', 'As',
+            'After', 'Before', 'During', 'According', 'Said', 'Says',
+            'New', 'First', 'Last', 'Also', 'Still', 'Just', 'More',
+            'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+            'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December',
+            'Reuters', 'AFP', 'BBC', 'PTI', 'ANI', 'AP', 'IANS', 'UNI',
+            'News', 'Times', 'Post', 'Express', 'Herald', 'Tribune',
+            'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
+        const entities = {};
+        let m;
+        while ((m = ENT_RE.exec(clean)) !== null) {
+            const name = m[1];
+            if (SKIP.has(name)) continue;
+            if (/^\d+$/.test(name)) continue;
+            const key = name.toLowerCase();
+            entities[key] = (entities[key] || 0) + 1;
+        }
+        return Object.entries(entities)
+            .filter(([, c]) => c >= 1)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 15)
+            .map(([name]) => name);
+    }
+    function sentimentScore(text) {
+        if (!text) return 0;
+        const words = text.toLowerCase().replace(/<[^>]*>/g, ' ').split(/[^a-z]+/).filter(Boolean);
+        let pos = 0, neg = 0;
+        for (const w of words) {
+            if (POSITIVE_WORDS.has(w)) pos++;
+            if (NEGATIVE_WORDS.has(w)) neg++;
+        }
+        const total = pos + neg;
+        if (total === 0) return 0;
+        return (pos - neg) / total;
+    }
+    function entitySentiment(text, entity) {
+        if (!text || !entity) return 0;
+        const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+        const sentences = clean.split(/(?<=[.!?])\s+/).filter(s => s.length > 8);
+        const entLower = entity.toLowerCase();
+        const entWords = entLower.split(/\s+/);
+        let scores = [];
+        for (const sent of sentences) {
+            const sLow = sent.toLowerCase();
+            const mentioned = entWords.every(w => sLow.includes(w));
+            if (mentioned) {
+                scores.push(sentimentScore(sent));
+            }
+        }
+        if (scores.length === 0) return 0;
+        return scores.reduce((a, b) => a + b, 0) / scores.length;
+    }
+    function detectSentimentConflicts(articles, threshold = 0.35) {
+        const out = new Map();
+        if (!articles || articles.length < 2) return out;
+        const clusters = clusterByTitle(articles, threshold);
+        for (const cluster of clusters) {
+            if (cluster.length < 2) continue;
+            const sources = new Set(cluster.map(a => (a.source || '').toLowerCase()));
+            if (sources.size < 2) continue;
+            const allText = cluster.map(a => ((a.title || '') + '. ' + (a.summary || '')).toLowerCase()).join(' ');
+            const entities = extractEntities(allText);
+            for (const entity of entities) {
+                const sourcePolarities = [];
+                for (const a of cluster) {
+                    const text = (a.title || '') + '. ' + (a.summary || '');
+                    const pol = entitySentiment(text, entity);
+                    if (pol !== 0) {
+                        sourcePolarities.push({ source: a.source, article: a, polarity: pol });
+                    }
+                }
+                if (sourcePolarities.length < 2) continue;
+                const positives = sourcePolarities.filter(s => s.polarity > 0.15);
+                const negatives = sourcePolarities.filter(s => s.polarity < -0.15);
+                if (positives.length === 0 || negatives.length === 0) continue;
+                const conflict = {
+                    metric: 'sentiment',
+                    subject: entity,
+                    detail: [
+                        {
+                            value: 'positive framing',
+                            articles: positives.map(p => ({ source: p.source, title: p.article.title, link: p.article.link }))
+                        },
+                        {
+                            value: 'negative framing',
+                            articles: negatives.map(n => ({ source: n.source, title: n.article.title, link: n.article.link }))
+                        }
+                    ]
+                };
+                for (const a of cluster) {
+                    const link = a.link;
+                    if (!link) continue;
+                    if (out.has(link)) {
+                        out.get(link).conflicts.push(conflict);
+                    } else {
+                        out.set(link, {
+                            isConflicting: true,
+                            clusterSize: cluster.length,
+                            conflicts: [conflict]
+                        });
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    /* ── Omission detection (Approach 3) ── */
+    function detectOmissionConflicts(articles, threshold = 0.35) {
+        const out = new Map();
+        if (!articles || articles.length < 2) return out;
+        const clusters = clusterByTitle(articles, threshold);
+        for (const cluster of clusters) {
+            if (cluster.length < 2) continue;
+            const sources = new Set(cluster.map(a => (a.source || '').toLowerCase()));
+            if (sources.size < 2) continue;
+            const allText = cluster.map(a => ((a.title || '') + '. ' + (a.summary || '')).toLowerCase()).join(' ');
+            const entities = extractEntities(allText);
+            const significantEntities = entities.filter(ent => {
+                let count = 0;
+                for (const a of cluster) {
+                    const text = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
+                    if (text.includes(ent)) count++;
+                }
+                return count >= Math.ceil(cluster.length * 0.4);
+            });
+            if (significantEntities.length === 0) continue;
+            for (const entity of significantEntities) {
+                const mentioningSources = new Set();
+                const omittingSources = new Set();
+                for (const a of cluster) {
+                    const text = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
+                    if (text.includes(entity)) {
+                        mentioningSources.add((a.source || '').toLowerCase());
+                    } else {
+                        omittingSources.add((a.source || '').toLowerCase());
+                    }
+                }
+                if (omittingSources.size === 0 || mentioningSources.size === 0) continue;
+                const omitArticles = cluster.filter(a => {
+                    const text = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
+                    return !text.includes(entity);
+                });
+                const mentionArticles = cluster.filter(a => {
+                    const text = ((a.title || '') + ' ' + (a.summary || '')).toLowerCase();
+                    return text.includes(entity);
+                });
+                const conflict = {
+                    metric: 'omission',
+                    subject: entity,
+                    detail: [
+                        {
+                            value: 'mentioned by ' + mentioningSources.size + ' source(s)',
+                            articles: mentionArticles.slice(0, 5).map(a => ({ source: a.source, title: a.title, link: a.link }))
+                        },
+                        {
+                            value: 'omitted by ' + omittingSources.size + ' source(s)',
+                            articles: omitArticles.slice(0, 5).map(a => ({ source: a.source, title: a.title, link: a.link }))
+                        }
+                    ]
+                };
+                for (const a of omitArticles) {
+                    const link = a.link;
+                    if (!link) continue;
+                    if (out.has(link)) {
+                        out.get(link).conflicts.push(conflict);
+                    } else {
+                        out.set(link, {
+                            isConflicting: true,
+                            clusterSize: cluster.length,
+                            conflicts: [conflict]
+                        });
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    /* ── Source editorial stance clustering (Approach 4) ── */
+    const _stanceCache = { sources: {}, built: 0 };
+    const STANCE_CACHE_TTL = 3600000;
+    function buildSourceStanceMap(articles) {
+        const now = Date.now();
+        if (_stanceCache.built && (now - _stanceCache.built) < STANCE_CACHE_TTL && Object.keys(_stanceCache.sources).length > 0) {
+            return _stanceCache.sources;
+        }
+        const sourceSentiments = {};
+        for (const a of articles) {
+            const src = (a.source || '').toLowerCase();
+            if (!src) continue;
+            const text = (a.title || '') + '. ' + (a.summary || '');
+            const score = sentimentScore(text);
+            if (!sourceSentiments[src]) sourceSentiments[src] = [];
+            sourceSentiments[src].push(score);
+        }
+        const sourceAvg = {};
+        for (const [src, scores] of Object.entries(sourceSentiments)) {
+            sourceAvg[src] = scores.reduce((a, b) => a + b, 0) / scores.length;
+        }
+        const sources = Object.keys(sourceAvg);
+        if (sources.length < 3) {
+            _stanceCache.sources = sourceAvg;
+            _stanceCache.built = now;
+            return sourceAvg;
+        }
+        const medianIdx = Math.floor(sources.length / 2);
+        const sorted = [...sources].sort((a, b) => sourceAvg[a] - sourceAvg[b]);
+        const median = sourceAvg[sorted[medianIdx]];
+        for (const src of sources) {
+            sourceAvg[src] = sourceAvg[src] - median;
+        }
+        _stanceCache.sources = sourceAvg;
+        _stanceCache.built = now;
+        return sourceAvg;
+    }
+    function detectStanceConflicts(articles, threshold = 0.35) {
+        const out = new Map();
+        if (!articles || articles.length < 2) return out;
+        const stanceMap = buildSourceStanceMap(articles);
+        const clusters = clusterByTitle(articles, threshold);
+        for (const cluster of clusters) {
+            if (cluster.length < 2) continue;
+            const sources = new Set(cluster.map(a => (a.source || '').toLowerCase()));
+            if (sources.size < 2) continue;
+            const sourceStances = [];
+            for (const a of cluster) {
+                const src = (a.source || '').toLowerCase();
+                const stance = stanceMap[src];
+                if (stance !== undefined) {
+                    sourceStances.push({ source: a.source, article: a, stance });
+                }
+            }
+            if (sourceStances.length < 2) continue;
+            const positiveStance = sourceStances.filter(s => s.stance > 0.1);
+            const negativeStance = sourceStances.filter(s => s.stance < -0.1);
+            if (positiveStance.length === 0 || negativeStance.length === 0) continue;
+            const conflict = {
+                metric: 'editorial_stance',
+                subject: cluster[0].title ? cluster[0].title.substring(0, 60) : 'Coverage',
+                detail: [
+                    {
+                        value: 'positive editorial stance',
+                        articles: positiveStance.map(p => ({ source: p.source, title: p.article.title, link: p.article.link }))
+                    },
+                    {
+                        value: 'negative editorial stance',
+                        articles: negativeStance.map(n => ({ source: n.source, title: n.article.title, link: n.article.link }))
+                    }
+                ]
+            };
+            for (const a of cluster) {
+                const link = a.link;
+                if (!link) continue;
+                if (out.has(link)) {
+                    out.get(link).conflicts.push(conflict);
+                } else {
+                    out.set(link, {
+                        isConflicting: true,
+                        clusterSize: cluster.length,
+                        conflicts: [conflict]
+                    });
+                }
+            }
+        }
+        return out;
+    }
+    /* ── Model-powered verb antonym expansion (Approach 2) ── */
+    let _expandedVerbCache = null;
+    async function expandVerbAntonyms() {
+        if (_expandedVerbCache) return _expandedVerbCache;
+        if (!window.Embeddings || !Embeddings.isReady || !Embeddings.isReady()) {
+            _expandedVerbCache = EXPANDED_OPPOSING_VERBS;
+            return _expandedVerbCache;
+        }
+        try {
+            const seedPairs = EXPANDED_OPPOSING_VERBS.slice(0, 30);
+            const allVerbs = new Set();
+            for (const [a, b] of seedPairs) {
+                allVerbs.add(a);
+                allVerbs.add(b);
+            }
+            const extraVerbs = [
+                'dispersed', 'charged', 'attacked', 'contained', 'escalated', 'spread',
+                'managed', 'failed', 'protected', 'endangered', 'harmed', 'rescued',
+                'abandoned', 'trapped', 'helped', 'ignored', 'responded', 'delayed',
+                'prevented', 'caused', 'allowed', 'reduced', 'increased', 'worsened',
+                'deteriorated', 'expanded', 'shrank', 'rose', 'fell', 'surged',
+                'dropped', 'soared', 'plummeted', 'condemned', 'criticized', 'slammed',
+                'praised', 'hailed', 'denounced', 'welcomed', 'rejected', 'embraced',
+                'resisted', 'upheld', 'overturned', 'banned', 'legalized', 'criminalized',
+                'freed', 'detained', 'imprisoned', 'jailed', 'indicted', 'exonerated',
+                'justified', 'unjustified', 'credible', 'dubious', 'accurate', 'misleading',
+                'fair', 'unfair', 'biased', 'neutral', 'factual', 'false', 'honest',
+                'dishonest', 'transparent', 'secretive', 'moderate', 'extreme', 'radical',
+                'peaceful', 'violent', 'calm', 'chaotic', 'stable', 'volatile', 'armed',
+                'unarmed', 'voluntary', 'forced', 'willing', 'reluctant', 'swift', 'delayed',
+                'adequate', 'inadequate', 'effective', 'ineffective', 'humane', 'inhumane',
+                'compassionate', 'cruel', 'lenient', 'harsh', 'restrained', 'excessive',
+                'just', 'unjust', 'equal', 'unequal', 'tolerant', 'intolerant',
+                'unity', 'division', 'harmony', 'discord', 'constructive', 'destructive',
+                'cooperative', 'adversarial'
+            ];
+            for (const v of extraVerbs) allVerbs.add(v);
+            const verbList = [...allVerbs];
+            const embeddings = await Embeddings.embedBatch(verbList);
+            if (!embeddings || !embeddings.length) {
+                _expandedVerbCache = EXPANDED_OPPOSING_VERBS;
+                return _expandedVerbCache;
+            }
+            const verbEmbMap = {};
+            for (let i = 0; i < verbList.length; i++) {
+                verbEmbMap[verbList[i]] = embeddings[i];
+            }
+            const SIMILARITY_THRESHOLD = 0.45;
+            const ANTONYM_THRESHOLD = -0.15;
+            const newPairs = [];
+            const pairSet = new Set(EXPANDED_OPPOSING_VERBS.map(p => p[0] + '|' + p[1]));
+            for (let i = 0; i < verbList.length; i++) {
+                for (let j = i + 1; j < verbList.length; j++) {
+                    const a = verbList[i], b = verbList[j];
+                    const key1 = a + '|' + b, key2 = b + '|' + a;
+                    if (pairSet.has(key1) || pairSet.has(key2)) continue;
+                    const sim = Embeddings.cosineSimilarity(verbEmbMap[a], verbEmbMap[b]);
+                    if (sim < ANTONYM_THRESHOLD && sim > -0.6) {
+                        const alreadyHave = EXPANDED_OPPOSING_VERBS.some(p =>
+                            (p[0] === a || p[1] === a) && (p[0] === b || p[1] === b));
+                        if (!alreadyHave) {
+                            newPairs.push([a, b]);
+                            pairSet.add(key1);
+                        }
+                    }
+                }
+            }
+            _expandedVerbCache = [...EXPANDED_OPPOSING_VERBS, ...newPairs.slice(0, 50)];
+            return _expandedVerbCache;
+        } catch (e) {
+            _expandedVerbCache = EXPANDED_OPPOSING_VERBS;
+            return _expandedVerbCache;
+        }
+    }
     /**
      * Extract "claim units" from a piece of text. Each claim is a tuple
      * of (subject, verb, negated, context) where:
@@ -655,8 +1234,8 @@ const Analyzer = (() => {
         const seen = new Set();
         const allClusters = [];
         function clusterKey(c) {
-            c.map(a => a.link || a.title).sort();
-            return c.map(a => a.link || a.title).join('|');
+            c.map(a => a._isPublished ? ('pub_' + a._pubId) : (a.link || a.title)).sort();
+            return c.map(a => a._isPublished ? ('pub_' + a._pubId) : (a.link || a.title)).join('|');
         }
         for (const c of vocabClusters) {
             const k = clusterKey(c);
@@ -752,7 +1331,7 @@ const Analyzer = (() => {
     function isOpposingVerb(a, b) {
         a = (a || '').toLowerCase();
         b = (b || '').toLowerCase();
-        for (const pair of OPPOSING_VERBS) {
+        for (const pair of EXPANDED_OPPOSING_VERBS) {
             if ((pair[0] === a && pair[1] === b) || (pair[0] === b && pair[1] === a))
                 return true;
         }
@@ -769,9 +1348,10 @@ const Analyzer = (() => {
         const seen = new Set();
         const out = [];
         for (const r of refs) {
-            if (seen.has(r.link))
+            const id = r._isPublished ? ('pub_' + r._pubId) : r.link;
+            if (seen.has(id))
                 continue;
-            seen.add(r.link);
+            seen.add(id);
             out.push(r);
         }
         return out;
@@ -984,6 +1564,13 @@ const Analyzer = (() => {
         detectClaimConflicts,
         detectConflicts,
         detectNumericConflicts,
+        detectSentimentConflicts,
+        detectOmissionConflicts,
+        detectStanceConflicts,
+        expandVerbAntonyms,
+        sentimentScore,
+        extractEntities,
+        entitySentiment,
         formatConflictSummary,
         normalizeValue,
         computeSeverity,

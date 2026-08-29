@@ -32,7 +32,6 @@
             localStorage.setItem(key, JSON.stringify(all));
         }
         catch (e) {
-            console.warn('Bookmarks: saveArticleData failed', e);
         }
     }
     function getFlagColor(flag) {
